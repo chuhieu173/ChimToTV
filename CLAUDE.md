@@ -12,11 +12,8 @@ sang `ConBangTV…apk` từ 13/11/2026 (anh bảo), nhưng release TV vẫn kèm
 - App đã cài vẫn gọi đường dẫn cũ; GitHub chuyển hướng 301 (đã thử OTA thật TV 2.16.1 → 2.18 sau khi chuyển). **Không bao giờ**
   tạo / fork repo tên `ChimToTV` vào tài khoản `Circling5714`, đổi tên / xoá tài khoản đó, hay đổi tên repo — mất chuyển hướng
   là mọi app đã cài hết tự cập nhật.
-- **Việc phải làm ở bản phát hành tới của mỗi nền tảng** (anh dặn): đổi link OTA trong app sang `conbangtv/ChimToTV` —
-  TV: `UPDATE_URL` trong `app/build.gradle.kts` + `Invite.kt`; iPad / Mac: `UpdateCheck.swift` + `Invite.swift`; Windows / Linux
-  (lõi chung): `linux/core/src/update_check.rs` + `invite.rs`, phía WPF `windows/ConBangTV/Core/UpdateCheck.cs` + `Invite.cs`; sửa
-  cả test (`InviteTest.kt`, `InviteTests.swift`, `InviteTests.cs`, test trong `invite.rs`). Xong nền tảng nào thì gạch ở mục
-  «Repo đã chuyển» trong README; đủ cả năm thì bỏ mục này.
+- Link OTA / mời bạn bè trong mã đã theo `conbangtv/ChimToTV` từ TV 2.19, iPad / Mac 1.19, Windows 1.17, Linux 1.3 (15/11/2026);
+  máy còn bản cũ hơn vẫn cập nhật qua chuyển hướng — nên ba điều trên vẫn phải giữ mãi.
 
 ## Cách làm việc với anh
 

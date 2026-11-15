@@ -17,19 +17,19 @@ Dữ liệu (danh sách phim, tập, server) đọc trực tiếp từ trang, n�
 [Cài trên Android TV bằng Downloader](#cài-trên-android-tv-bằng-downloader).
 
 **Bản iPad / iPhone** (iOS / iPadOS 15+, cài bằng TrollStore): [tải bản mới nhất](https://github.com/conbangtv/ChimToTV/releases/download/conbangtv_ios/ConBangTV-iPad.ipa)
-(link cố định) · [release `ios-v1.18`](https://github.com/conbangtv/ChimToTV/releases/tag/ios-v1.18)
+(link cố định) · [release `ios-v1.19`](https://github.com/conbangtv/ChimToTV/releases/tag/ios-v1.19)
 — xem mục [Bản iPad](#bản-ipad). TV và iPad / iPhone đồng bộ được với nhau — xem [Đồng bộ trong nhà](#đồng-bộ-trong-nhà-từ-22).
 
 **Bản Windows** (Windows 10 / 11, một tệp `.exe` chạy ngay): [tải bản mới nhất](https://github.com/conbangtv/ChimToTV/releases/download/conbangtv_windows/ConBangTV-Windows.exe)
-(link cố định) · [release `win-v1.16`](https://github.com/conbangtv/ChimToTV/releases/tag/win-v1.16)
+(link cố định) · [release `win-v1.17`](https://github.com/conbangtv/ChimToTV/releases/tag/win-v1.17)
 — xem mục [Bản Windows](#bản-windows). Đồng bộ được với TV và iPad / iPhone.
 
 **Bản Mac** (macOS 12+, máy Intel và chip Apple): [tải bản mới nhất](https://github.com/conbangtv/ChimToTV/releases/download/conbangtv_macos/ConBangTV-Mac.zip)
-(link cố định) · [release `mac-v1.18`](https://github.com/conbangtv/ChimToTV/releases/tag/mac-v1.18)
+(link cố định) · [release `mac-v1.19`](https://github.com/conbangtv/ChimToTV/releases/tag/mac-v1.19)
 — xem mục [Bản Mac](#bản-mac) (lần đầu mở: Cài đặt hệ thống → Quyền riêng tư & Bảo mật → Vẫn mở).
 
 **Bản Linux** (Ubuntu 22.04+ / Linux Mint 21+ / Debian 12+, máy 64-bit, tệp `.deb`): [tải bản mới nhất](https://github.com/conbangtv/ChimToTV/releases/download/conbangtv_linux/ConBangTV-Linux.deb)
-(link cố định) · [release `linux-v1.2`](https://github.com/conbangtv/ChimToTV/releases/tag/linux-v1.2)
+(link cố định) · [release `linux-v1.3`](https://github.com/conbangtv/ChimToTV/releases/tag/linux-v1.3)
 — xem mục [Bản Linux](#bản-linux). Đồng bộ được với TV, iPad / iPhone, Windows và Mac.
 
 **Liên hệ** (góp ý, báo lỗi, hỏi đáp): nhóm Telegram [t.me/tivikit](https://t.me/tivikit) — trong app: **Cài đặt** →
@@ -167,6 +167,7 @@ Có sẵn trong danh sách (menu **Đổi trang phim**). Mở menu này là app 
 | NguonC — phim.nguonc.com (từ 2.7 / iPad 1.7 / Windows 1.4) | không đọc trang: API công khai `/api/films/…` của NguonC (định dạng riêng) | trình phát NguonC → iframe (app tự bỏ quảng cáo trước phim) |
 | VSMOV — vsmov.com (từ 2.7 / iPad 1.7 / Windows 1.4) | không đọc trang: API `/api/…` kiểu KKPhim (khác đường dẫn) | app đọc luồng `.m3u8` trong trang trình phát rồi tự phát (cắt ảnh PNG ngụy trang trước dữ liệu); trình phát VSMOV → iframe |
 | CLB Phim Xưa — sc.k-20.xyz (từ 2.7 / iPad 1.7 / Windows 1.4) | add-on Stremio «K20 Phim Tổng Hợp» (`catalog` / `meta` / `stream`), chỉ lấy mục CLB Phim Xưa | tệp MP4 (qua máy chủ trung gian của k-20) → `<video>` |
+| Phim Âu Mỹ 4K — dexter.pw (từ 2.19 / iPad · Mac 1.19 / Windows 1.17 / Linux 1.3) | không đọc trang: API JSON `/api/…` của trang (mã phim = mã TMDB), phim bộ chia mùa | luồng HLS fMP4 (`/api/s/<20\|21>/…`) → app tự phát bằng hls.js bản đầy đủ, phụ đề rời OpenSubtitles / Subsource chọn được |
 
 **Tìm kiếm** (từ 1.9.1) tìm cùng lúc trên mọi trang trong danh sách (tối đa 3 trang một lúc, trang đang dùng được hỏi trước),
 mỗi trang một nhóm — trang nào trả lời trước thì hiện trước, không chờ trang chậm / không vào được.
@@ -213,6 +214,24 @@ thuyết minh / 4K, ít hoạt hình Trung Quốc; server **HLS** (app tự phá
 `sc.k-20.xyz` của add-on k-20 — app ghi «CLB Phim Xưa»): phim Hồng Kông / TVB / kiếm hiệp cũ, menu theo thể loại / thập niên, mỗi
 chất lượng (1080p / 720p / 360p) là một server. Video đi qua máy chủ trung gian của k-20: trên TV mở chậm (~25–35 s), thỉnh thoảng
 khựng, tua xa có khi không được (iPad / iPhone / Windows mượt).
+
+**dexter.pw** (từ 2.19 / iPad · iPhone · Mac 1.19 / Windows 1.17 / Linux 1.3, tên trong app «Phim Âu Mỹ 4K (dexter.pw)»): khoảng
+6 400 phim lẻ (nhiều phim 4K) + hơn 1 000 phim bộ Âu Mỹ, tên và giới thiệu tiếng Anh; menu Phim mới & nổi bật, Phim bộ, **Thể loại…**,
+**Thập niên…**. Mã: `Dexter.kt`, `ios/…/Core/Dexter.swift`, `linux/core/src/dexter.rs` (lõi chung Windows / Linux).
+
+- **Phụ đề** (kho OpenSubtitles / Subsource / Addic7ed của trang, tệp `.vtt` rời): TV ▼ → «Phụ đề», iPad / Mac Menu → «Phụ đề»,
+  Windows / Linux bảng điều khiển → «Phụ đề»; «Chữ sớm hơn / Chữ muộn hơn 0,5 s» khi lệch tiếng. Ngôn ngữ, bản và độ lệch nhớ theo người
+  xem. Máy chủ của trang tải phụ đề lúc có người hỏi: tệp có khi 404 «No such subtitle» / treo lúc đầu, danh sách phim bộ báo
+  `pending` vài phút → `hls.html` tự thử tệp sau (20 s mỗi tệp), hết tiếng Việt thì tạm dùng tiếng Anh (có báo) và thử lại 3 lần cách
+  45 s; TV hỏi lại danh sách mỗi 4 s tới 3 phút.
+- **Chất lượng** (TV, Windows, Linux): Tự động / 4K / 1080p / 720p / 480p — chỉ hiện bản phim có; bản 4K khung rộng (3840×1600) tính là
+  4K. Tự động = `capLevelToPlayerSize` + `capLevelOnFPSDrop` của hls.js (máy yếu tự hạ). iPad / iPhone / Mac không có nút này: WKWebView
+  không có MediaSource nên WebKit tự phát HLS và tự chọn.
+- **Mùa:** hết mùa tự sang mùa sau, nút «Xem từ / Mới nhất» ghi mùa, mùa 0 thành «Tập đặc biệt».
+- Máy chủ 20 của phim bộ tách âm thanh riêng (AUDIO rendition) → cần hls.js **bản đầy đủ** (`app/src/main/assets/hls.min.js`, 1.5.20,
+  khớp gói npm); các trang khác vẫn dùng bản nhẹ. Bản máy tính phát dexter.pw bằng trang HLS trong WebView (để có phụ đề), chưa qua mpv.
+- Trang `hls.html` dùng chung cho cả năm nền tảng có thêm tham số `{{SUBS}}` `{{SUBI}}` `{{SUBD}}` `{{FILE}}` `{{HLSJS}}` `{{CAP}}` —
+  thêm tham số mới thì phải điền ở **mọi** nền tảng, thiếu là mọi luồng HLS của nền tảng đó hỏng.
 
 App không viết riêng cho từng trang mà nhận dạng theo mẫu giao diện, nên trang khác cùng kiểu (yanhh3d / theme HaLim /
 Next.js kiểu PhimMoi) thường cũng chạy: **Đổi trang phim** → **＋ Thêm trang khác…** rồi gõ tên miền (từ 2.1), hoặc nhập
@@ -586,8 +605,10 @@ nhật, sau đó ai tắt thì giữ tắt). App hỏi địa chỉ trang qua DN
 
 Máy chủ nào bị chặn / không trả lời thì nghỉ 2 phút, app hỏi máy chủ sau. **Từ 2.11.1 / iPad 1.11.1 / Windows 1.8.1:** NextDNS dùng máy chủ gần mạng nhà nhất (đo 11/2026 từ mạng Viettel: IP anycast bị đưa sang Hồng Kông, NextDNS có máy
 chủ Hà Nội nhanh gần gấp đôi) và app giữ kết nối tới máy chủ DNS để dùng lại — mỗi lần tìm địa chỉ trang còn ~20–100 ms
-thay vì ~200 ms trở lên. Tên miền không có (hoặc hồ sơ NextDNS chặn) là trả lời
-thật — app không hỏi máy chủ khác để lách. Nhà mạng không đọc / sửa được truy vấn DNS, nhưng vẫn thấy tên trang lúc kết nối (phần
+thay vì ~200 ms trở lên. Tên miền không có (NXDOMAIN) là trả lời thật — app không hỏi máy chủ khác.
+**Từ 2.19 / iPad · Mac 1.19 / Windows 1.17 / Linux 1.3:** máy chủ trả địa chỉ bị chặn (0.0.0.0, 127.x, `::` — vd hồ sơ NextDNS chặn nhầm
+máy chủ video `v.lumenbox.top` của dexter.pw) thì app hỏi máy chủ sau (Cloudflare → Google) thay vì dừng ở câu trả lời đó (trước đây
+coi là trả lời thật nên phim đứng hình). Nhà mạng không đọc / sửa được truy vấn DNS, nhưng vẫn thấy tên trang lúc kết nối (phần
 đó do [Vượt chặn nhà mạng](#vượt-chặn-nhà-mạng-từ-21) lo) và IP đích. Đang bật proxy với «DNS của proxy» thì proxy tự hỏi DNS.
 
 Tắt DNS mã hoá mà vẫn bật Vượt chặn: DNS của máy trả 0.0.0.0 / :: (bị chặn) hoặc không trả lời thì app vẫn hỏi lại qua chuỗi
@@ -763,12 +784,12 @@ Repo chuyển từ tài khoản `Circling5714/ChimToTV` sang tổ chức **`conb
   cũ (hai link APK + bốn link cố định) đúng SHA-256, `release.ps1 <nền tảng> -Verify` đạt cả năm nền tảng.
 - **Chuyển hướng chỉ còn khi:** không bao giờ tạo hay **fork** một repo tên `ChimToTV` vào tài khoản `Circling5714`, không đổi
   tên / xoá tài khoản đó, không đổi tên repo. Làm một trong ba là mọi app đã cài hết tự cập nhật.
-- **Việc còn lại — làm ở bản phát hành tới của từng nền tảng:** đổi đường dẫn trong mã sang `conbangtv/ChimToTV`:
-  `UPDATE_URL` trong `app/build.gradle.kts`, `releasesApi` trong `ios/ConBangTV/Sources/Core/UpdateCheck.swift`,
-  `ReleasesApi` / `ReleasesPage` trong `windows/ConBangTV/Core/UpdateCheck.cs`, `RELEASES_API` / `RELEASES_PAGE` trong
-  `linux/core/src/update_check.rs` (lõi chung của Windows và Linux), link mời bạn bè trong `Invite.kt` / `Invite.swift` /
-  `Invite.cs` / `invite.rs` và các test tương ứng (`InviteTest.kt`, `InviteTests.swift`, `InviteTests.cs`, test trong
-  `invite.rs`). `release.ps1` và trang giới thiệu đã đổi ngày chuyển.
+- ~~Việc còn lại: đổi đường dẫn trong mã sang `conbangtv/ChimToTV`~~ — **xong cả năm nền tảng** ở TV 2.19, iPad / iPhone / Mac
+  1.19, Windows 1.17, Linux 1.3 (15/11/2026): `UPDATE_URL` trong `app/build.gradle.kts`, `releasesApi` trong
+  `ios/ConBangTV/Sources/Core/UpdateCheck.swift`, `ReleasesApi` / `ReleasesPage` trong `windows/ConBangTV/Core/UpdateCheck.cs`,
+  `RELEASES_API` / `RELEASES_PAGE` trong `linux/core/src/update_check.rs`, link mời bạn bè trong `Invite.kt` / `Invite.swift` /
+  `Invite.cs` / `invite.rs` + test. Bản cũ (đi đường chuyển hướng) đã tự cập nhật thật lên các bản này: TV 2.18 → 2.19 (TX3), Mac
+  1.18 → 1.19, Windows 1.16 → 1.17, Linux 1.2 → 1.3.
 
 1. Tăng `versionCode` / `versionName` trong `app/build.gradle.kts`.
 2. `.\build.ps1` → `dist\ConBangTV-<phiên bản>.apk` (ký bằng `keys\` — phải cùng khoá thì app mới nhận; bản 2.17 trở về

@@ -9,6 +9,111 @@ Bản Windows (Windows 10 / 11, một tệp `.exe`) ghi riêng với tiêu đề
 Bản Mac (macOS 12+, từ 13/11/2026, cùng mã nguồn và số bản với bản iPad) ghi riêng với tiêu đề "Mac …", tag `mac-v…`.
 Bản Linux (Ubuntu 22.04+ / Linux Mint 21+ / Debian 12+, từ 13/11/2026, tệp `.deb`) ghi riêng với tiêu đề "Linux …", tag `linux-v…`.
 
+## iPad / iPhone 1.19 và Mac 1.19 — 15/11/2026 (dexter.pw, phụ đề chọn được)
+
+- **Trang mới dexter.pw — «Phim Âu Mỹ 4K (dexter.pw)»** (chọn trong «Đổi trang phim»): khoảng 6 400 phim lẻ (nhiều phim 4K) và hơn
+  1 000 phim bộ; đọc API JSON của trang (`Core/Dexter.swift`, mã phim là mã TMDB), menu Phim mới & nổi bật / Phim bộ / **Thể loại…** /
+  **Thập niên…**, tìm kiếm chung. Tên phim và giới thiệu là tiếng Anh.
+- **Phụ đề tiếng Việt từ OpenSubtitles / Subsource** (kho phụ đề của trang): Menu → «Phụ đề» để đổi bản hoặc tắt; «Chữ sớm hơn / Chữ
+  muộn hơn 0,5 s» khi lệch tiếng; app nhớ lựa chọn theo người xem. Tệp lỗi / chưa có thì tự thử tệp sau; hết tiếng Việt thì tạm dùng
+  tiếng Anh (có báo) rồi tự thử lại; phim bộ ít người xem có khi vài phút máy chủ của trang mới có phụ đề.
+- **Phim bộ chia theo mùa:** hết mùa tự sang mùa sau; nút «Xem từ / Mới nhất» ghi rõ mùa; tập đặc biệt (mùa 0) gom riêng.
+- Chất lượng: WKWebView không có MediaSource nên WebKit tự phát HLS và tự chọn chất lượng theo màn hình / mạng (nút «Chất lượng» của
+  bản tivi / máy tính ẩn ở đây).
+- **DNS mã hoá:** máy chủ trả 0.0.0.0 / 127.x / `::` (hồ sơ NextDNS chặn nhầm, vd máy chủ video của dexter.pw) thì hỏi máy chủ sau
+  (Cloudflare → Google); NXDOMAIN vẫn là trả lời thật.
+- **Link tự cập nhật và màn «Mời bạn bè» theo repo mới `conbangtv/ChimToTV`** (bản cũ vẫn chạy nhờ chuyển hướng của GitHub).
+- iPad / iPhone: bản 1.19 (build 25) · tag `ios-v1.19` · `ConBangTV-iPad-1.19.ipa` 4 721 411 byte · SHA-256
+  `62398c26e3dff0dfa8fde4093e86c06452de07a1e6578ca54a6f0f2b45536694`
+- Mac: bản 1.19 (build 25) · tag `mac-v1.19` · `ConBangTV-Mac-1.19.zip` 8 260 488 byte (Intel + Apple Silicon, ký ad-hoc) · SHA-256
+  `9823c81e1e78c947852a07a36a909b83662f6b0d7e350b5532eb28f24771da32`
+- commit `b0cf6c0` (tính năng: `21d41c7`, `eda5c5d`, `c2747d2`, `500958b`; không bản nào là "latest" — Latest là `v2.19`).
+- Thử:
+  - CI `ios.yml` (release=true): test lõi, IPA, bản Mac đều đạt. Info.plist đúng (`vn.chimto.tv`, 1.19, build 25), có `hls.min.js`,
+    không có cổng gỡ lỗi; bản Mac hai kiến trúc.
+  - Trước đó bản Mac thử trên Mac mini: Coco + phụ đề tiếng Việt, Dexter 1/2 có tiếng, KKPhim vẫn phát; 167 test lõi đạt.
+  - IPA bản chính cài lên iPad bằng TrollStore (`trollstorehelper` trả 0, `vn.chimto.tv` 1.18 → 1.19). **Chưa mở giao diện trên iPad /
+    iPhone thật** (màn iPad tắt; iPhone không trả lời mạng lúc phát hành).
+- Đăng lúc 20:06:50 (iPad) và 20:07:11 (Mac) bằng `release.ps1 ipad` / `release.ps1 mac`; link cố định `conbangtv_ios` /
+  `conbangtv_macos` chép đè sang 1.19, khớp SHA-256 (`-Verify` đạt).
+  - **Tự cập nhật thật Mac 1.18 → 1.19** (bản trong `/Applications` của Mac mini, mang link API cũ `Circling5714/…` → 301): hộp «Có bản
+    mới 1.19 — Đang dùng 1.18» kèm «Có gì mới» → «Cài đặt ngay» 20:08:21 → app mở lại ở 1.19 trước 20:08:57.
+  - «Có gì mới» trên các release 15/11 rút còn dưới 600 ký tự sau khi đăng (hộp «Có bản mới» chỉ hiện ~600 ký tự, bản đầu bị cắt giữa chữ).
+
+## Windows 1.17 — 15/11/2026 (dexter.pw, phụ đề chọn được, chọn chất lượng)
+
+- **Trang mới dexter.pw — «Phim Âu Mỹ 4K (dexter.pw)»**: như bản iPad 1.19 (lõi Rust chung `linux/core/src/dexter.rs`, FFI
+  `dexter.subtitlesFrom`). Phim của trang này phát bằng trang HLS trong WebView2 (hls.js bản đầy đủ `hls.min.js`, cần cho máy chủ 20 tách
+  âm thanh riêng) để có phụ đề chọn được; các trang khác vẫn dùng trình phát mpv như 1.16.
+- **Phụ đề tiếng Việt** (OpenSubtitles / Subsource): «Phụ đề» + «Chữ sớm / muộn hơn 0,5 s» trong bảng điều khiển (phím M); nhớ theo
+  người xem.
+- **Nút «Chất lượng»:** Tự động / 4K / 1080p / 720p / 480p (phim có bản nào hiện bản đó; đổi giữa chừng được; bản 4K khung rộng
+  3840×1600 tính là 4K). Tự động: hls.js chọn theo cỡ cửa sổ và tự hạ khi rớt khung hình.
+- Phim bộ chia mùa, tự sang mùa sau; «Thập niên…» trong menu.
+- DNS mã hoá: câu trả lời bị chặn (0.0.0.0 / 127.x) thì hỏi máy chủ sau (lõi Rust).
+- Link tự cập nhật + màn mời bạn bè theo `conbangtv/ChimToTV`.
+- bản 1.17.0 · tag `win-v1.17` · `ConBangTV-Windows-1.17.exe` 120 002 320 byte · SHA-256
+  `e59ef13f4d8fa569dadb618056f24843ae40afb942ce97fb10487642df317220` · commit `b0cf6c0` (tính năng: `3580658`, `60f36ff`, `c2747d2`,
+  `500958b`)
+- Thử: `windows\build.ps1` — test lõi Rust 219 đạt, .NET 32 đạt. Gói chính chạy với thư mục dữ liệu riêng: «Đổi trang phim» có dexter.pw,
+  tìm «Coco» → trang phim (105 phút, «Cùng bộ», «Cùng thể loại») → phát (server 21, 16 phụ đề), phụ đề tiếng Việt hiện trên hình,
+  «Chất lượng: Tự động (4K)»; «Kiểm tra cập nhật» báo đúng.
+- Đăng lúc 20:03:38 bằng `release.ps1 windows` (không phải Latest; link cố định `conbangtv_windows` → 1.17, `-Verify` đạt).
+  **Tự cập nhật thật 1.16 → 1.17** (bản 1.16 đã phát hành chép riêng, mang link API cũ → 301): lúc mở tự thấy «Có bản mới: Côn Bằng TV
+  1.17» (20:04:43); thử cả đường Cài đặt → «Kiểm tra cập nhật» → «Cập nhật ngay» 20:05:23 → tải 120 MB trong ~15 s → mở lại bằng
+  `--updated` 20:05:40 ở 1.17; tệp sau cập nhật cùng SHA-256 với release, dữ liệu giữ nguyên, `.old` đã dọn.
+- Lưu ý cho sau: bộ kiểm tra cập nhật chỉ đọc 30 release mới nhất — nếu giữa hai bản Windows có hơn ~30 bản nền tảng khác thì app sẽ
+  tưởng mình là bản mới nhất.
+
+## Linux 1.3 — 15/11/2026 (dexter.pw, phụ đề chọn được, chọn chất lượng)
+
+- Giống Windows 1.17: trang **dexter.pw**, **phụ đề tiếng Việt** chọn được + chỉnh sớm / muộn, nút **«Chất lượng»**, phim bộ chia mùa,
+  «Thập niên…», DNS mã hoá bỏ qua câu trả lời bị chặn, link tự cập nhật theo `conbangtv/ChimToTV`. Phim của dexter.pw phát bằng trang
+  HLS trong WebKitGTK (để có phụ đề); các trang khác vẫn dùng trình phát mpv như 1.2.
+- bản 1.3.0 · tag `linux-v1.3` · `ConBangTV-Linux-1.3.deb` 5 569 208 byte · SHA-256
+  `16e0470792a957315e0baf98717b3a35f6b2bc35ff12a311444591b22686a0fd` · commit `b0cf6c0` (tính năng: `3580658`, `6193d87`, `c2747d2`,
+  `500958b`)
+- Thử: dựng trong container Ubuntu 22.04 (`release-build.sh`), tệp chạy cần tối đa `GLIBC_2.34`, không có cổng gỡ lỗi, năm link GitHub
+  trong tệp chạy đều là `conbangtv/ChimToTV`; `dpkg-deb -f`: `conbangtv` 1.3.0 amd64. Cài bằng `apt-get install ./…deb` trên máy Ubuntu
+  thử, mở từ biểu tượng: trang chủ, «Giới thiệu» ghi bản 1.3, «Kiểm tra cập nhật» báo đúng.
+- Đăng lúc 20:01:24 bằng `release.ps1 linux` (không phải Latest; link cố định `conbangtv_linux` → 1.3, `-Verify` đạt).
+  **Tự cập nhật thật 1.2 → 1.3** trên máy Ubuntu thử (bản 1.2 cài bằng .deb, mang link API cũ → 301): mở app 20:02:04 → hộp «Có bản mới:
+  Côn Bằng TV 1.3» kèm «Có gì mới» → «Cập nhật ngay» 20:02:43 → tải .deb xong 20:02:44 → `pkexec apt-get install -y` mã 0 → app mở lại ở
+  1.3.0 lúc 20:02:48 (tải về và cài trong ~5 giây); `.deb` tạm đã xoá.
+- Còn từ trước (không do 1.3): thỉnh thoảng lần đọc đầu tiên trang chủ hoathinh3d.pw qua WebKitGTK ẩn báo «Load failed» (1.2 cũng
+  vậy) → app dùng danh sách lần trước; phim MP4 của CLB Phim Xưa trong trình phát WebView dừng sớm (mpv mặc định vẫn phát).
+
+## 2.19 — 15/11/2026 (dexter.pw, phụ đề chọn được, chọn chất lượng, sửa bàn phím ô tìm kiếm)
+
+- **Trang mới dexter.pw — «Phim Âu Mỹ 4K (dexter.pw)»** (chọn trong «Đổi trang phim»): khoảng 6 400 phim lẻ (nhiều phim 4K) và hơn
+  1 000 phim bộ (Dexter, The Mentalist, Modern Family…). App đọc API JSON của trang (`Dexter.kt`, mã phim là mã TMDB): trang chủ,
+  Phim mới & nổi bật, Phim bộ, **Thể loại…**, **Thập niên…**, tìm kiếm chung. Luồng HLS fMP4 không mã hoá, không quảng cáo; app phát
+  bằng **hls.js bản đầy đủ** (`assets/hls.min.js` 1.5.20 — cần cho máy chủ 20 tách âm thanh riêng; các trang khác vẫn dùng bản nhẹ).
+- **Phụ đề tiếng Việt từ kho OpenSubtitles / Subsource** của trang: ▼ → «Phụ đề» để đổi bản phụ đề hoặc tắt; «Chữ sớm hơn / Chữ muộn
+  hơn 0,5 s» khi lệch tiếng; nhớ theo người xem. Tệp lỗi / chưa có thì tự thử tệp sau; hết tiếng Việt thì tạm dùng tiếng Anh (có báo)
+  rồi tự thử lại (3 lần, cách 45 giây); danh sách phụ đề phim bộ «đang chuẩn bị» thì hỏi lại mỗi 4 giây tới 3 phút.
+- **▼ → «Chất lượng»:** Tự động / 4K / 1080p / 720p / 480p (phim có bản nào hiện bản đó; đổi giữa chừng được; nhớ theo người xem; bản 4K
+  khung rộng 3840×1600 tính là 4K). Tự động: hls.js chọn theo cỡ màn hình và tự hạ khi rớt khung hình (TX3 giải mã 1080p rớt ~37% khung
+  → tự xuống 720p / 480p). 4K cần tivi đủ mạnh.
+- **Phim bộ chia theo mùa:** hết mùa tự sang mùa sau; nút «Xem từ / Mới nhất» ghi rõ mùa; tập đặc biệt (mùa 0) gom riêng.
+- **Sửa lỗi bàn phím không hiện khi chọn «Tìm kiếm» trong menu** (anh gặp trên Skyworth; TX3 cũng bị): tiêu điểm vào ô trong lúc menu
+  xử lý phím OK nên bàn phím không được báo — nay app đặt lại tiêu điểm rồi gọi bàn phím, thử lại tới 10 lần (`View.openKeyboard`).
+- **DNS mã hoá:** máy chủ trả 0.0.0.0 / 127.x / `::` (hồ sơ NextDNS chặn nhầm máy chủ video `v.lumenbox.top`,
+  `v.cloudsstrservices.top` của dexter.pw — anh đã thêm vào danh sách cho phép) thì hỏi máy chủ sau (Cloudflare → Google); NXDOMAIN
+  vẫn là trả lời thật.
+- **Link tự cập nhật (`UPDATE_URL`) và màn «Mời bạn bè cài app» theo repo mới `conbangtv/ChimToTV`**; mã QR vẽ sẵn của màn đó dựng lại
+  theo link mới.
+- bản 2.19 · versionCode 43 · tag `v2.19` (Latest) · commit `b0cf6c0` (tính năng: `4268009`, `eda5c5d`, `c2747d2`, `500958b`) ·
+  `ConBangTV-2.19.apk` = `ConBangTV.apk` = `ChimToTV.apk` 150 273 275 byte · SHA-256
+  `8649f6e3b5debfa1c102837b8a7438ee8a36cb9b131b7b1f942100c690d8fe3f` · chứng chỉ `949ef2b5…177b`
+- Thử: 174 test (2 bỏ qua) đạt. Bản debug trên TX3: Coco 1080p + phụ đề tiếng Việt khớp hình, đổi bản, chỉnh ±; Fight Club; Dexter
+  1/1 có tiếng; phim bộ 8 mùa; tìm «coco»; 4K → 2160p và đổi chất lượng giữa chừng; Spider-Man: Brand New Day 3840×1600 sau khi sửa DNS;
+  KKPhim vẫn phát. Bàn phím: TX3 + Skyworth (bản 2.18 tái hiện lỗi, bản sửa hiện Gboard).
+- Đăng lúc 19:59:24 bằng `release.ps1 tv` (Latest = `v2.19`, ba tệp cùng SHA-256, hai link cố định tải về đúng 2.19; `-Verify` đạt).
+  **Tự cập nhật thật 2.18 → 2.19 trên TX3** (bản 2.18 mang link API cũ `Circling5714/…` → 301): Cài đặt → «Kiểm tra cập nhật» 20:01 →
+  «Có bản mới 2.19 (đang dùng 2.18)» → tải 150 MB → «Cài đặt ngay» → màn cài của hệ thống → **2.19 lúc 20:02:52**, mở lại màn chính.
+- Mục «Có gì mới» rút còn 388 ký tự sau khi đăng (hộp cập nhật chỉ hiện ~600 ký tự).
+
 ## Chuyển repo sang tổ chức conbangtv — 15/11/2026 (không phải bản mới)
 
 - Repo chuyển từ `Circling5714/ChimToTV` sang **`conbangtv/ChimToTV`** (cùng tổ chức với trang giới thiệu `conbangtv.github.io`).
@@ -17,7 +122,7 @@ Bản Linux (Ubuntu 22.04+ / Linux Mint 21+ / Debian 12+, từ 13/11/2026, tệp
   đường dẫn cũ, GitHub chuyển hướng 301 sang chỗ mới. Link tải cũ đã gửi đi (APK, bốn link cố định, mã Downloader) cũng vậy.
 - Đã kiểm ngay sau khi chuyển: OTA thật TV 2.16.1 → 2.18 trên TX3 (app mang link cũ, 15:25 → 15:37); sáu link cũ tải về đúng
   SHA-256; `release.ps1 <tv|windows|linux|ipad|mac> -Verify` đạt cả năm nền tảng với tên mới; trang giới thiệu đổi link (site 30a80f8).
-- Bản phát hành tới của từng nền tảng sẽ đổi link trong app sang tên mới (xem README, mục «Repo đã chuyển sang tổ chức conbangtv»).
+- Link trong app đã đổi sang tên mới ở TV 2.19, iPad / iPhone / Mac 1.19, Windows 1.17, Linux 1.3 (cùng ngày, xem các mục trên).
 
 ## iPad / iPhone 1.18 và Mac 1.18 — 14/11/2026 (đọc trang bật chống bot)
 
