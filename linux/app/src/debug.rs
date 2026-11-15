@@ -175,6 +175,11 @@ fn handle(r: Req) {
                 }
             }
         }
+        // Giả phụ đề «đang tìm» của dexter.pw: /subs_later?url=<…/api/subs/list/…> — bỏ phụ đề đang có, hỏi lại sau 4 giây
+        "/subs_later" => match app().player.borrow().clone() {
+            Some(p) => send(p.debug_subs_later(r.q.get("url").map(|s| s.as_str()).unwrap_or(""))),
+            None => send("trình phát chưa mở".into()),
+        },
         "/open" => {
             app().push(crate::pages::detail::new(r.q.get("url").map(|s| s.as_str()).unwrap_or(""), None, Vec::new()));
             send("ok".into());

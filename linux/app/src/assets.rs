@@ -6,6 +6,8 @@ pub const HLS_HTML: &str = include_str!("../../../app/src/main/assets/hls.html")
 pub const PLAYER_AGENT_JS: &str = include_str!("../../../app/src/main/assets/player-agent.js");
 pub const PAGE_FOCUS_JS: &str = include_str!("../../../app/src/main/assets/page-focus.js");
 pub const HLS_JS: &str = include_str!("../../../app/src/main/assets/hls.light.min.js");
+/// Bản hls.js đầy đủ (có luồng âm thanh tách rời) — chỉ cho Video.hls (dexter.pw); trang khác vẫn dùng bản light.
+pub const HLS_FULL_JS: &str = include_str!("../../../app/src/main/assets/hls.min.js");
 /// Logo (鵬) — biểu tượng cửa sổ và góc menu.
 pub const LOGO_PNG: &[u8] = include_bytes!("../../../design/logo-512.png");
 
@@ -18,6 +20,7 @@ pub fn get(name: &str) -> Option<String> {
             "player-agent.js" => PLAYER_AGENT_JS,
             "page-focus.js" => PAGE_FOCUS_JS,
             "hls.light.min.js" => HLS_JS,
+            "hls.min.js" => HLS_FULL_JS,
             _ => return None,
         }
         .to_string(),

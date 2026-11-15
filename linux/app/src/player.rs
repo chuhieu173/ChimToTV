@@ -13,7 +13,7 @@ use crate::css::px;
 use crate::keynav;
 use crate::ui;
 use cbtv::util::format_time;
-use cbtv::{prefs, EpisodeGroup, EpisodeSource, FilmDetail, HistoryItem, Server};
+use cbtv::{prefs, EpisodeGroup, EpisodeSource, FilmDetail, HistoryItem, Server, SubTrack};
 use gtk::prelude::*;
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
@@ -160,6 +160,34 @@ struct St {
     extract: bool,
     /// Trình phát native lỗi với server này → phát bằng WebView tới khi đổi tập / server
     force_web: bool,
+    /// Phụ đề rời của tập đang phát (dexter.pw): danh sách, tệp đang hiện (-1 = tắt), độ lệch (giây, + = chữ muộn hơn)
+    subs: Vec<SubTrack>,
+    sub_idx: i32,
+    sub_delay: f64,
+    /// Lời nhắn phụ đề mới nhất đã hiện (số thứ tự hls.html đánh; trang nạp lại thì đếm lại từ 1)
+    sub_note_shown: u64,
+    /// Các bản của luồng HLS đang phát (chiều cao, cao → thấp; dexter.pw: 4K / 1080p / 720p / 480p) — đọc từ hls.html khi mở bảng
+    levels: Vec<i64>,
+    /// Chiều cao video đang phát (hls.html báo cùng danh sách bản)
+    level_now: i64,
+}
+
+/// Phụ đề đang hiện (None = tắt / chưa có).
+fn cur_sub(s: &St) -> Option<&SubTrack> {
+    usize::try_from(s.sub_idx).ok().and_then(|i| s.subs.get(i))
+}
+
+/// Phim chia mùa (dexter.pw): mùa sau của mùa đang xem (không sang nhóm tập đặc biệt); phim khác: None.
+fn next_season_of(s: &St) -> Option<&EpisodeGroup> {
+    let d = s.detail.as_ref().filter(|d| d.seasons)?;
+    let g = s.group.as_ref()?;
+    let i = d.groups.iter().position(|x| x == g)?;
+    d.groups.get(i + 1).filter(|n| n.name != FilmDetail::SPECIALS && !n.episodes.is_empty())
+}
+
+/// Còn tập sau: tập kế trong nhóm đang xem, hoặc (phim chia mùa) mùa sau.
+fn has_next(s: &St) -> bool {
+    s.index + 1 < s.group.as_ref().map(|g| g.episodes.len()).unwrap_or(0) || next_season_of(s).is_some()
 }
 
 pub struct Player {
@@ -198,6 +226,10 @@ pub struct Player {
     click_timer: RefCell<Option<glib::SourceId>>,
     /// Cửa sổ phim nhỏ (đang thu nhỏ) — xem enter_mini().
     mini: RefCell<Option<Mini>>,
+    /// Nút «Phụ đề: …» trong bảng tuỳ chọn đang mở (đổi chữ tại chỗ, khỏi dựng lại bảng)
+    sub_btn: glib::WeakRef<gtk::Button>,
+    /// Nút «Chất lượng: …» trong bảng tuỳ chọn đang mở (ẩn khi luồng chỉ có một bản)
+    quality_btn: glib::WeakRef<gtk::Button>,
 }
 
 /// Cửa sổ phim nhỏ: WebView chuyển sang đây, cửa sổ app trở lại các trang.
@@ -445,13 +477,15 @@ impl Player {
             panel_stack,
             btn_done,
             open: Cell::new(false),
-            s: RefCell::new(St { rate: 1.0, ..Default::default() }),
+            s: RefCell::new(St { rate: 1.0, sub_idx: -1, ..Default::default() }),
             poll_timer: RefCell::new(None),
             osd_timer: RefCell::new(None),
             notice_timer: RefCell::new(None),
             seek_timer: RefCell::new(None),
             click_timer: RefCell::new(None),
             mini: RefCell::new(None),
+            sub_btn: glib::WeakRef::new(),
+            quality_btn: glib::WeakRef::new(),
         });
         PLAYER.with(|x| *x.borrow_mut() = Some(Rc::downgrade(&p)));
         p.connect();
@@ -760,8 +794,10 @@ impl Player {
     fn navigate(&self, url: &str, html: Option<String>, start: i64) {
         let load = self.s.borrow().page_load;
         self.ucm.remove_all_scripts();
+        // Trang của app (hls.html): chất lượng muốn xem — hls.html đọc window.__chimtoWantH lúc có danh sách bản (0 = tự động)
+        let want = if html.is_some() { format!("window.__chimtoWantH={};", prefs::video_quality()) } else { String::new() };
         let mut js = format!(
-            "window.__chimtoStart={start};if(window.top===window)window.__chimtoLoad={load};\n{STYLE_SHIM}{}",
+            "window.__chimtoStart={start};if(window.top===window){{window.__chimtoLoad={load};{want}}}\n{STYLE_SHIM}{}",
             crate::assets::PLAYER_AGENT_JS
         );
         if std::env::var_os("CONBANG_DEBUG").is_some() {
@@ -855,11 +891,21 @@ impl Player {
         };
         let i = g.episodes.iter().position(|e| e.url == ep_url).unwrap_or(0);
         let resume_open = self.s.borrow().resume_open;
-        let next = resume_open && prefs::finished(ep_url) && i + 1 < g.episodes.len();
+        let done = resume_open && prefs::finished(ep_url);
+        let next = done && i + 1 < g.episodes.len();
         {
             let mut s = self.s.borrow_mut();
             s.detail = Some(d);
             s.group = Some(g);
+        }
+        // «Xem tiếp» mà tập cuối của mùa đã xem xong (phim chia mùa): sang tập đầu mùa sau
+        if done && !next {
+            let season = next_season_of(&self.s.borrow()).cloned();
+            if let Some(n) = season {
+                self.s.borrow_mut().group = Some(n);
+                self.open_episode(0);
+                return;
+            }
         }
         self.open_episode(if next { i + 1 } else { i });
     }
@@ -1034,10 +1080,13 @@ impl Player {
                     me.s.borrow_mut().load_started_at = cbtv::util::now_ms();
                     let start = me.start_for();
                     me.s.borrow_mut().start_hint = start;
-                    let is_hls = v.file || url::Url::parse(&v.url).map(|u| u.path().ends_with(".m3u8")).unwrap_or(false);
+                    let m3u8 = url::Url::parse(&v.url).map(|u| u.path().ends_with(".m3u8")).unwrap_or(false);
+                    // v.hls: luồng HLS dù link không có đuôi .m3u8 (dexter.pw /api/s/…)
+                    let is_hls = v.file || v.hls || m3u8;
                     let native = me.native_allowed();
-                    // Trình phát native: luồng .m3u8 / tệp video phát thẳng bằng mpv
-                    if is_hls && native {
+                    // Trình phát native: luồng .m3u8 / tệp video phát thẳng bằng mpv. dexter.pw (v.hls) luôn phát bằng hls.html:
+                    // phụ đề rời chọn được (đổi bản, chỉnh sớm / muộn) và âm thanh tách rời nằm ở trang đó
+                    if is_hls && native && !v.hls {
                         me.s.borrow_mut().hls_url = Some(v.url.clone());
                         if me.play_native(&v.url, v.subtitle.as_deref(), &src.ep_url, start, false) {
                             return;
@@ -1048,16 +1097,41 @@ impl Player {
                     me.s.borrow_mut().extract = native && !is_hls;
                     let page = if is_hls {
                         me.s.borrow_mut().hls_url = Some(v.url.clone());
-                        hls_page(&v.url, v.subtitle.as_deref(), start)
+                        // Phụ đề rời (dexter.pw): chọn sẵn theo ngôn ngữ người xem ưa dùng, độ lệch đã chỉnh cho tập này
+                        let listed = !v.subs.is_empty() || v.subs_later.is_some();
+                        me.set_subs(v.subs.clone());
+                        me.s.borrow_mut().sub_delay = if listed { prefs::sub_delay(&src.ep_url) } else { 0.0 };
+                        let st = me.s.borrow();
+                        let html = hls_page(&HlsPage {
+                            src: &v.url,
+                            sub: v.subtitle.as_deref(),
+                            start,
+                            subs: listed.then_some(st.subs.as_slice()),
+                            sub_idx: st.sub_idx,
+                            sub_delay: st.sub_delay,
+                            file: v.file || !(v.hls || m3u8),
+                            full: v.hls,
+                        });
+                        html
                     } else {
                         me.s.borrow_mut().embed_url = Some(v.url.clone());
                         crate::assets::PLAYER_HTML.replace("{{SRC}}", &html_escape(&v.url))
                     };
                     cbtv::log::d(
                         "player",
-                        &format!("Phát {} {} (server {}, bắt đầu {start}s)", if is_hls { "HLS" } else { "iframe" }, v.url, s.as_ref().map(|x| x.label.as_str()).unwrap_or("")),
+                        &format!(
+                            "Phát {} {} (server {}, bắt đầu {start}s{})",
+                            if is_hls { "HLS" } else { "iframe" },
+                            v.url,
+                            s.as_ref().map(|x| x.label.as_str()).unwrap_or(""),
+                            if v.hls { format!(", hls.js đầy đủ, {} phụ đề", me.s.borrow().subs.len()) } else { String::new() }
+                        ),
                     );
                     me.navigate(&src.ep_url, Some(page), start);
+                    // Trang còn đang tìm phụ đề (phim bộ dexter.pw): hỏi lại sau
+                    if let Some(later) = v.subs_later.clone().filter(|_| is_hls) {
+                        me.poll_subs(later, t, 0);
+                    }
                 }
                 Err(e) => {
                     me.show_error(&format!("{}\nNhấn ▼ (hoặc ☰) để chọn server khác.", cbtv::util::friendly(&e)));
@@ -1212,6 +1286,12 @@ impl Player {
             s.seek_target = None;
             s.nudges = 0;
             s.last_nudge = 0;
+            s.subs.clear();
+            s.sub_idx = -1;
+            s.sub_delay = 0.0;
+            s.sub_note_shown = 0;
+            s.levels.clear();
+            s.level_now = 0;
             s.page_load += 1;
         }
         if let Some(id) = self.seek_timer.borrow_mut().take() {
@@ -1258,9 +1338,17 @@ impl Player {
         let i = self.s.borrow().index;
         if i + 1 < self.episodes_len() {
             self.open_episode(i + 1);
-        } else {
+        } else if !self.open_next_season() {
             self.notice("Đây là tập mới nhất.", 4000);
         }
+    }
+
+    /// Phim chia mùa: mở tập đầu của mùa sau (không sang nhóm tập đặc biệt). false = không có mùa sau.
+    fn open_next_season(self: &Rc<Self>) -> bool {
+        let Some(g) = next_season_of(&self.s.borrow()).cloned() else { return false };
+        self.s.borrow_mut().group = Some(g);
+        self.open_episode(0);
+        true
     }
 
     fn prev(self: &Rc<Self>) {
@@ -1273,15 +1361,26 @@ impl Player {
     }
 
     /// Sang bản khác (Vietsub / Thuyết Minh…): mở tập cùng tên và xem tiếp đúng chỗ; bản đó chưa có tập này thì mở tập cùng vị trí.
+    /// Phim chia mùa (dexter.pw): chọn mùa là mở tập đầu của mùa đó (mùa nào cũng có «Tập 1» — không phải cùng tập).
     fn switch_group(self: &Rc<Self>, g: EpisodeGroup) {
         self.hide_panel();
-        let (cur, idx, film) = {
+        let (cur, idx, film, seasons) = {
             let s = self.s.borrow();
             if s.group.as_ref() == Some(&g) || s.detail.is_none() || g.episodes.is_empty() {
                 return;
             }
-            (s.group.as_ref().and_then(|x| x.episodes.get(s.index)).cloned(), s.index, s.detail.as_ref().map(|d| d.url.clone()).unwrap_or_default())
+            (
+                s.group.as_ref().and_then(|x| x.episodes.get(s.index)).cloned(),
+                s.index,
+                s.detail.as_ref().map(|d| d.url.clone()).unwrap_or_default(),
+                s.detail.as_ref().map(|d| d.seasons).unwrap_or(false),
+            )
         };
+        if seasons {
+            self.s.borrow_mut().group = Some(g);
+            self.open_episode(0);
+            return;
+        }
         let same = g.episodes.iter().position(|e| Some(&e.title) == cur.as_ref().map(|c| &c.title));
         let target = same.unwrap_or(idx.min(g.episodes.len() - 1));
         if same.is_some() {
@@ -1312,7 +1411,7 @@ impl Player {
         let me = self.clone();
         #[allow(deprecated)]
         self.web.run_javascript(
-            "JSON.stringify([window.__chimtoLoad||0,window.__chimtoState||null,window.__chimtoSrc||null])",
+            "JSON.stringify([window.__chimtoLoad||0,window.__chimtoState||null,window.__chimtoSrc||null,window.__chimtoSubNote||null])",
             None::<&gio::Cancellable>,
             move |r| {
                 me.s.borrow_mut().polling = false;
@@ -1328,7 +1427,11 @@ impl Player {
     fn on_state(self: &Rc<Self>, raw: Option<String>) {
         let page_load = self.s.borrow().page_load;
         let v = raw.and_then(|r| serde_json::from_str::<serde_json::Value>(&r).ok());
+        // [lần nạp trang, trạng thái, link luồng của trình phát nhúng, lời nhắn phụ đề]: của trang tập cũ thì bỏ
         let mine = v.as_ref().and_then(|v| v.as_array()).filter(|a| a.len() >= 2 && a[0].as_u64() == Some(page_load));
+        if let Some(note) = mine.and_then(|a| a.get(3)).and_then(|x| x.as_str()) {
+            self.sub_note(note);
+        }
         // Trình phát nhúng đã lộ link luồng (EXTRACT_JS): chuyển sang trình phát native
         if self.s.borrow().extract {
             if let Some(src) = mine.and_then(|a| a.get(2)).and_then(|x| x.as_object()) {
@@ -1475,6 +1578,13 @@ impl Player {
                 let t = self.s.borrow().group.as_ref().map(|g| g.episodes[i + 1].title.clone()).unwrap_or_default();
                 self.notice(&format!("Hết tập — chuyển sang {t}"), 4000);
                 self.open_episode(i + 1);
+            } else if prefs::auto_next() {
+                // Phim chia mùa: hết mùa thì sang tập đầu mùa sau
+                let season = next_season_of(&self.s.borrow()).map(|g| format!("{}, {}", g.name, g.episodes[0].title));
+                if let Some(name) = season {
+                    self.notice(&format!("Hết mùa — chuyển sang {name}"), 4000);
+                    self.open_next_season();
+                }
             }
         }
     }
@@ -1594,6 +1704,259 @@ impl Player {
         let done = st.ended || (st.d > 0.0 && st.t > st.d - 90.0);
         let film = s.detail.as_ref().map(|d| d.url.clone()).unwrap_or_else(|| s.film_url.clone());
         prefs::save_position(&s.episode_url, if done { 0 } else { st.t as i64 }, &film);
+    }
+
+    // ---- Phụ đề rời (dexter.pw) — bản Android: PlayerActivity setSubs / nudgeSub / subNote / pollSubs ----
+
+    /// Danh sách phụ đề mới → chọn sẵn theo ngôn ngữ người xem ưa dùng (không có tiếng Việt thì bản đầu tiên; "off" = tắt).
+    fn set_subs(&self, list: Vec<SubTrack>) {
+        let want = prefs::sub_lang();
+        let idx = if list.is_empty() || want == "off" {
+            -1
+        } else {
+            list.iter().position(|x| x.lang == want).unwrap_or(0) as i32
+        };
+        let mut s = self.s.borrow_mut();
+        s.subs = list;
+        s.sub_idx = idx;
+    }
+
+    /// Chữ trên nút: «Phụ đề: Tiếng Việt 2 · muộn 1,5 s» / «Phụ đề: Tắt».
+    fn sub_text(&self) -> String {
+        let s = self.s.borrow();
+        let delay = if s.sub_delay != 0.0 && s.sub_idx >= 0 { format!(" · {}", delay_text(s.sub_delay)) } else { String::new() };
+        format!("Phụ đề: {}{delay}", cur_sub(&s).map(|x| x.label.as_str()).unwrap_or("Tắt"))
+    }
+
+    /// Đổi chữ trên nút «Phụ đề: …» của bảng tuỳ chọn (nếu bảng đang có nút).
+    fn show_sub_button(&self) {
+        if let Some(b) = self.sub_btn.upgrade() {
+            b.set_label(&self.sub_text());
+        }
+    }
+
+    /// Đổi bản phụ đề (hết danh sách thì tắt, bấm nữa lại bản đầu); nhớ ngôn ngữ cho người xem này.
+    fn cycle_sub(&self) {
+        let idx = {
+            let mut s = self.s.borrow_mut();
+            if s.subs.is_empty() {
+                return;
+            }
+            s.sub_idx = if s.sub_idx + 1 >= s.subs.len() as i32 { -1 } else { s.sub_idx + 1 };
+            prefs::set_sub_lang(cur_sub(&s).map(|x| x.lang.as_str()).unwrap_or("off"));
+            s.sub_idx
+        };
+        self.js(&format!("window.__chimtoSub&&__chimtoSub({idx})"));
+        self.show_sub_button();
+    }
+
+    /// Chữ lệch với tiếng (bản phụ đề làm cho bản phim khác): dời 0,5 giây mỗi lần bấm, nhớ cho tập này.
+    fn nudge_sub(&self, d: f64) {
+        let (delay, ep) = {
+            let mut s = self.s.borrow_mut();
+            if s.subs.is_empty() {
+                return;
+            }
+            s.sub_delay = ((s.sub_delay + d) * 10.0).round() / 10.0;
+            (s.sub_delay, s.source.as_ref().map(|x| x.ep_url.clone()).unwrap_or_else(|| s.episode_url.clone()))
+        };
+        prefs::set_sub_delay(&ep, delay);
+        self.js(&format!("window.__chimtoSubDelay&&__chimtoSubDelay({delay})"));
+        self.show_sub_button();
+        let text = if delay == 0.0 { "đúng như bản gốc".to_string() } else { format!("{} so với bản gốc", delay_text(delay)) };
+        self.notice(&format!("Phụ đề: {text}"), 1500);
+    }
+
+    /// Tệp phụ đề hỏng thì trang tự sang tệp sau — hỏi lại tệp đang hiện cho đúng chữ trên nút.
+    fn sync_sub_idx(self: &Rc<Self>) {
+        let load = {
+            let s = self.s.borrow();
+            if s.subs.is_empty() || s.native_on {
+                return;
+            }
+            s.page_load
+        };
+        let me = self.clone();
+        #[allow(deprecated)]
+        self.web.run_javascript("window.__chimtoSubNow?__chimtoSubNow():null", None::<&gio::Cancellable>, move |r| {
+            let Some(i) = r.ok().and_then(|x| x.js_value()).and_then(|v| {
+                use javascriptcore::ValueExt;
+                v.to_str().trim().parse::<i32>().ok()
+            }) else {
+                return;
+            };
+            {
+                let mut s = me.s.borrow_mut();
+                if s.page_load != load || s.subs.is_empty() || i == s.sub_idx || i >= s.subs.len() as i32 {
+                    return;
+                }
+                s.sub_idx = i.max(-1);
+            }
+            me.show_sub_button();
+        });
+    }
+
+    /// hls.html báo "số|lời nhắn" (vd hết tệp tiếng Việt tải được → tạm dùng tiếng Anh; thử lại được) → hiện một lần.
+    fn sub_note(self: &Rc<Self>, raw: &str) {
+        let Some((n, text)) = raw.split_once('|') else { return };
+        let Ok(n) = n.trim().parse::<u64>() else { return };
+        if n <= self.s.borrow().sub_note_shown {
+            return;
+        }
+        self.s.borrow_mut().sub_note_shown = n;
+        self.notice(text, 7000);
+        self.sync_sub_idx();
+    }
+
+    /// Trang còn đang tìm phụ đề (phim bộ: tập ít người xem có khi vài phút mới có, trình duyệt cũng vậy): hỏi lại mỗi 4 giây,
+    /// tối đa 45 lần (3 phút như trang) khi vẫn đang mở đúng lần phát này (token); có thì gắn ngay vào trình phát (phụ đề riêng
+    /// của nguồn, nếu có, vẫn đứng đầu).
+    fn poll_subs(self: &Rc<Self>, list_url: String, t: u64, tries: u32) {
+        if tries >= 45 {
+            return;
+        }
+        let me = self.clone();
+        ui::after(4000, move || {
+            if t != me.s.borrow().token || !me.is_open() {
+                return;
+            }
+            let u = list_url.clone();
+            ui::spawn(async move { cbtv::dexter::subtitles_from(&u).await }, move |r| {
+                if t != me.s.borrow().token || !me.is_open() {
+                    return;
+                }
+                let (list, pending) = r.unwrap_or_else(|_| (Vec::new(), true));
+                if list.is_empty() {
+                    if pending {
+                        me.poll_subs(list_url, t, tries + 1);
+                    }
+                    return;
+                }
+                me.add_subs(list);
+            });
+        });
+    }
+
+    /// Phụ đề trang tìm xong sau: thêm vào cuối danh sách (bỏ tệp đã có), chọn lại, báo trang hls.html.
+    fn add_subs(&self, list: Vec<SubTrack>) {
+        let (keep, mut all) = {
+            let s = self.s.borrow();
+            ((!s.subs.is_empty() && s.sub_idx >= 0).then_some(s.sub_idx), s.subs.clone())
+        };
+        let fresh: Vec<SubTrack> = list.into_iter().filter(|n| !all.iter().any(|x| x.url == n.url)).collect();
+        all.extend(fresh);
+        self.set_subs(all);
+        if let Some(k) = keep {
+            self.s.borrow_mut().sub_idx = k;
+        }
+        let (json, idx, label) = {
+            let s = self.s.borrow();
+            (subs_json(&s.subs), s.sub_idx, cur_sub(&s).map(|x| x.label.clone()))
+        };
+        self.js(&format!("window.__chimtoSubs&&__chimtoSubs({json},{idx})"));
+        self.show_sub_button();
+        cbtv::log::d("player", &format!("Đã có phụ đề ({} tệp), đang hiện {idx}", self.s.borrow().subs.len()));
+        if let Some(l) = label {
+            self.notice(&format!("Đã có phụ đề {} — ▼ để chọn bản khác hoặc chỉnh chữ sớm / muộn.", lower_first(&l)), 5000);
+        }
+    }
+
+    // ---- Chất lượng (luồng HLS nhiều bản — bản Android: PlayerActivity showQuality / syncQuality / cycleQuality) ----
+
+    /// «Chất lượng: Tự động (720p)» / «Chất lượng: 4K (đang 1080p)».
+    fn quality_text(&self) -> String {
+        let now = self.s.borrow().level_now;
+        let want = prefs::video_quality();
+        let v = if want <= 0 {
+            format!("Tự động{}", if now > 0 { format!(" ({})", quality_name(now)) } else { String::new() })
+        } else {
+            format!("{}{}", quality_name(want), if now > 0 && now != want { format!(" (đang {})", quality_name(now)) } else { String::new() })
+        };
+        format!("Chất lượng: {v}")
+    }
+
+    /// {levels, want, now} từ hls.html (__chimtoLevels / __chimtoQuality trả chuỗi JSON) → nút «Chất lượng» (ẩn khi < 2 bản).
+    fn show_quality(&self, raw: &str) {
+        let o = serde_json::from_str::<serde_json::Value>(raw).ok();
+        let levels: Vec<i64> = o
+            .as_ref()
+            .and_then(|o| o.get("levels"))
+            .and_then(|a| a.as_array())
+            .map(|a| a.iter().filter_map(|x| x.as_i64()).filter(|h| *h > 0).collect())
+            .unwrap_or_default();
+        let now = o.as_ref().and_then(|o| o.get("now")).and_then(|x| x.as_i64()).unwrap_or(0);
+        {
+            let mut s = self.s.borrow_mut();
+            s.levels = levels;
+            s.level_now = now;
+        }
+        if let Some(b) = self.quality_btn.upgrade() {
+            b.set_label(&self.quality_text());
+            if let Some(c) = b.parent() {
+                c.set_visible(self.s.borrow().levels.len() > 1);
+            }
+        }
+    }
+
+    /// Hỏi hls.html danh sách bản + bản đang phát (khi mở bảng ▼, sau khi đổi bản).
+    fn sync_quality(self: &Rc<Self>) {
+        let load = {
+            let s = self.s.borrow();
+            if s.hls_url.is_none() || s.native_on {
+                return;
+            }
+            s.page_load
+        };
+        let me = self.clone();
+        #[allow(deprecated)]
+        self.web.run_javascript("window.__chimtoLevels?__chimtoLevels():null", None::<&gio::Cancellable>, move |r| {
+            if me.s.borrow().page_load != load {
+                return;
+            }
+            let raw = r.ok().and_then(|x| x.js_value()).map(|v| {
+                use javascriptcore::ValueExt;
+                v.to_str().to_string()
+            });
+            me.show_quality(raw.as_deref().unwrap_or(""));
+        });
+    }
+
+    /// Tự động → bản cao nhất (4K) → … → bản thấp nhất → tự động; nhớ cho các phim sau (người xem này). Giá trị đã lưu không có
+    /// trong phim này thì coi như đang ở bản thấp hơn gần nhất.
+    fn cycle_quality(self: &Rc<Self>) {
+        let levels = self.s.borrow().levels.clone();
+        if levels.len() < 2 {
+            return;
+        }
+        let options: Vec<i64> = std::iter::once(0).chain(levels).collect();
+        let cur = prefs::video_quality();
+        let i = options.iter().position(|x| *x == cur).or_else(|| options.iter().position(|x| (1..=cur).contains(x))).unwrap_or(0);
+        let next = options[(i + 1) % options.len()];
+        prefs::set_video_quality(next);
+        let load = self.s.borrow().page_load;
+        let me = self.clone();
+        #[allow(deprecated)]
+        self.web.run_javascript(&format!("window.__chimtoQuality?__chimtoQuality({next}):null"), None::<&gio::Cancellable>, move |r| {
+            if me.s.borrow().page_load != load {
+                return;
+            }
+            let raw = r.ok().and_then(|x| x.js_value()).map(|v| {
+                use javascriptcore::ValueExt;
+                v.to_str().to_string()
+            });
+            me.show_quality(raw.as_deref().unwrap_or(""));
+        });
+        if let Some(b) = self.quality_btn.upgrade() {
+            b.set_label(&self.quality_text());
+        }
+        self.notice(&format!("Chất lượng: {}", if next == 0 { "Tự động (vừa màn hình)".to_string() } else { quality_name(next) }), 1500);
+        // Bản mới chạy sau vài giây (hls.js tải đoạn của bản đó) — hỏi lại cho chữ «đang …» đúng, nếu bảng còn mở
+        let me = self.clone();
+        ui::after(4000, move || {
+            if me.quality_btn.upgrade().is_some() && me.panel.is_visible() {
+                me.sync_quality();
+            }
+        });
     }
 
     // ---- Điều khiển ----
@@ -1823,9 +2186,8 @@ impl Player {
         };
         self.state_text.set_text(&state);
         self.btn_play.set_label(if st.map(|x| !x.paused).unwrap_or(false) { "⏸  Dừng" } else { "▶  Phát" });
-        let n = s.group.as_ref().map(|g| g.episodes.len()).unwrap_or(0);
         self.btn_prev.set_sensitive(s.index > 0);
-        self.btn_next.set_sensitive(s.index + 1 < n);
+        self.btn_next.set_sensitive(has_next(&s));
     }
 
     pub fn notice(&self, text: &str, ms: u64) {
@@ -1921,7 +2283,8 @@ impl Player {
             _ => {}
         }
         if let Some(d) = detail.as_ref().filter(|d| d.groups.len() > 1) {
-            self.section("Bản", None);
+            // Phim chia mùa (dexter.pw): mỗi nhóm là một mùa, chọn là mở tập đầu của mùa
+            self.section(if d.seasons { "Mùa" } else { "Bản" }, None);
             let row = self.panel_row();
             for g in &d.groups {
                 let me = self.clone();
@@ -1930,7 +2293,7 @@ impl Player {
                 ui::add_flow(&row, b.upcast_ref());
             }
         }
-        let n = group.as_ref().map(|g| g.episodes.len()).unwrap_or(0);
+        let more = has_next(&self.s.borrow());
         self.section("Xem", None);
         let view = self.panel_row();
         let me = self.clone();
@@ -1944,14 +2307,14 @@ impl Player {
             me.hide_panel();
             me.next();
         });
-        next.set_sensitive(index + 1 < n);
+        next.set_sensitive(more);
         let me = self.clone();
         let reload = ui::pill("↻  Tải lại", move || me.reload());
         for b in [&prev, &next, &reload] {
             ui::add_flow(&view, b.upcast_ref());
         }
         if focus.is_none() {
-            focus = Some(if index + 1 < n { next.clone() } else { prev.clone() });
+            focus = Some(if more { next.clone() } else { prev.clone() });
         }
         let rates = self.panel_row();
         for r in RATES {
@@ -1971,7 +2334,37 @@ impl Player {
             me.cmd("fit", Some(if prefs::video_fill() { 1.0 } else { 0.0 }));
             me.show_panel();
         });
-        ui::add_flow(&self.panel_row(), fit.upcast_ref());
+        let view2 = self.panel_row();
+        ui::add_flow(&view2, fit.upcast_ref());
+        // Chất lượng (luồng HLS có nhiều bản, vd dexter.pw 4K): nút hiện khi hls.html báo từ 2 bản trở lên
+        if self.s.borrow().hls_url.is_some() && !self.s.borrow().native_on {
+            let me = self.clone();
+            let q = ui::pill(&self.quality_text(), move || me.cycle_quality());
+            ui::add_flow(&view2, q.upcast_ref());
+            if let Some(c) = q.parent() {
+                c.set_no_show_all(true);
+                c.set_visible(self.s.borrow().levels.len() > 1);
+                q.show();
+            }
+            self.quality_btn.set(Some(&q));
+            self.sync_quality();
+        }
+
+        // Phụ đề rời (dexter.pw): chỉ hiện khi tập có phụ đề chọn được
+        if !self.s.borrow().subs.is_empty() {
+            self.section("Phụ đề", None);
+            let row = self.panel_row();
+            let me = self.clone();
+            let b = ui::pill(&self.sub_text(), move || me.cycle_sub());
+            self.sub_btn.set(Some(&b));
+            ui::add_flow(&row, b.upcast_ref());
+            let me = self.clone();
+            ui::add_flow(&row, ui::pill("Chữ sớm hơn 0,5 s", move || me.nudge_sub(-0.5)).upcast_ref());
+            let me = self.clone();
+            ui::add_flow(&row, ui::pill("Chữ muộn hơn 0,5 s", move || me.nudge_sub(0.5)).upcast_ref());
+            // Tệp phụ đề hỏng thì trang tự sang tệp sau — hỏi lại tệp đang hiện cho đúng chữ trên nút
+            self.sync_sub_idx();
+        }
 
         // Nhạc mở đầu
         let key = self.intro_key();
@@ -2112,7 +2505,8 @@ impl Player {
             _ => format!("off (force_web={})", s.force_web),
         };
         format!(
-            "native={native} open={} pageMode={} started={} server={:?} ep={} t={:?} d={:?} paused={:?} embed={:?} hls={:?} load={}",
+            "native={native} open={} pageMode={} started={} server={:?} ep={} t={:?} d={:?} paused={:?} embed={:?} hls={:?} load={} \
+             group={:?} index={} subs={} sub={} ({:?}) delay={} levels={:?} levelNow={} quality={}",
             self.is_open(),
             s.page_mode,
             s.started,
@@ -2123,8 +2517,35 @@ impl Player {
             s.state.map(|x| x.paused),
             s.embed_url,
             s.hls_url,
-            s.page_load
+            s.page_load,
+            s.group.as_ref().map(|g| g.name.clone()),
+            s.index,
+            s.subs.len(),
+            s.sub_idx,
+            cur_sub(&s).map(|x| x.label.clone()),
+            s.sub_delay,
+            s.levels,
+            s.level_now,
+            prefs::video_quality()
         )
+    }
+
+    /// Cổng gỡ lỗi: giả phụ đề «đang tìm» (khó gặp thật — trang tìm xong trong vài giây) — bỏ danh sách phụ đề đang có của tập
+    /// rồi hỏi lại danh sách `list_url` như khi trang trả {pending: true} (poll_subs).
+    #[cfg(debug_assertions)]
+    pub fn debug_subs_later(self: &Rc<Self>, list_url: &str) -> String {
+        if !self.is_open() || self.s.borrow().hls_url.is_none() {
+            return "không đang phát bằng hls.html".into();
+        }
+        let t = {
+            let mut s = self.s.borrow_mut();
+            s.subs.clear();
+            s.sub_idx = -1;
+            s.token
+        };
+        self.js("window.__chimtoSubs&&__chimtoSubs([],-1)");
+        self.poll_subs(list_url.to_string(), t, 0);
+        "ok — hỏi lại sau 4 giây".into()
     }
 
     #[cfg(debug_assertions)]
@@ -2160,16 +2581,116 @@ pub fn clear_browsing_data() {
     crate::images::clear_disk();
 }
 
-/// Trang hls.html với hls.js đóng kèm (gắn thẳng vào trang thay cho /__chimto/hls.js — WebKitGTK không chặn được yêu cầu
-/// https để trả tệp như WebView của Android / WebView2).
-fn hls_page(src: &str, sub: Option<&str>, start: i64) -> String {
-    let js = crate::assets::HLS_JS.replace("</script", "<\\/script");
-    crate::assets::HLS_HTML
-        .replace("<script src=\"/__chimto/hls.js\"></script>", &format!("<script>{js}</script>"))
-        .replace("{{SRC}}", &serde_json::to_string(src).unwrap_or_else(|_| "\"\"".into()))
-        .replace("{{START}}", &start.to_string())
-        .replace("{{SUB}}", &sub.map(|s| serde_json::to_string(s).unwrap_or_else(|_| "null".into())).unwrap_or_else(|| "null".into()))
-        .replace("{{AGENT}}", "")
+/// Tham số của trang hls.html (bản Android: PlayerActivity.playServer, iPad: Assets.hlsPage).
+struct HlsPage<'a> {
+    src: &'a str,
+    /// Một tệp phụ đề rời (bản Song Ngữ của server HD phimmois)
+    sub: Option<&'a str>,
+    start: i64,
+    /// Phụ đề chọn được (dexter.pw); None = không có danh sách — chỉ dùng `sub`
+    subs: Option<&'a [SubTrack]>,
+    /// Tệp chọn sẵn (-1 = tắt) và độ lệch (giây, + = chữ muộn hơn)
+    sub_idx: i32,
+    sub_delay: f64,
+    /// Phát thẳng bằng <video> (MP4 của CLB Phim Xưa), không qua hls.js
+    file: bool,
+    /// Video.hls (dexter.pw): bản hls.js đầy đủ (âm thanh tách rời) + chọn bản không lớn hơn màn hình (CAP)
+    full: bool,
+}
+
+/// Trang hls.html với hls.js đóng kèm (gắn thẳng vào trang thay cho thẻ nạp {{HLSJS}} — WebKitGTK không chặn được yêu cầu
+/// https để trả tệp như WebView của Android / WebView2). Điền mọi chỗ {{…}} trong một lượt: giá trị điền vào (link, tên phụ
+/// đề, mã hls.js) không bị điền lần nữa; chuỗi JSON thoát «</» để không thoát ra khỏi thẻ <script>.
+fn hls_page(p: &HlsPage) -> String {
+    let js = if p.full { crate::assets::HLS_FULL_JS } else { crate::assets::HLS_JS };
+    let tpl = crate::assets::HLS_HTML
+        .replace("<script src=\"{{HLSJS}}\"></script>", "<script>{{HLSJS}}</script>")
+        // trang hls.html kiểu cũ (đường dẫn cố định)
+        .replace("<script src=\"/__chimto/hls.js\"></script>", "<script>{{HLSJS}}</script>");
+    fill(
+        &tpl,
+        &[
+            ("HLSJS", js.replace("</script", "<\\/script")),
+            ("AGENT", String::new()),
+            ("SRC", js_value(p.src)),
+            ("SUB", p.sub.map(js_value).unwrap_or_else(|| "null".into())),
+            ("SUBS", p.subs.map(subs_json).unwrap_or_else(|| "null".into())),
+            ("SUBI", p.sub_idx.to_string()),
+            ("SUBD", js_number(p.sub_delay)),
+            ("FILE", p.file.to_string()),
+            ("CAP", p.full.to_string()),
+            ("START", p.start.to_string()),
+        ],
+    )
+}
+
+/// Thay các chỗ {{TÊN}} có trong `vals` (một lượt, từ trái sang phải); chỗ không có tên trong `vals` giữ nguyên.
+fn fill(tpl: &str, vals: &[(&str, String)]) -> String {
+    let mut out = String::with_capacity(tpl.len() + vals.iter().map(|v| v.1.len()).sum::<usize>());
+    let mut rest = tpl;
+    while let Some(i) = rest.find("{{") {
+        out.push_str(&rest[..i]);
+        let after = &rest[i + 2..];
+        let hit = after.find("}}").and_then(|j| vals.iter().find(|v| v.0 == &after[..j]));
+        match hit {
+            Some((k, v)) => {
+                out.push_str(v);
+                rest = &after[k.len() + 2..];
+            }
+            None => {
+                out.push_str("{{");
+                rest = after;
+            }
+        }
+    }
+    out.push_str(rest);
+    out
+}
+
+/// Chuỗi JS (JSON) an toàn trong thẻ <script>.
+fn js_value(s: &str) -> String {
+    script_safe(serde_json::to_string(s).unwrap_or_else(|_| "\"\"".into()))
+}
+
+fn script_safe(json: String) -> String {
+    json.replace("</", "<\\/")
+}
+
+/// Số cho JS (độ lệch phụ đề): 0, -0.5, 1.5…
+fn js_number(x: f64) -> String {
+    if x.is_finite() {
+        format!("{x}")
+    } else {
+        "0".into()
+    }
+}
+
+/// [{u, l, g}] cho hls.html (SUBS / __chimtoSubs) — an toàn trong thẻ <script>.
+fn subs_json(list: &[SubTrack]) -> String {
+    let arr: Vec<serde_json::Value> = list.iter().map(|s| serde_json::json!({ "u": s.url, "l": s.label, "g": s.lang })).collect();
+    script_safe(serde_json::to_string(&arr).unwrap_or_else(|_| "[]".into()))
+}
+
+/// «muộn 1,5 s» / «sớm 0,5 s».
+fn delay_text(d: f64) -> String {
+    format!("{} {} s", if d > 0.0 { "muộn" } else { "sớm" }, format!("{}", d.abs()).replace('.', ","))
+}
+
+/// Tên bản theo chiều cao: 2160+ = «4K», 1440+ = «2K», còn lại «720p»…
+fn quality_name(h: i64) -> String {
+    match h {
+        h if h >= 2160 => "4K".into(),
+        h if h >= 1440 => "2K".into(),
+        h => format!("{h}p"),
+    }
+}
+
+fn lower_first(s: &str) -> String {
+    let mut c = s.chars();
+    match c.next() {
+        Some(f) => f.to_lowercase().chain(c).collect(),
+        None => String::new(),
+    }
 }
 
 fn html_escape(s: &str) -> String {
@@ -2218,4 +2739,70 @@ fn is_repeat(key: &gdk::keys::Key, time: u32) -> bool {
     let (lk, lt) = LAST.with(|l| l.get());
     LAST.with(|l| l.set((k, time)));
     lk == k && time.wrapping_sub(lt) < 150
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn page(full: bool, subs: Option<&[SubTrack]>) -> String {
+        hls_page(&HlsPage { src: "https://x.vn/a.m3u8", sub: None, start: 12, subs, sub_idx: 1, sub_delay: -0.5, file: false, full })
+    }
+
+    #[test]
+    fn hls_page_fills_every_placeholder() {
+        for full in [false, true] {
+            let html = page(full, None);
+            assert!(!html.contains("{{"), "còn chỗ chưa điền");
+            assert!(!html.contains("<script src="), "còn thẻ nạp hls.js");
+            assert!(html.contains("var SRC = \"https://x.vn/a.m3u8\", SUB = null, SUBS = null, SUBI = 1, SUBD = -0.5, FILE = false"));
+            assert!(html.contains(&format!("CAP = {full}, START = 12")));
+            // light: trang khác (KKPhim, VSMOV…); đầy đủ: dexter.pw
+            assert_eq!(html.contains("(hls.min.js)"), full);
+            assert_eq!(html.contains("(hls.light.min.js)"), !full);
+        }
+    }
+
+    #[test]
+    fn hls_page_values_are_script_safe() {
+        let subs = vec![
+            SubTrack { label: "Tiếng Việt </script><b>".into(), url: "https://dexter.pw/api/subs/file/movie/1/a.vtt".into(), lang: "vi".into() },
+            SubTrack { label: "Tiếng Anh {{SRC}}".into(), url: "https://dexter.pw/b.vtt".into(), lang: "en".into() },
+        ];
+        let html = hls_page(&HlsPage {
+            src: "https://x.vn/a</script>{{SUB}}",
+            sub: Some("https://x.vn/s.vtt"),
+            start: 0,
+            subs: Some(&subs),
+            sub_idx: 0,
+            sub_delay: 0.0,
+            file: false,
+            full: true,
+        });
+        // một thẻ </script> cho mỗi thẻ <script> của trang (agent, hls.js, mã phát) — giá trị điền vào không đóng thẻ
+        assert_eq!(html.matches("</script>").count(), html.matches("<script>").count());
+        assert!(html.contains(r#""https://x.vn/a<\/script>{{SUB}}""#), "giá trị không bị điền lần nữa");
+        assert!(html.contains("\"l\":\"Tiếng Anh {{SRC}}\""));
+        assert!(html.contains("SUB = \"https://x.vn/s.vtt\", SUBS = [{\"u\":"));
+    }
+
+    #[test]
+    fn fill_keeps_unknown_braces() {
+        assert_eq!(fill("a{{X}}b{{Y}}c{{", &[("X", "1".into())]), "a1b{{Y}}c{{");
+        assert_eq!(fill("{ {x} }}{{X}}", &[("X", "2".into())]), "{ {x} }}2");
+    }
+
+    #[test]
+    fn delay_texts() {
+        assert_eq!(delay_text(0.5), "muộn 0,5 s");
+        assert_eq!(delay_text(-1.0), "sớm 1 s");
+        assert_eq!(delay_text(1.5), "muộn 1,5 s");
+        assert_eq!(js_number(-0.5), "-0.5");
+        assert_eq!(js_number(0.0), "0");
+        assert_eq!(lower_first("Tiếng Việt 2"), "tiếng Việt 2");
+        assert_eq!(quality_name(2160), "4K");
+        assert_eq!(quality_name(1440), "2K");
+        assert_eq!(quality_name(1080), "1080p");
+        assert_eq!(quality_name(800), "800p");
+    }
 }

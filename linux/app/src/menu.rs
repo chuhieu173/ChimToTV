@@ -41,7 +41,9 @@ pub fn entries(a: &App) -> Vec<MenuEntry> {
     let b = prefs::base_url();
     if cbtv::next_site::is_known(&b) || cbtv::api_site::is_known(&b) {
         add("genres", "Thể loại…".into(), Rc::new(|| app().show_root(pages::lists::filter(true))));
-        add("countries", "Quốc gia…".into(), Rc::new(|| app().show_root(pages::lists::filter(false))));
+        // dexter.pw không lọc theo nước: mục thứ hai là thập niên
+        let second = if cbtv::dexter::is_site(&b) { "Thập niên…" } else { "Quốc gia…" };
+        add("countries", second.into(), Rc::new(|| app().show_root(pages::lists::filter(false))));
     }
     add("sites", "🌐  Đổi trang phim".into(), Rc::new(|| app().show_root(pages::sites::new())));
     add("sync", "⇄  Đồng bộ trong nhà".into(), Rc::new(|| app().show_root(pages::sync_page::new())));

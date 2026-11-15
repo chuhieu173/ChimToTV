@@ -8,7 +8,7 @@ use crate::css::px;
 use crate::keynav;
 use crate::ui;
 use cbtv::util::format_time;
-use cbtv::{prefs, EpisodeGroup, Film, FilmDetail};
+use cbtv::{prefs, Episode, EpisodeGroup, Film, FilmDetail, HistoryItem};
 use gtk::prelude::*;
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -74,6 +74,41 @@ fn source_name(url: &str) -> String {
     }
 }
 
+/// Phim chia mùa (phim bộ Âu Mỹ của dexter.pw — bản Android: DetailActivity.updateSeasonButtons): chưa xem thì xem từ tập đầu
+/// mùa 1; «Mới nhất» = tập cuối của mùa cuối. Tên tập trên nút kèm tên mùa (mùa nào cũng có «Tập 1»). Trả nút chính.
+fn season_buttons(d: &FilmDetail, h: Option<&HistoryItem>, buttons: &gtk::FlowBox) -> Option<gtk::Button> {
+    let first = d.groups.first()?.episodes.first()?.clone();
+    let latest = d.latest_episode().cloned().unwrap_or_else(|| first.clone());
+    let name = |e: &Episode| d.group_of(&e.url).map(|g| format!("{}, {}", g.name, e.title)).unwrap_or_else(|| e.title.clone());
+    let resume = h.and_then(|h| d.groups.iter().flat_map(|g| g.episodes.iter()).find(|e| e.url == h.ep_url)).cloned();
+    let main = match &resume {
+        Some(r) => {
+            let pos = prefs::position_of(&r.url);
+            let label = if prefs::finished(&r.url) {
+                format!("▶  Xem tiếp (sau {})", name(r))
+            } else {
+                format!("▶  Xem tiếp {}{}", name(r), if pos > 0 { format!(" ({})", format_time(pos as f64)) } else { String::new() })
+            };
+            let (fu, eu) = (d.url.clone(), r.url.clone());
+            ui::pill_tag(&label, Some("active"), move || app().play(&fu, &eu, true))
+        }
+        None => {
+            let (fu, eu) = (d.url.clone(), first.url.clone());
+            ui::pill_tag(&format!("▶  Xem từ {}", name(&first)), Some("active"), move || app().play(&fu, &eu, false))
+        }
+    };
+    ui::add_flow(buttons, main.upcast_ref());
+    if resume.is_some() && resume.as_ref() != Some(&first) {
+        let (fu, eu) = (d.url.clone(), first.url.clone());
+        ui::add_flow(buttons, ui::pill(&format!("Xem từ {}", name(&first)), move || app().play(&fu, &eu, false)).upcast_ref());
+    }
+    if latest != first && Some(&latest) != resume.as_ref() {
+        let (fu, eu) = (d.url.clone(), latest.url.clone());
+        ui::add_flow(buttons, ui::pill(&format!("Mới nhất: {}", name(&latest)), move || app().play(&fu, &eu, false)).upcast_ref());
+    }
+    Some(main)
+}
+
 impl DetailPage {
     fn loaded(self: &Rc<Self>, d: FilmDetail) {
         if prefs::follow_of(&d.url).is_some() {
@@ -120,7 +155,9 @@ impl DetailPage {
         let mut main: Option<gtk::Button> = None;
         let h = prefs::history_for(&d.url);
         let eps = self.group.borrow().as_ref().map(|g| g.episodes.clone()).unwrap_or_default();
-        if let Some(h) = h.as_ref().filter(|h| d.group_of(&h.ep_url).is_some()) {
+        if d.seasons {
+            main = season_buttons(&d, h.as_ref(), &buttons);
+        } else if let Some(h) = h.as_ref().filter(|h| d.group_of(&h.ep_url).is_some()) {
             let pos = prefs::position_of(&h.ep_url);
             let label = if prefs::finished(&h.ep_url) {
                 format!("▶  Xem tiếp (sau {})", h.ep_title)
@@ -132,7 +169,7 @@ impl DetailPage {
             ui::add_flow(&buttons, m.upcast_ref());
             main = Some(m);
         }
-        if !eps.is_empty() {
+        if !eps.is_empty() && !d.seasons {
             let (fu, eu) = (d.url.clone(), eps[0].url.clone());
             let text = if eps.len() == 1 { "▶  Xem phim".to_string() } else { format!("▶  Xem từ {}", eps[0].title) };
             let first = ui::pill_tag(&text, main.is_none().then_some("active"), move || app().play(&fu, &eu, false));
@@ -198,7 +235,8 @@ impl DetailPage {
         b.add(&top);
 
         if d.groups.len() > 1 {
-            let hd = ui::header("Bản");
+            // Phim chia mùa (dexter.pw): mỗi nhóm là một mùa
+            let hd = ui::header(if d.seasons { "Mùa" } else { "Bản" });
             hd.set_margin_top(px(8.0));
             b.add(&hd);
             let groups = ui::flow(10.0, 10.0);

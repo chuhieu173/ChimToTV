@@ -560,6 +560,8 @@ impl Page for FilterPage {
         self.base.loading("Đang tải…");
         let t = self.base.next_token();
         let b = prefs::base_url();
+        // dexter.pw không lọc theo nước: mục thứ hai là thập niên
+        let second = if cbtv::dexter::is_site(&b) { "Thập niên" } else { "Quốc gia" };
         let me = self.clone();
         ui::spawn(async move { if cbtv::api_site::is_known(&b) { Ok(cbtv::api_site::filters(&b)) } else { cbtv::next_site::filters(&b).await } }, move |r| {
             if t != me.base.token() {
@@ -569,7 +571,7 @@ impl Page for FilterPage {
                 Ok((g, c)) => {
                     let items = if me.genres { g } else { c };
                     me.base.clear();
-                    me.base.add(&ui::header(if me.genres { "Thể loại" } else { "Quốc gia" }));
+                    me.base.add(&ui::header(if me.genres { "Thể loại" } else { second }));
                     let grid = ui::flow(10.0, 10.0);
                     let key = me.base.menu_key.borrow().clone();
                     for c in items {
