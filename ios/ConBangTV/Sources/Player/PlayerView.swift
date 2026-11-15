@@ -649,6 +649,9 @@ private struct MenuPanel: View {
                         PanelLabel("Xem")
                         LazyVGrid(columns: [GridItem(.adaptive(minimum: 220), spacing: 10, alignment: .leading)],
                                   alignment: .leading, spacing: 10) {
+                            if m.levels.count > 1 {
+                                ChipButton(text: "Chất lượng: \(m.qualityText)", icon: "4k.tv") { m.cycleQuality() }
+                            }
                             ChipButton(text: "Tốc độ: \(m.rateText)", icon: "speedometer") { m.cycleRate() }
                             ChipButton(text: "Khung hình: \(m.fitText)", icon: "aspectratio") { m.toggleFit() }
                             ChipButton(text: "Hẹn giờ tắt: \(m.sleepText)", icon: "moon.zzz") { m.cycleSleep() }

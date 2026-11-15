@@ -576,6 +576,13 @@ enum Prefs {
         set { store.set(newValue, forKey: k("video_fill")) }
     }
 
+    /// Chất lượng muốn xem cho luồng có nhiều bản (dexter.pw: 4K / 1080p / 720p…), riêng từng người xem: chiều cao (2160 = 4K),
+    /// 0 = tự động (hls.js tự chọn, không vượt kích thước khung phát). Trang hls.html đọc window.__chimtoWantH.
+    static var videoQuality: Int {
+        get { store.integer(forKey: k("video_quality")) }
+        set { store.set(newValue, forKey: k("video_quality")) }
+    }
+
     /// Phụ đề rời ưa dùng (dexter.pw), riêng từng người xem: "vi" (mặc định), "en" hoặc "off" (tắt).
     static var subLang: String {
         get { store.string(forKey: k("sub_lang")) ?? "vi" }

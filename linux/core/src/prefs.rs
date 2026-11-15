@@ -54,7 +54,7 @@ pub const PROFILE_COLOR_NAMES: [&str; 8] = ["Xanh lá", "Đỏ cam", "Xanh dươ
 /// Khoá riêng từng người xem (còn lại — danh sách trang, mốc nhạc mở đầu, cập nhật… — dùng chung).
 const PROFILE_KEYS: &[&str] = &[
     "history", "positions_v2", "follows", "last_follow_check", "private_mode", "hist_del", "follow_del", "base_url", "seek_step",
-    "auto_next", "video_fill", "sub_lang", "limit_min", "bedtime", "watch_day", "watch_sec", "watch_extra", "unblock_until",
+    "auto_next", "video_fill", "sub_lang", "video_quality", "limit_min", "bedtime", "watch_day", "watch_sec", "watch_extra", "unblock_until",
     // Trang chủ tổng hợp (home_feed): kiểu trang chủ, chủ đề đã chọn, tập mới nhất đã thấy, hồ sơ trẻ em, ngôn ngữ bản hay xem
     "home_mix", "home_topics", "seen_eps", "kids", "watch_langs",
     // Các hàng trang chủ (bật / tắt, thứ tự) và hàng tự thêm
@@ -1142,6 +1142,15 @@ pub fn video_fill() -> bool {
 }
 pub fn set_video_fill(v: bool) {
     set(&k("video_fill"), Some(v));
+}
+
+/// Chất lượng muốn xem cho luồng có nhiều bản (dexter.pw: 4K / 1080p / 720p…), riêng từng người xem: chiều cao (2160 = 4K),
+/// 0 = tự động (hls.js tự chọn, không vượt kích thước khung phát). Trang hls.html đọc window.__chimtoWantH.
+pub fn video_quality() -> i64 {
+    get_or(&k("video_quality"), 0)
+}
+pub fn set_video_quality(v: i64) {
+    set(&k("video_quality"), Some(v));
 }
 
 /// Phụ đề rời ưa dùng (dexter.pw), riêng từng người xem: "vi" (mặc định), "en" hoặc "off" (tắt).

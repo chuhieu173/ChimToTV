@@ -264,6 +264,7 @@ class PlayerActivity : BaseActivity() {
     private lateinit var btnSub: TextView
     private lateinit var btnSubEarly: TextView
     private lateinit var btnSubLate: TextView
+    private lateinit var btnQuality: TextView
 
     private var agentJs = ""
     private var focusJs = ""
@@ -402,6 +403,7 @@ class PlayerActivity : BaseActivity() {
         btnSub = findViewById(R.id.btnSub)
         btnSubEarly = findViewById(R.id.btnSubEarly)
         btnSubLate = findViewById(R.id.btnSubLate)
+        btnQuality = findViewById(R.id.btnQuality)
 
         agentJs = assets.open("player-agent.js").use { it.readBytes().toString(Charsets.UTF_8) }
         focusJs = assets.open("page-focus.js").use { it.readBytes().toString(Charsets.UTF_8) }
@@ -771,6 +773,8 @@ class PlayerActivity : BaseActivity() {
         subDelay = 0.0
         subNoteShown = 0
         showSubButtons()
+        levels = emptyList()
+        btnQuality.visibility = View.GONE
         errShown = false
         lastAdAt = 0
         state = null
@@ -784,7 +788,9 @@ class PlayerActivity : BaseActivity() {
         web.loadUrl("about:blank")
     }
 
-    private fun marked(html: String) = html.replaceFirst("<head>", "<head><script>window.__chimtoLoad=$pageLoad</script>")
+    /** Đánh dấu lần nạp trang + chất lượng muốn xem (hls.html đọc window.__chimtoWantH lúc có danh sách bản). */
+    private fun marked(html: String) =
+        html.replaceFirst("<head>", "<head><script>window.__chimtoLoad=$pageLoad;window.__chimtoWantH=${Prefs.videoQuality}</script>")
 
     private fun buildServerButtons(src: EpisodeSource) {
         serverRow.removeAllViews()
@@ -910,6 +916,7 @@ class PlayerActivity : BaseActivity() {
             showSubButtons()
         }
         btnSubEarly.setOnClickListener { nudgeSub(-0.5) }
+        btnQuality.setOnClickListener { cycleQuality() }
         btnSubLate.setOnClickListener { nudgeSub(0.5) }
         btnSleep.setOnClickListener {
             sleepChoice = (sleepChoice + 1) % SLEEP.size
@@ -997,6 +1004,51 @@ class PlayerActivity : BaseActivity() {
                 subs.getOrNull(subIdx)?.let { notice.show("Đã có phụ đề ${it.label.replaceFirstChar { c -> c.lowercase() }} — ▼ để chọn bản khác hoặc chỉnh chữ sớm / muộn.", 5000) }
             }
         }, 4000)
+    }
+
+    /** Các bản của luồng HLS đang phát (chiều cao, cao → thấp) — đọc từ hls.html khi mở bảng ▼. */
+    private var levels: List<Int> = emptyList()
+
+    private fun qualityName(h: Int) = when {
+        h >= 2160 -> "4K"
+        h >= 1440 -> "2K"
+        else -> "${h}p"
+    }
+
+    /** {levels, want, now} từ hls.html (__chimtoLevels / __chimtoQuality trả chuỗi JSON) → nút «Chất lượng». */
+    private fun showQuality(raw: String?) {
+        val o = runCatching { JSONObject(JSONArray("[$raw]").getString(0)) }.getOrNull()
+        levels = o?.optJSONArray("levels")?.let { a -> (0 until a.length()).map { a.optInt(it) }.filter { it > 0 } }.orEmpty()
+        btnQuality.visibility = if (levels.size > 1) View.VISIBLE else View.GONE
+        if (levels.size < 2) return
+        val want = Prefs.videoQuality
+        val now = o?.optInt("now") ?: 0
+        btnQuality.text = "Chất lượng: " + if (want <= 0) {
+            "Tự động" + if (now > 0) " (${qualityName(now)})" else ""
+        } else {
+            qualityName(want) + if (now > 0 && now != want) " (đang ${qualityName(now)})" else ""
+        }
+    }
+
+    /** Luồng có nhiều bản (vd dexter.pw có 4K): hỏi hls.html danh sách bản để hiện nút. */
+    private fun syncQuality() {
+        if (hlsUrl == null) {
+            btnQuality.visibility = View.GONE
+            return
+        }
+        web.evaluateJavascript("window.__chimtoLevels?__chimtoLevels():null") { showQuality(it) }
+    }
+
+    /** Tự động → bản cao nhất (4K) → … → bản thấp nhất → tự động; nhớ cho các phim sau (bản thiếu thì lấy bản thấp hơn gần nhất). */
+    private fun cycleQuality() {
+        if (levels.size < 2) return
+        val options = listOf(0) + levels
+        val cur = Prefs.videoQuality
+        val i = options.indexOf(cur).takeIf { it >= 0 } ?: options.indexOfFirst { it in 1..cur }.takeIf { it >= 0 } ?: 0
+        val next = options[(i + 1) % options.size]
+        Prefs.videoQuality = next
+        web.evaluateJavascript("window.__chimtoQuality?__chimtoQuality($next):null") { showQuality(it) }
+        showHud("Chất lượng: " + if (next == 0) "Tự động (vừa màn hình)" else qualityName(next), ms = 1500)
     }
 
     private fun showViewButtons() {
@@ -1473,6 +1525,7 @@ class PlayerActivity : BaseActivity() {
         showViewButtons()
         showSubButtons()
         syncSubIdx()
+        syncQuality()
         panel.visibility = View.VISIBLE
         val active = ((0 until serverRow.childCount).map { serverRow.getChildAt(it) } +
             (0 until groupRow.childCount).map { groupRow.getChildAt(it) }).firstOrNull { it.isActivated }

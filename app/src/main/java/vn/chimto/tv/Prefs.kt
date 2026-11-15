@@ -831,6 +831,14 @@ object Prefs {
         get() = sp.getBoolean(k("video_fill"), false)
         set(value) = sp.edit().putBoolean(k("video_fill"), value).apply()
 
+    /**
+     * Chất lượng muốn xem cho luồng có nhiều bản (dexter.pw: 4K / 1080p / 720p…), riêng từng người xem: chiều cao (2160 = 4K),
+     * 0 = tự động (hls.js tự chọn, không vượt độ phân giải màn hình). Phim không có đúng bản đó thì lấy bản cao nhất thấp hơn.
+     */
+    var videoQuality: Int
+        get() = sp.getInt(k("video_quality"), 0)
+        set(value) = sp.edit().putInt(k("video_quality"), value).apply()
+
     /** Phụ đề rời ưa dùng (dexter.pw), riêng từng người xem: "vi" (mặc định), "en" hoặc "off" (tắt). */
     var subLang: String
         get() = sp.getString(k("sub_lang"), "vi") ?: "vi"

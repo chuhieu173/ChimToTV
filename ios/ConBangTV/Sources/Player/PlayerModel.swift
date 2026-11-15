@@ -59,6 +59,9 @@ final class PlayerModel: NSObject, ObservableObject, WKNavigationDelegate, WKUID
     @Published private(set) var subs: [SubTrack] = []
     @Published private(set) var subIdx = -1
     @Published private(set) var subDelay = 0.0
+    /// Các bản của luồng HLS đang phát (chiều cao, cao → thấp) và chiều cao đang phát — đọc từ hls.html khi mở Menu.
+    @Published private(set) var levels: [Int] = []
+    @Published private(set) var levelNow = 0
     /// Lời nhắn phụ đề mới nhất đã hiện (số thứ tự hls.html đánh; trang nạp lại thì đếm lại từ 1).
     private var subNoteShown = 0
     @Published private(set) var pageMode = false
@@ -297,7 +300,8 @@ final class PlayerModel: NSObject, ObservableObject, WKNavigationDelegate, WKUID
     private func installScripts(hls: Bool, page: Bool, fullHls: Bool = false) {
         let ucc = web.configuration.userContentController
         ucc.removeAllUserScripts()
-        let prefix = "window.__chimtoStart=\(startHint);window.__chimtoLoad=\(pageLoad);\n"
+        // __chimtoWantH: chất lượng muốn xem (hls.html đọc lúc có danh sách bản)
+        let prefix = "window.__chimtoStart=\(startHint);window.__chimtoLoad=\(pageLoad);window.__chimtoWantH=\(Prefs.videoQuality);\n"
         ucc.addUserScript(WKUserScript(source: prefix + Assets.agent, injectionTime: .atDocumentStart, forMainFrameOnly: false))
         ucc.addUserScript(WKUserScript(source: WebSetup.fillCss, injectionTime: .atDocumentStart, forMainFrameOnly: false))
         // dexter.pw (Video.hls): bản hls.js đầy đủ — luồng âm thanh tách rời
@@ -331,6 +335,8 @@ final class PlayerModel: NSObject, ObservableObject, WKNavigationDelegate, WKUID
         subIdx = -1
         subDelay = 0
         subNoteShown = 0
+        levels = []
+        levelNow = 0
         errShown = false
         lastAdAt = 0
         state = nil
@@ -731,6 +737,44 @@ final class PlayerModel: NSObject, ObservableObject, WKNavigationDelegate, WKUID
         }
     }
 
+    // MARK: - Chất lượng (luồng có nhiều bản, vd 4K của dexter.pw)
+
+    private func qualityName(_ h: Int) -> String { h >= 2160 ? "4K" : h >= 1440 ? "2K" : "\(h)p" }
+
+    var qualityText: String {
+        let want = Prefs.videoQuality
+        if want <= 0 { return "Tự động" + (levelNow > 0 ? " (\(qualityName(levelNow)))" : "") }
+        return qualityName(want) + (levelNow > 0 && levelNow != want ? " (đang \(qualityName(levelNow)))" : "")
+    }
+
+    /// {levels, want, now} từ hls.html (__chimtoLevels / __chimtoQuality trả chuỗi JSON).
+    private func showQuality(_ r: Any?) {
+        guard let s = r as? String, let o = try? JSONSerialization.jsonObject(with: Data(s.utf8)) as? [String: Any] else {
+            levels = []
+            return
+        }
+        levels = ((o["levels"] as? [Any]) ?? []).compactMap { ($0 as? NSNumber)?.intValue }.filter { $0 > 0 }
+        levelNow = (o["now"] as? NSNumber)?.intValue ?? 0
+    }
+
+    func syncQuality() {
+        guard hlsUrl != nil else { levels = []; return }
+        web.evaluateJavaScript("window.__chimtoLevels?__chimtoLevels():null") { [weak self] r, _ in self?.showQuality(r) }
+    }
+
+    /// Tự động → bản cao nhất (4K) → … → bản thấp nhất → tự động; nhớ cho các phim sau (bản thiếu thì lấy bản thấp hơn gần nhất).
+    func cycleQuality() {
+        guard levels.count > 1 else { return }
+        let options = [0] + levels
+        let cur = Prefs.videoQuality
+        let i = options.firstIndex(of: cur) ?? options.firstIndex(where: { $0 > 0 && $0 <= cur }) ?? 0
+        let next = options[(i + 1) % options.count]
+        Prefs.videoQuality = next
+        web.evaluateJavaScript("window.__chimtoQuality?__chimtoQuality(\(next)):null") { [weak self] r, _ in self?.showQuality(r) }
+        showNotice("Chất lượng: " + (next == 0 ? "Tự động (vừa màn hình)" : qualityName(next)), 1.5)
+        objectWillChange.send()
+    }
+
     // MARK: - Tốc độ / khung hình / hẹn giờ tắt
 
     func cycleRate() {
@@ -1041,6 +1085,7 @@ final class PlayerModel: NSObject, ObservableObject, WKNavigationDelegate, WKUID
         hideBar()
         panelShown = true
         syncSubIdx()
+        syncQuality()
     }
 
     /// Phim chia mùa (nhóm tập = mùa, không phải bản Vietsub / Thuyết Minh).

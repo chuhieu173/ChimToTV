@@ -367,6 +367,12 @@
                     android:text="Chữ muộn hơn 0,5 s"
                     android:visibility="gone" />
 
+                <!-- Chất lượng (luồng HLS có nhiều bản, vd 4K của dexter.pw): chỉ hiện khi có từ hai bản trở lên -->
+                <TextView
+                    android:id="@+id/btnQuality"
+                    style="@style/TvButton"
+                    android:visibility="gone" />
+
                 <TextView
                     android:id="@+id/btnSpeed"
                     style="@style/TvButton" />
