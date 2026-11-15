@@ -247,12 +247,15 @@
   // Chất lượng (luồng có nhiều bản, vd dexter.pw 4K / 1080p / 720p / 480p): mặc định hls.js tự chọn (giới hạn theo màn hình
   // khi CAP). App đặt chiều cao muốn dùng qua window.__chimtoWantH (0 = tự động; chèn sẵn trước khi trang chạy, hoặc gọi
   // __chimtoQuality sau) — phim không có đúng bản đó thì lấy bản cao nhất không vượt quá, không có thì bản thấp nhất.
+  // Chiều cao «danh nghĩa» của một bản: phim khung rộng 4K là 3840×1600, 1080p là 2592×1080… → rộng từ 3200 trở lên tính là 4K
+  function nominal(w, h) { return (w || 0) >= 3200 ? 2160 : (h || 0); }
+  function levelH(l) { return nominal(l.width, l.height); }
   function levelFor(h) {
     var best = -1, low = -1, i, lh;
     for (i = 0; i < hls.levels.length; i++) {
-      lh = hls.levels[i].height || 0;
-      if (lh <= h && (best < 0 || lh > hls.levels[best].height)) best = i;
-      if (low < 0 || lh < hls.levels[low].height) low = i;
+      lh = levelH(hls.levels[i]);
+      if (lh <= h && (best < 0 || lh > levelH(hls.levels[best]))) best = i;
+      if (low < 0 || lh < levelH(hls.levels[low])) low = i;
     }
     return best >= 0 ? best : low;
   }
@@ -264,9 +267,9 @@
   }
   // App hỏi: {levels: [chiều cao…] (cao → thấp), want: chiều cao đã chọn (0 = tự động), now: chiều cao đang phát}
   window.__chimtoLevels = function () {
-    var hs = (hls.levels || []).map(function (l) { return l.height || 0; }).filter(function (h, i, a) { return h > 0 && a.indexOf(h) === i; });
+    var hs = (hls.levels || []).map(levelH).filter(function (h, i, a) { return h > 0 && a.indexOf(h) === i; });
     hs.sort(function (a, b) { return b - a; });
-    return JSON.stringify({ levels: hs, want: window.__chimtoWantH || 0, now: v.videoHeight || 0 });
+    return JSON.stringify({ levels: hs, want: window.__chimtoWantH || 0, now: nominal(v.videoWidth, v.videoHeight) });
   };
   window.__chimtoQuality = function (h) { window.__chimtoWantH = h || 0; applyQuality(); return window.__chimtoLevels(); };
   // Cho cổng gỡ lỗi của bản thử đọc trạng thái hls.js (bản đang tải, giới hạn tự động…)
