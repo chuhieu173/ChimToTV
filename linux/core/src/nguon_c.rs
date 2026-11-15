@@ -160,6 +160,7 @@ pub fn parse_detail(root: &Obj, url: &str) -> Result<FilmDetail> {
         description,
         info: ne(&info),
         groups,
+        seasons: false,
     })
 }
 

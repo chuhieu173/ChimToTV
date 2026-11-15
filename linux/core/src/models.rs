@@ -129,6 +129,8 @@ pub struct EpisodeGroup {
     pub episodes: Vec<Episode>,
 }
 
+/// `seasons`: mỗi nhóm là một mùa (phim bộ của dexter.pw; nhóm tập đặc biệt — nếu có — đứng cuối) chứ không phải một bản
+/// (Vietsub / Thuyết Minh) của cùng các tập.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct FilmDetail {
@@ -139,15 +141,26 @@ pub struct FilmDetail {
     pub description: Option<String>,
     pub info: Option<String>,
     pub groups: Vec<EpisodeGroup>,
+    pub seasons: bool,
 }
 
 impl FilmDetail {
+    /// Tên nhóm tập đặc biệt (mùa 0) của phim chia mùa.
+    pub const SPECIALS: &'static str = "Tập đặc biệt";
+
+    /// Bản: số tập của bản nhiều tập nhất. Mùa: tổng số tập (mùa mới ra tập là tăng — để báo «có tập mới»).
     pub fn episode_count(&self) -> usize {
+        if self.seasons {
+            return self.groups.iter().map(|g| g.episodes.len()).sum();
+        }
         self.groups.iter().map(|g| g.episodes.len()).max().unwrap_or(0)
     }
 
-    /// Tập mới nhất của bản nhiều tập nhất (bản Vietsub thường ra trước Thuyết Minh).
+    /// Bản: tập mới nhất của bản nhiều tập nhất (bản Vietsub thường ra trước Thuyết Minh). Mùa: tập cuối của mùa cuối.
     pub fn latest_episode(&self) -> Option<&Episode> {
+        if self.seasons {
+            return self.groups.iter().rev().find(|g| g.name != Self::SPECIALS).or(self.groups.last()).and_then(|g| g.episodes.last());
+        }
         // MaxBy của C# lấy phần tử đầu khi bằng nhau
         let mut best: Option<&EpisodeGroup> = None;
         for g in &self.groups {
@@ -178,19 +191,34 @@ impl Server {
     }
 }
 
+/// Một phụ đề rời chọn được trong trình phát (dexter.pw: kho OpenSubtitles / Subsource). `lang`: "vi", "en".
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct SubTrack {
+    pub label: String,
+    pub url: String,
+    pub lang: String,
+}
+
 /// Link phát của một server: iframe trình phát / trang tập, hoặc luồng .m3u8 (kèm phụ đề rời nếu có).
 /// `file`: tệp video phát thẳng bằng <video> (MP4 của CLB Phim Xưa), không phải trang trình phát.
+/// `hls`: luồng HLS dù đường dẫn không có đuôi .m3u8 (dexter.pw /api/s/…), phát bằng trang hls.html với bản hls.js đầy đủ
+/// (âm thanh tách rời). `subs`: phụ đề chọn được (trình phát chọn sẵn theo ngôn ngữ ưa dùng); `subs_later`: địa chỉ danh sách
+/// phụ đề trang còn đang tìm — trình phát hỏi lại sau (dexter::subtitles_from).
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Video {
     pub url: String,
     pub subtitle: Option<String>,
     pub file: bool,
+    pub hls: bool,
+    pub subs: Vec<SubTrack>,
+    pub subs_later: Option<String>,
 }
 
 impl Video {
     pub fn new(url: impl Into<String>) -> Video {
-        Video { url: url.into(), subtitle: None, file: false }
+        Video { url: url.into(), ..Default::default() }
     }
 }
 

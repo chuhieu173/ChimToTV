@@ -330,6 +330,7 @@ pub fn parse_detail(doc: &Doc, data: &NextData, url: &str) -> Result<FilmDetail>
         description,
         info: ne(&info),
         groups,
+        seasons: false,
     })
 }
 
@@ -475,7 +476,7 @@ fn video_of_ep(ep: &Obj, origin: &str) -> Option<Video> {
     let v = json::obj(Some(ep), "video")?;
     let link = ne(&jstr(v, "link_m3u8")).or_else(|| ne(&jstr(v, "link_embed")))?;
     let url = abs(origin, &link)?;
-    Some(Video { url, subtitle: subtitle(json::arr(Some(v), "subtitles"), origin), file: false })
+    Some(Video { url, subtitle: subtitle(json::arr(Some(v), "subtitles"), origin), file: false, ..Default::default() })
 }
 
 /// Phụ đề rời: bản mặc định, không có thì tiếng Việt.

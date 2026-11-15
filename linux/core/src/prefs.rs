@@ -19,6 +19,8 @@ pub const KK_SITE: &str = "https://www.kkphim.com";
 pub const NC_SITE: &str = "https://phim.nguonc.com";
 pub const VS_SITE: &str = "https://vsmov.com";
 pub const K20_SITE: &str = "https://sc.k-20.xyz";
+/// dexter.pw — phim Âu Mỹ 4K, phụ đề OpenSubtitles / Subsource (xem dexter.rs; Windows 1.17 / Linux 1.3).
+pub const DX_SITE: &str = "https://dexter.pw";
 
 /// Các trang mẫu có sẵn trong danh sách lần đầu cài.
 pub const PRESET_SITES: &[&str] = &[
@@ -32,10 +34,11 @@ pub const PRESET_SITES: &[&str] = &[
     NC_SITE,
     VS_SITE,
     K20_SITE,
+    DX_SITE,
 ];
 
 /// Trang mẫu thêm ở bản sau: thêm một lần vào danh sách đã lưu (xoá đi thì thôi, không thêm lại).
-const ADDED_SITES: &[&str] = &[KK_SITE, NC_SITE, VS_SITE, K20_SITE];
+const ADDED_SITES: &[&str] = &[KK_SITE, NC_SITE, VS_SITE, K20_SITE, DX_SITE];
 
 pub const MAX_HISTORY: usize = 60;
 pub const MAX_POSITIONS: usize = 400;
@@ -51,7 +54,7 @@ pub const PROFILE_COLOR_NAMES: [&str; 8] = ["Xanh lá", "Đỏ cam", "Xanh dươ
 /// Khoá riêng từng người xem (còn lại — danh sách trang, mốc nhạc mở đầu, cập nhật… — dùng chung).
 const PROFILE_KEYS: &[&str] = &[
     "history", "positions_v2", "follows", "last_follow_check", "private_mode", "hist_del", "follow_del", "base_url", "seek_step",
-    "auto_next", "video_fill", "limit_min", "bedtime", "watch_day", "watch_sec", "watch_extra", "unblock_until",
+    "auto_next", "video_fill", "sub_lang", "limit_min", "bedtime", "watch_day", "watch_sec", "watch_extra", "unblock_until",
     // Trang chủ tổng hợp (home_feed): kiểu trang chủ, chủ đề đã chọn, tập mới nhất đã thấy, hồ sơ trẻ em, ngôn ngữ bản hay xem
     "home_mix", "home_topics", "seen_eps", "kids", "watch_langs",
     // Các hàng trang chủ (bật / tắt, thứ tự) và hàng tự thêm
@@ -1139,6 +1142,34 @@ pub fn video_fill() -> bool {
 }
 pub fn set_video_fill(v: bool) {
     set(&k("video_fill"), Some(v));
+}
+
+/// Phụ đề rời ưa dùng (dexter.pw), riêng từng người xem: "vi" (mặc định), "en" hoặc "off" (tắt).
+pub fn sub_lang() -> String {
+    get_or(&k("sub_lang"), "vi".to_string())
+}
+pub fn set_sub_lang(v: &str) {
+    set(&k("sub_lang"), Some(v.to_string()));
+}
+
+/// Độ lệch phụ đề (giây, + = chữ hiện muộn hơn) đã chỉnh cho từng tập; giữ 100 tập chỉnh gần nhất (thứ tự chèn).
+pub fn sub_delay(ep_url: &str) -> f64 {
+    get_or::<Map<String, Value>>("sub_delay", Map::new()).get(ep_url).and_then(|v| v.as_f64()).unwrap_or(0.0)
+}
+pub fn set_sub_delay(ep_url: &str, seconds: f64) {
+    let mut m: Map<String, Value> = get_or("sub_delay", Map::new());
+    m.remove(ep_url);
+    if seconds != 0.0 {
+        m.insert(ep_url.to_string(), Value::from(seconds));
+    }
+    while m.len() > 100 {
+        let first = m.keys().next().cloned();
+        match first {
+            Some(f) => m.remove(&f),
+            None => break,
+        };
+    }
+    set("sub_delay", Some(m));
 }
 
 /// Trình phát native (libmpv) cho luồng .m3u8 / tệp video — cài đặt của máy, không theo người xem. Mặc định bật; máy không có

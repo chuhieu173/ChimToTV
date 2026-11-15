@@ -627,7 +627,7 @@ fn parse_detail_html(doc: &Doc, url: &str) -> FilmDetail {
             groups = vec![EpisodeGroup { name: "Tập phim".into(), episodes: vec![Episode::new("Xem phim", play)] }];
         }
     }
-    FilmDetail { url: url.to_string(), title, other_title: other, poster, description, info, groups }
+    FilmDetail { url: url.to_string(), title, other_title: other, poster, description, info, groups, seasons: false }
 }
 
 /// Tên server HaLim: bỏ "#", ":" và dấu cách ở hai đầu.
@@ -833,10 +833,12 @@ pub fn resolve(base_url: &str, reference: &str) -> String {
         .unwrap_or_else(|| reference.to_string())
 }
 
-/// Tên trang hiện trong app: tên miền, riêng add-on k-20 ghi «CLB Phim Xưa (sc.k-20.xyz)».
+/// Tên trang hiện trong app: tên miền, riêng add-on k-20 ghi «CLB Phim Xưa (sc.k-20.xyz)», dexter.pw ghi rõ loại phim.
 pub fn display_name(host: &str) -> String {
     if host == stremio::HOST {
         format!("{} ({host})", stremio::NAME)
+    } else if host == crate::dexter::HOST {
+        format!("Phim Âu Mỹ 4K ({host})")
     } else {
         host.to_string()
     }

@@ -108,6 +108,11 @@ pub async fn call(m: &str, a: &Value) -> Option<Res> {
             };
             kk_phim::source(&d, g.as_ref(), &ep).await.map_err(err).and_then(ok)
         }
+        // dexter.pw: hỏi lại danh sách phụ đề còn «đang tìm» → {subs: [{label, url, lang}], pending}
+        "dexter.subtitlesFrom" => cbtv::dexter::subtitles_from(&s(a, "url"))
+            .await
+            .map_err(err)
+            .map(|(subs, pending)| json!({ "subs": subs, "pending": pending })),
         "related.load" => ok(related::load(&s(a, "title"), &s(a, "url")).await),
         "imdb.forList" => imdb_top::for_list(&s(a, "url")).await.map_err(err).and_then(ok),
         "imdb.page" => imdb_top::page(a.get("kids").and_then(|v| v.as_bool()).unwrap_or(false)).await.map_err(err).and_then(ok),

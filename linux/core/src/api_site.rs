@@ -10,7 +10,7 @@ use crate::json::{self, Obj};
 use crate::models::*;
 use crate::site::{distinct_by, jstr, json_object, lock, ne};
 use crate::util::{after_last, collapse_spaces, form_encoded, Error, Result, Rx};
-use crate::{http, next_site, nguon_c, site, stremio};
+use crate::{dexter, http, next_site, nguon_c, site, stremio};
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 use std::future::Future;
@@ -31,7 +31,7 @@ struct State {
 
 static STATE: LazyLock<Mutex<State>> = LazyLock::new(|| {
     Mutex::new(State {
-        known: ["mephim.ddns.net", KK_HOST, VS_HOST, nguon_c::HOST, stremio::HOST].iter().map(|s| s.to_string()).collect(),
+        known: ["mephim.ddns.net", KK_HOST, VS_HOST, nguon_c::HOST, stremio::HOST, dexter::HOST].iter().map(|s| s.to_string()).collect(),
         not_api: HashSet::new(),
     })
 });
@@ -178,6 +178,9 @@ pub async fn home(base_url: &str) -> Result<Home> {
     if stremio::is_site(base_url) {
         return stremio::home(base_url).await;
     }
+    if dexter::is_site(base_url) {
+        return dexter::home(base_url).await;
+    }
     let o = origin(base_url);
     let kk = is_kk(base_url);
     let vs = is_vs(base_url);
@@ -218,6 +221,9 @@ pub fn menu_of(base_url: &str) -> Vec<Category> {
     }
     if stremio::is_site(base_url) {
         return stremio::menu_of(base_url);
+    }
+    if dexter::is_site(base_url) {
+        return dexter::menu_of(base_url);
     }
     let o = origin(base_url);
     if is_vs(base_url) {
@@ -278,6 +284,9 @@ pub async fn list(url: &str) -> Result<FilmPage> {
     if stremio::is_site(url) {
         return stremio::list(url).await;
     }
+    if dexter::is_site(url) {
+        return dexter::list(url).await;
+    }
     Ok(parse_list(&get_json(url, true).await?, url))
 }
 
@@ -295,6 +304,8 @@ pub fn parse_list(root: &Obj, url: &str) -> FilmPage {
 pub fn newest_url(base_url: &str) -> String {
     if nguon_c::is_site(base_url) {
         nguon_c::newest_url(base_url)
+    } else if dexter::is_site(base_url) {
+        dexter::newest_url(base_url)
     } else if stremio::is_site(base_url) {
         stremio::newest_url(base_url)
     } else if is_vs(base_url) {
@@ -307,6 +318,8 @@ pub fn newest_url(base_url: &str) -> String {
 pub fn search_url(base_url: &str, query: &str) -> String {
     if nguon_c::is_site(base_url) {
         nguon_c::search_url(base_url, query)
+    } else if dexter::is_site(base_url) {
+        dexter::search_url(base_url, query)
     } else if stremio::is_site(base_url) {
         stremio::search_url(base_url, query)
     } else if is_vs(base_url) {
@@ -323,6 +336,9 @@ pub fn filters(base_url: &str) -> (Vec<Category>, Vec<Category>) {
     }
     if stremio::is_site(base_url) {
         return stremio::filters(base_url);
+    }
+    if dexter::is_site(base_url) {
+        return dexter::filters(base_url);
     }
     let o = origin(base_url);
     if is_vs(base_url) {
@@ -367,6 +383,9 @@ pub async fn detail(url: &str) -> Result<FilmDetail> {
     }
     if stremio::is_site(url) {
         return stremio::detail(url).await;
+    }
+    if dexter::is_site(url) {
+        return dexter::detail(url).await;
     }
     let film = film_url(url)?;
     let root = get_json(&detail_api(&film)?, true).await?;
@@ -420,6 +439,7 @@ pub fn parse_detail(root: &Obj, url: &str) -> Result<FilmDetail> {
         description,
         info: ne(&info),
         groups,
+        seasons: false,
     })
 }
 
@@ -472,6 +492,9 @@ pub async fn source(ep_url: &str) -> Result<EpisodeSource> {
     }
     if stremio::is_site(ep_url) {
         return stremio::source(ep_url).await;
+    }
+    if dexter::is_site(ep_url) {
+        return dexter::source(ep_url).await;
     }
     let root = get_json(&detail_api(&film_url(ep_url)?)?, true).await?;
     let (sv, tap) = sv_and_tap(ep_url)?;

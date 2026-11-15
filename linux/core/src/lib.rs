@@ -19,6 +19,7 @@ pub mod api_site;
 pub mod kk_phim;
 pub mod nguon_c;
 pub mod stremio;
+pub mod dexter;
 pub mod ad_block;
 pub mod feed;
 pub mod home_feed;

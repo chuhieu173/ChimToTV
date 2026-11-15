@@ -175,6 +175,7 @@ pub fn parse_detail(data: &[u8], url: &str) -> Result<FilmDetail> {
         description: ne(&jstr(m, "description")),
         info: ne(&info),
         groups: vec![EpisodeGroup { name: "Tập phim".into(), episodes: eps }],
+        seasons: false,
     })
 }
 
@@ -213,7 +214,7 @@ pub fn parse_source(data: &[u8], ep_url: &str) -> Result<EpisodeSource> {
         };
         let kind = format!("mp4-{i}");
         servers.push(Server::new(label, kind.clone()));
-        links.insert(kind, Video { url, subtitle: None, file: true });
+        links.insert(kind, Video { url, subtitle: None, file: true, ..Default::default() });
     }
     Ok(EpisodeSource { ep_url: ep_url.to_string(), servers, links, next: true, ..Default::default() })
 }
