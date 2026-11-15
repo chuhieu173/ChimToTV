@@ -152,6 +152,12 @@ enum Doh {
                 continue
             }
             switch answer {
+            // Hồ sơ NextDNS chặn tên miền bằng 0.0.0.0 (11/2026: máy chủ video v.lumenbox.top / v.cloudsstrservices.top của
+            // dexter.pw — phim không phát) → câu trả lời không dùng được: hỏi máy chủ sau (Cloudflare / Google không lọc).
+            // NXDOMAIN vẫn là trả lời thật như trước.
+            case let .found(_, _, all) where all.contains(where: Self.blocked):
+                Log.d("dns", "\(name) bị \(s.label) chặn, hỏi máy chủ sau")
+                continue
             case let .found(addr, ttl, _):
                 lock.lock()
                 cache[name] = (addr, Date().addingTimeInterval(TimeInterval(min(max(ttl, 30), 600))))

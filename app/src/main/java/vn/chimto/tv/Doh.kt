@@ -34,8 +34,8 @@ import javax.net.ssl.SSLSocketFactory
  *   không được thì hỏi DNS của thiết bị; nhớ 6 giờ; anycast vẫn đứng sau để dự phòng.
  * - Giữ kết nối TLS tới máy chủ DNS để dùng lại (DoT; DoH bằng HTTP/1.1 keep-alive): mở kết nối mới tốn ~140–220 ms,
  *   dùng lại chỉ ~20–40 ms. Kết nối nghỉ quá 90 giây thì bỏ (NextDNS / Cloudflare DoH / Google DoH giữ ≥ 100 giây); kết nối cũ bị máy chủ đóng thì mở kết nối mới ngay.
- * Máy chủ lỗi thì nghỉ 2 phút. Trả lời «không có tên miền» (NXDOMAIN — vd hồ sơ NextDNS chặn) là trả lời thật: không hỏi
- * máy chủ sau. Bản debug ghi mỗi lần hỏi (logcat ChimToDoh, kèm IP máy chủ và thời gian).
+ * Máy chủ lỗi thì nghỉ 2 phút. Trả lời «không có tên miền» (NXDOMAIN) là trả lời thật: không hỏi máy chủ sau. Trả lời
+ * 0.0.0.0 / 127.x (hồ sơ NextDNS chặn, từ 11/2026) thì hỏi máy chủ sau. Bản debug ghi mỗi lần hỏi (logcat ChimToDoh, kèm IP máy chủ và thời gian).
  */
 object Doh {
     enum class Kind { DOH, DOT }
@@ -139,7 +139,14 @@ object Doh {
                 continue
             }
             when (answer) {
+                // Hồ sơ NextDNS chặn tên miền bằng 0.0.0.0 (11/2026: máy chủ video v.lumenbox.top / v.cloudsstrservices.top
+                // của dexter.pw — phim không phát) → câu trả lời không dùng được: hỏi máy chủ sau (Cloudflare / Google không
+                // lọc). NXDOMAIN vẫn là trả lời thật như trước.
                 is Answer.Found -> {
+                    if (Socks5.blockedAnswer(answer.all)) {
+                        if (BuildConfig.DEBUG) Log.d("ChimToDoh", "$key → ${answer.addr.hostAddress} bị ${s.label} chặn, hỏi máy chủ sau")
+                        continue
+                    }
                     cache[key] = Entry(answer.addr, System.currentTimeMillis() + answer.ttl.coerceIn(30, 600) * 1000L)
                     if (BuildConfig.DEBUG) {
                         Log.d("ChimToDoh", "$key → ${answer.addr.hostAddress} (${s.label} · $ip, ${System.currentTimeMillis() - t0} ms)")

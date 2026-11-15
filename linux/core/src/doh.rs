@@ -265,6 +265,14 @@ async fn lookup(name: &str, servers: &[Server]) -> Result<Option<IpAddr>> {
             }
         };
         match answer {
+            // Hồ sơ NextDNS chặn tên miền bằng 0.0.0.0 (11/2026: máy chủ video v.lumenbox.top / v.cloudsstrservices.top của
+            // dexter.pw — phim không phát) → câu trả lời không dùng được: hỏi máy chủ sau (Cloudflare / Google không lọc).
+            // NXDOMAIN vẫn là trả lời thật như trước.
+            Answer::Found { ref all, .. } if all.iter().any(|a| blocked(&IpAddr::V4(*a))) => {
+                if cfg!(debug_assertions) {
+                    crate::log::d("dns", &format!("{name} bị {} chặn ({:?}), hỏi máy chủ sau", s.label, all));
+                }
+            }
             Answer::Found { addr, ttl, .. } => {
                 let keep = (ttl as i64).clamp(30, 600) * 1000;
                 lock(&CACHE).insert(name.to_string(), (Some(addr), now_ms() + keep));
