@@ -1,6 +1,6 @@
 # Nhật ký phiên bản
 
-Côn Bằng TV — từ 1.0 đến 1.4 tên là ChimTo TV. Tải bản mới nhất ở [GitHub Releases](https://github.com/Circling5714/ChimToTV/releases/latest). Bản mới nhất ở trên cùng.
+Côn Bằng TV — từ 1.0 đến 1.4 tên là ChimTo TV. Tải bản mới nhất ở [GitHub Releases](https://github.com/conbangtv/ChimToTV/releases/latest). Bản mới nhất ở trên cùng.
 Mọi bản ký cùng một khoá (chứng chỉ SHA-256 `949ef2b52f3cf895d7fe5ff9db495f273e6fd35d02b23b4a521df43957a0177b`), cài đè
 được lên nhau và giữ nguyên lịch sử xem.
 
@@ -8,6 +8,16 @@ Bản iPad / iPhone (iOS / iPadOS 15+, cài bằng TrollStore; có bản iPhone 
 Bản Windows (Windows 10 / 11, một tệp `.exe`) ghi riêng với tiêu đề "Windows …", tag `win-v…`.
 Bản Mac (macOS 12+, từ 13/11/2026, cùng mã nguồn và số bản với bản iPad) ghi riêng với tiêu đề "Mac …", tag `mac-v…`.
 Bản Linux (Ubuntu 22.04+ / Linux Mint 21+ / Debian 12+, từ 13/11/2026, tệp `.deb`) ghi riêng với tiêu đề "Linux …", tag `linux-v…`.
+
+## Chuyển repo sang tổ chức conbangtv — 15/11/2026 (không phải bản mới)
+
+- Repo chuyển từ `Circling5714/ChimToTV` sang **`conbangtv/ChimToTV`** (cùng tổ chức với trang giới thiệu `conbangtv.github.io`).
+  Release, tag, tệp và secret đi theo repo; tên repo, tên tệp, bốn tag link cố định, mã Downloader 9192365 giữ nguyên.
+- **App đã cài không cần làm gì:** bộ tự cập nhật của TV ≤ 2.18, iPad / iPhone / Mac ≤ 1.18, Windows ≤ 1.16, Linux ≤ 1.2 vẫn hỏi
+  đường dẫn cũ, GitHub chuyển hướng 301 sang chỗ mới. Link tải cũ đã gửi đi (APK, bốn link cố định, mã Downloader) cũng vậy.
+- Đã kiểm ngay sau khi chuyển: OTA thật TV 2.16.1 → 2.18 trên TX3 (app mang link cũ, 15:25 → 15:37); sáu link cũ tải về đúng
+  SHA-256; `release.ps1 <tv|windows|linux|ipad|mac> -Verify` đạt cả năm nền tảng với tên mới; trang giới thiệu đổi link (site 30a80f8).
+- Bản phát hành tới của từng nền tảng sẽ đổi link trong app sang tên mới (xem README, mục «Repo đã chuyển sang tổ chức conbangtv»).
 
 ## iPad / iPhone 1.18 và Mac 1.18 — 14/11/2026 (đọc trang bật chống bot)
 

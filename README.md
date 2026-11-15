@@ -10,26 +10,26 @@ App Android TV xem phim hoạt hình 3D (và phim bộ / phim lẻ ở phimmois.
 Android, cầm dọc hay ngang — xem [Điện thoại Android](#điện-thoại-android-từ-24).
 Dữ liệu (danh sách phim, tập, server) đọc trực tiếp từ trang, nên trang đổi tên miền chỉ cần sửa link trong **Cài đặt**.
 
-**Bản mới nhất:** [tải APK trên GitHub Releases](https://github.com/Circling5714/ChimToTV/releases/latest) ·
+**Bản mới nhất:** [tải APK trên GitHub Releases](https://github.com/conbangtv/ChimToTV/releases/latest) ·
 [nhật ký phiên bản](CHANGELOG.md). Từ bản 1.3 app tự cập nhật.
 
 **Cài nhanh trên Android TV:** mở app **Downloader** (AFTVnews) trên tivi, nhập mã **`9192365`** — xem
 [Cài trên Android TV bằng Downloader](#cài-trên-android-tv-bằng-downloader).
 
-**Bản iPad / iPhone** (iOS / iPadOS 15+, cài bằng TrollStore): [tải bản mới nhất](https://github.com/Circling5714/ChimToTV/releases/download/conbangtv_ios/ConBangTV-iPad.ipa)
-(link cố định) · [release `ios-v1.17`](https://github.com/Circling5714/ChimToTV/releases/tag/ios-v1.17)
+**Bản iPad / iPhone** (iOS / iPadOS 15+, cài bằng TrollStore): [tải bản mới nhất](https://github.com/conbangtv/ChimToTV/releases/download/conbangtv_ios/ConBangTV-iPad.ipa)
+(link cố định) · [release `ios-v1.18`](https://github.com/conbangtv/ChimToTV/releases/tag/ios-v1.18)
 — xem mục [Bản iPad](#bản-ipad). TV và iPad / iPhone đồng bộ được với nhau — xem [Đồng bộ trong nhà](#đồng-bộ-trong-nhà-từ-22).
 
-**Bản Windows** (Windows 10 / 11, một tệp `.exe` chạy ngay): [tải bản mới nhất](https://github.com/Circling5714/ChimToTV/releases/download/conbangtv_windows/ConBangTV-Windows.exe)
-(link cố định) · [release `win-v1.15`](https://github.com/Circling5714/ChimToTV/releases/tag/win-v1.15)
+**Bản Windows** (Windows 10 / 11, một tệp `.exe` chạy ngay): [tải bản mới nhất](https://github.com/conbangtv/ChimToTV/releases/download/conbangtv_windows/ConBangTV-Windows.exe)
+(link cố định) · [release `win-v1.16`](https://github.com/conbangtv/ChimToTV/releases/tag/win-v1.16)
 — xem mục [Bản Windows](#bản-windows). Đồng bộ được với TV và iPad / iPhone.
 
-**Bản Mac** (macOS 12+, máy Intel và chip Apple): [tải bản mới nhất](https://github.com/Circling5714/ChimToTV/releases/download/conbangtv_macos/ConBangTV-Mac.zip)
-(link cố định) · [release `mac-v1.17`](https://github.com/Circling5714/ChimToTV/releases/tag/mac-v1.17)
+**Bản Mac** (macOS 12+, máy Intel và chip Apple): [tải bản mới nhất](https://github.com/conbangtv/ChimToTV/releases/download/conbangtv_macos/ConBangTV-Mac.zip)
+(link cố định) · [release `mac-v1.18`](https://github.com/conbangtv/ChimToTV/releases/tag/mac-v1.18)
 — xem mục [Bản Mac](#bản-mac) (lần đầu mở: Cài đặt hệ thống → Quyền riêng tư & Bảo mật → Vẫn mở).
 
-**Bản Linux** (Ubuntu 22.04+ / Linux Mint 21+ / Debian 12+, máy 64-bit, tệp `.deb`): [tải bản mới nhất](https://github.com/Circling5714/ChimToTV/releases/download/conbangtv_linux/ConBangTV-Linux.deb)
-(link cố định) · [release `linux-v1.0`](https://github.com/Circling5714/ChimToTV/releases/tag/linux-v1.0)
+**Bản Linux** (Ubuntu 22.04+ / Linux Mint 21+ / Debian 12+, máy 64-bit, tệp `.deb`): [tải bản mới nhất](https://github.com/conbangtv/ChimToTV/releases/download/conbangtv_linux/ConBangTV-Linux.deb)
+(link cố định) · [release `linux-v1.2`](https://github.com/conbangtv/ChimToTV/releases/tag/linux-v1.2)
 — xem mục [Bản Linux](#bản-linux). Đồng bộ được với TV, iPad / iPhone, Windows và Mac.
 
 **Liên hệ** (góp ý, báo lỗi, hỏi đáp): nhóm Telegram [t.me/tivikit](https://t.me/tivikit) — trong app: **Cài đặt** →
@@ -227,8 +227,8 @@ loại trên menu của trang, và **Thể loại…** / **Quốc gia…** (từ
 
 ## Cài lên tivi
 
-- Tải `ConBangTV-<phiên bản>.apk` ở [Releases](https://github.com/Circling5714/ChimToTV/releases/latest) (hoặc thẳng
-  [`ConBangTV.apk`](https://github.com/Circling5714/ChimToTV/releases/latest/download/ConBangTV.apk) — luôn là bản mới nhất),
+- Tải `ConBangTV-<phiên bản>.apk` ở [Releases](https://github.com/conbangtv/ChimToTV/releases/latest) (hoặc thẳng
+  [`ConBangTV.apk`](https://github.com/conbangtv/ChimToTV/releases/latest/download/ConBangTV.apk) — luôn là bản mới nhất),
   chép vào USB / dùng app "Send Files to TV" rồi mở bằng trình quản lý file trên tivi. Bản 2.17 trở về trước tên
   `ChimToTV-<phiên bản>.apk` (tên cũ của app) — cùng một app, cài đè lên nhau được.
 - Qua mạng (tivi/box bật gỡ lỗi ADB): `.\build.ps1 -Install <IP-tivi>` (dựng từ mã nguồn rồi cài).
@@ -251,9 +251,11 @@ mở đúng mục hướng dẫn này — khách chụp bằng điện thoại l
 (từ 1.14) cũng có: Cài đặt → **Cài lên tivi / mời bạn bè** — mã to, ba bước, nút gửi / chép sẵn tin nhắn hướng dẫn.
 
 - Trên trình duyệt: `aftv.news/9192365` (tải cùng tệp; trang thông tin của mã: `aftv.news/9192365+`).
-- **Link cố định:** `https://github.com/Circling5714/ChimToTV/releases/latest/download/ConBangTV.apk`
+- **Link cố định:** `https://github.com/conbangtv/ChimToTV/releases/latest/download/ConBangTV.apk`
 - Link cố định tên cũ (mã Downloader trên trỏ vào đây, vẫn dùng được mãi):
-  `https://github.com/Circling5714/ChimToTV/releases/latest/download/ChimToTV.apk`
+  `https://github.com/conbangtv/ChimToTV/releases/latest/download/ChimToTV.apk` — mã được tạo khi repo còn ở tài khoản cũ nên
+  thực ra trỏ vào `github.com/Circling5714/ChimToTV/…/ChimToTV.apk`; GitHub chuyển hướng sang đây (xem
+  [Repo đã chuyển sang tổ chức conbangtv](#repo-đã-chuyển-sang-tổ-chức-conbangtv-15112026)).
 
 Hai link này luôn tải thẳng APK của bản TV mới nhất — cùng một tệp: `ConBangTV.apk` và `ChimToTV.apk` là bản sao giống hệt
 `ConBangTV-<phiên bản>.apk`. Mọi release TV có `ChimToTV.apk` từ 2.15 và có thêm `ConBangTV.apk` từ 2.17 (13/11/2026 đổi sang tên
@@ -268,7 +270,7 @@ Cùng app cho iPad và iPhone (iOS / iPadOS 15 trở lên, cài bằng TrollStor
 `ios/`), đủ các tính năng chính của bản TV, điều khiển bằng chạm:
 
 - **Cài:** cần TrollStore. Tải bản mới nhất qua
-  [link cố định](https://github.com/Circling5714/ChimToTV/releases/download/conbangtv_ios/ConBangTV-iPad.ipa) (hoặc
+  [link cố định](https://github.com/conbangtv/ChimToTV/releases/download/conbangtv_ios/ConBangTV-iPad.ipa) (hoặc
   `ConBangTV-iPad-<bản>.ipa` ở release `ios-v<bản>`; một tệp cho cả iPad và iPhone) → mở bằng TrollStore → Install. Bản sau app tự tìm trên GitHub (release `ios-v…`) và mở TrollStore để cài đè, giữ lịch sử xem:
   hộp thoại «Có bản mới» → **Cài đặt ngay** → TrollStore tự tải rồi hỏi Install (cả iOS / iPadOS 15 từ 1.8.2; bản 1.8.1 trở
   về trước trên iOS 15 bấm «Kiểm tra cập nhật» trong Cài đặt không hiện hộp thoại — tải tay một lần lên 1.8.2).
@@ -315,7 +317,7 @@ Chính app iPad dựng thành app Mac bằng **Mac Catalyst** (cùng mã nguồn
 máy Intel và máy chip Apple (M1…), giao diện và tính năng như bản iPad, dùng chuột / bàn di chuột / bàn phím (phím tắt như
 mục «Bàn phím rời» của [Bản iPad](#bản-ipad)).
 
-- **Cài:** tải bản mới nhất qua [link cố định](https://github.com/Circling5714/ChimToTV/releases/download/conbangtv_macos/ConBangTV-Mac.zip)
+- **Cài:** tải bản mới nhất qua [link cố định](https://github.com/conbangtv/ChimToTV/releases/download/conbangtv_macos/ConBangTV-Mac.zip)
   (hoặc `ConBangTV-Mac-<bản>.zip` ở release `mac-v<bản>`; bản đầu: 1.17, 13/11/2026), mở tệp .zip, kéo **ConBangTV** vào thư mục
   **Applications** (Ứng dụng) rồi mở. App không mua chứng chỉ của Apple (ký ad-hoc) nên lần đầu macOS chặn — đã thử đúng các bước
   này trên macOS 14 (13/11/2026, tệp mang cờ «Safari đã tải về»): hộp «Không thể mở "ConBangTV" vì ứng dụng này đến từ một nhà phát
@@ -340,7 +342,7 @@ App cho máy tính và mini PC cắm tivi chạy Windows 10 / 11 (thư mục `wi
 `conbang_core.dll` qua `linux/ffi`; giao diện WPF giữ nguyên), dùng được cả chuột lẫn bàn phím / remote:
 
 - **Cài:** tải bản mới nhất qua
-  [link cố định](https://github.com/Circling5714/ChimToTV/releases/download/conbangtv_windows/ConBangTV-Windows.exe) (hoặc
+  [link cố định](https://github.com/conbangtv/ChimToTV/releases/download/conbangtv_windows/ConBangTV-Windows.exe) (hoặc
   `ConBangTV-Windows-<bản>.exe` ở release `win-v<bản>`), để vào thư mục nào cũng được rồi mở — không cần cài .NET. Lần đầu Windows báo «Windows protected your PC» (app chưa có chữ ký số): **More info → Run anyway**. Cần Microsoft
   Edge WebView2 Runtime (Windows 10 / 11 cập nhật thường có sẵn; máy chưa có thì app báo và mở trang tải). Dữ liệu ở
   `%LOCALAPPDATA%\ConBangTV`. Bản sau tự cập nhật (Cài đặt → **Kiểm tra cập nhật**; tự hỏi tối đa 2 giờ một lần). Từ 1.16 tệp
@@ -749,6 +751,25 @@ tải APK ngầm, kiểm tra cùng gói + cùng chữ ký + số hiệu lớn h�
 Lần đầu Android hỏi cho phép Côn Bằng TV "cài ứng dụng không rõ nguồn" (app tự mở đúng trang cài đặt).
 Android luôn yêu cầu bấm xác nhận cài; riêng Android 12+ thì từ lần thứ hai trở đi cập nhật hoàn toàn tự động.
 
+### Repo đã chuyển sang tổ chức conbangtv (15/11/2026)
+
+Repo chuyển từ tài khoản `Circling5714/ChimToTV` sang tổ chức **`conbangtv/ChimToTV`** (cùng chủ trang giới thiệu
+`conbangtv.github.io`). Release, tag, tệp, secret của Actions đi theo repo; tên repo, tên tệp và các tag cố định giữ nguyên.
+
+- **App đã cài vẫn tự cập nhật:** mã của TV ≤ 2.18, iPad / iPhone / Mac ≤ 1.18, Windows ≤ 1.16, Linux ≤ 1.2 còn ghi đường dẫn
+  cũ `api.github.com/repos/Circling5714/ChimToTV/…`. GitHub trả 301 sang `api.github.com/repositories/1442486526/…` và bộ cập
+  nhật của cả năm nền tảng đều đi theo chuyển hướng. Link tải trong kết quả API đã là `conbangtv/…`, mã Downloader 9192365
+  và link cũ đã gửi đi cũng được chuyển hướng. Đã thử ngay sau khi chuyển: OTA thật TV 2.16.1 → 2.18 trên TX3, tải qua sáu link
+  cũ (hai link APK + bốn link cố định) đúng SHA-256, `release.ps1 <nền tảng> -Verify` đạt cả năm nền tảng.
+- **Chuyển hướng chỉ còn khi:** không bao giờ tạo hay **fork** một repo tên `ChimToTV` vào tài khoản `Circling5714`, không đổi
+  tên / xoá tài khoản đó, không đổi tên repo. Làm một trong ba là mọi app đã cài hết tự cập nhật.
+- **Việc còn lại — làm ở bản phát hành tới của từng nền tảng:** đổi đường dẫn trong mã sang `conbangtv/ChimToTV`:
+  `UPDATE_URL` trong `app/build.gradle.kts`, `releasesApi` trong `ios/ConBangTV/Sources/Core/UpdateCheck.swift`,
+  `ReleasesApi` / `ReleasesPage` trong `windows/ConBangTV/Core/UpdateCheck.cs`, `RELEASES_API` / `RELEASES_PAGE` trong
+  `linux/core/src/update_check.rs` (lõi chung của Windows và Linux), link mời bạn bè trong `Invite.kt` / `Invite.swift` /
+  `Invite.cs` / `invite.rs` và các test tương ứng (`InviteTest.kt`, `InviteTests.swift`, `InviteTests.cs`, test trong
+  `invite.rs`). `release.ps1` và trang giới thiệu đã đổi ngày chuyển.
+
 1. Tăng `versionCode` / `versionName` trong `app/build.gradle.kts`.
 2. `.\build.ps1` → `dist\ConBangTV-<phiên bản>.apk` (ký bằng `keys\` — phải cùng khoá thì app mới nhận; bản 2.17 trở về
    trước: `ChimToTV-<phiên bản>.apk`).
@@ -766,11 +787,14 @@ có; riêng APK: đúng gói, đúng số bản, đúng chứng chỉ ký. Sau k
 trên GitHub khớp SHA-256 với tệp trong máy, bản TV thì tải thử qua hai link cố định. `-DryRun` chỉ in lệnh; `.\release.ps1
 <tv|windows|ipad|mac> -Verify` kiểm lại một bản đã đăng, không sửa gì.
 
-**Link tải cố định của bản Windows / iPad / Mac (từ 13/11/2026)** — luôn là bản mới nhất, như link APK:
+**Link tải cố định của bản Windows / iPad / Mac / Linux (từ 13/11/2026)** — luôn là bản mới nhất, như link APK:
 
-- `https://github.com/Circling5714/ChimToTV/releases/download/conbangtv_windows/ConBangTV-Windows.exe`
-- `https://github.com/Circling5714/ChimToTV/releases/download/conbangtv_ios/ConBangTV-iPad.ipa`
-- `https://github.com/Circling5714/ChimToTV/releases/download/conbangtv_macos/ConBangTV-Mac.zip` (từ bản Mac 1.17)
+- `https://github.com/conbangtv/ChimToTV/releases/download/conbangtv_windows/ConBangTV-Windows.exe`
+- `https://github.com/conbangtv/ChimToTV/releases/download/conbangtv_ios/ConBangTV-iPad.ipa`
+- `https://github.com/conbangtv/ChimToTV/releases/download/conbangtv_macos/ConBangTV-Mac.zip` (từ bản Mac 1.17)
+- `https://github.com/conbangtv/ChimToTV/releases/download/conbangtv_linux/ConBangTV-Linux.deb` (từ bản Linux 1.0)
+
+Các link `github.com/Circling5714/ChimToTV/…` đã gửi đi trước 15/11/2026 vẫn tải được nhờ chuyển hướng của GitHub.
 
 Bản Windows / iPad / Mac không bao giờ là Latest nên không dùng được `…/releases/latest/download/…`; thay vào đó mỗi nền tảng có một
 release «cuốn chiếu» với tag không đổi (`conbangtv_windows`, `conbangtv_ios`, `conbangtv_macos`) và tệp tên cố định. `.\release.ps1 windows|ipad|mac`
@@ -826,8 +850,10 @@ node design/render.mjs preview xem-truoc.png   # xem cả 3 phương án
 node design/render.mjs export c                 # ghi PNG vào app/src/main/res
 ```
 
-Đổi tên app chỉ là đổi **tên hiển thị** (`app_name`), logo và banner. Mã gói `vn.chimto.tv`, khoá ký và repo
-`Circling5714/ChimToTV` phải giữ nguyên — đổi một trong ba thì các TV đã cài không nhận bản cập nhật nữa.
+Đổi tên app chỉ là đổi **tên hiển thị** (`app_name`), logo và banner. Mã gói `vn.chimto.tv`, khoá ký và tên repo
+`ChimToTV` phải giữ nguyên — đổi một trong ba thì các TV đã cài không nhận bản cập nhật nữa. Repo đã chuyển sang
+`conbangtv/ChimToTV` ngày 15/11/2026; đường dẫn cũ `Circling5714/ChimToTV` vẫn được chuyển hướng — xem
+[Repo đã chuyển sang tổ chức conbangtv](#repo-đã-chuyển-sang-tổ-chức-conbangtv-15112026).
 
 ## Cách phát video (cho người sửa code)
 

@@ -5,6 +5,19 @@ Trước đây tên là ChimTo TV: chỉ đổi tên hiển thị / logo — mã
 sang `ConBangTV…apk` từ 13/11/2026 (anh bảo), nhưng release TV vẫn kèm bản sao `ChimToTV.apk` (xem dưới).
 Đọc `README.md` để biết cấu trúc và cách phát video; `CHANGELOG.md` để biết các bản đã phát hành.
 
+## Repo ở tổ chức `conbangtv` (từ 15/11/2026, anh bảo chuyển)
+
+- Repo là **`conbangtv/ChimToTV`** (trước là `Circling5714/ChimToTV`; trang giới thiệu `conbangtv.github.io` cùng tổ chức).
+  `origin`, `release.ps1`, README và trang giới thiệu đã theo tên mới.
+- App đã cài vẫn gọi đường dẫn cũ; GitHub chuyển hướng 301 (đã thử OTA thật TV 2.16.1 → 2.18 sau khi chuyển). **Không bao giờ**
+  tạo / fork repo tên `ChimToTV` vào tài khoản `Circling5714`, đổi tên / xoá tài khoản đó, hay đổi tên repo — mất chuyển hướng
+  là mọi app đã cài hết tự cập nhật.
+- **Việc phải làm ở bản phát hành tới của mỗi nền tảng** (anh dặn): đổi link OTA trong app sang `conbangtv/ChimToTV` —
+  TV: `UPDATE_URL` trong `app/build.gradle.kts` + `Invite.kt`; iPad / Mac: `UpdateCheck.swift` + `Invite.swift`; Windows / Linux
+  (lõi chung): `linux/core/src/update_check.rs` + `invite.rs`, phía WPF `windows/ConBangTV/Core/UpdateCheck.cs` + `Invite.cs`; sửa
+  cả test (`InviteTest.kt`, `InviteTests.swift`, `InviteTests.cs`, test trong `invite.rs`). Xong nền tảng nào thì gạch ở mục
+  «Repo đã chuyển» trong README; đủ cả năm thì bỏ mục này.
+
 ## Cách làm việc với anh
 
 - Trả lời bằng tiếng Việt, xưng "anh".

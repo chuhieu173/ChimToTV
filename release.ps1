@@ -10,19 +10,25 @@
 # Vì sao phải đúng — hai thứ đi theo bản đang là Latest:
 #   1. app TV tự cập nhật: Updater.kt hỏi .../releases/latest rồi lấy tệp .apk đầu tiên (tên nào cũng được — từ bản 1.3);
 #   2. link tải cố định cho app Downloader trên Android TV (chỉ tải đúng một địa chỉ, không đọc được API):
-#        https://github.com/Circling5714/ChimToTV/releases/latest/download/ConBangTV.apk      (tên mới, từ 13/11/2026)
-#        https://github.com/Circling5714/ChimToTV/releases/latest/download/ChimToTV.apk       (tên cũ — vẫn phải có)
+#        https://github.com/conbangtv/ChimToTV/releases/latest/download/ConBangTV.apk      (tên mới, từ 13/11/2026)
+#        https://github.com/conbangtv/ChimToTV/releases/latest/download/ChimToTV.apk       (tên cũ — vẫn phải có)
 #      Hai link này cần tệp tên ConBangTV.apk / ChimToTV.apk có trong MỌI bản TV — nên bản TV đính kèm ba tệp. ĐỪNG bỏ tệp tên
 #      cũ: mã Downloader 9192365 (aftv.news) trỏ vào link cũ, và màn «Cài lên tivi» của TV 2.16–2.17 / iPad 1.16–1.17 /
 #      Windows 1.14–1.15 đã cài in link cũ. Ghi chú của bản TV được thêm mục "## Cài mới trên Android TV" ghi mã Downloader.
+#
+# Repo đã chuyển từ Circling5714/ChimToTV sang tổ chức conbangtv ngày 15/11/2026. App đã cài và mã Downloader vẫn gọi đường dẫn
+# cũ github.com/Circling5714/ChimToTV/… — GitHub chuyển hướng 301 sang chỗ mới (đã thử OTA thật TV 2.16.1 → 2.18 sau khi chuyển).
+# Chuyển hướng chỉ còn khi: KHÔNG tạo / fork repo tên ChimToTV vào tài khoản Circling5714, KHÔNG đổi tên / xoá tài khoản đó,
+# KHÔNG đổi tên repo. Mất chuyển hướng = mọi app đã cài hết tự cập nhật.
 # Bản Windows / iPad / Mac / Linux mà thành Latest thì mọi TV hết thấy bản mới và hai link trên trả 404.
 #
 # Link tải cố định của bản Windows / iPad / Mac / Linux (luôn là bản mới nhất, như link APK ở trên) — mỗi nền tảng một release "cuốn chiếu"
 # với tag không bao giờ đổi và tệp tên cố định; mỗi lần đăng bản mới script chép đè tệp vào đó:
-#   https://github.com/Circling5714/ChimToTV/releases/download/conbangtv_windows/ConBangTV-Windows.exe
-#   https://github.com/Circling5714/ChimToTV/releases/download/conbangtv_ios/ConBangTV-iPad.ipa
-#   https://github.com/Circling5714/ChimToTV/releases/download/conbangtv_macos/ConBangTV-Mac.zip   (tạo ở lần đăng bản Mac đầu)
-#   https://github.com/Circling5714/ChimToTV/releases/download/conbangtv_linux/ConBangTV-Linux.deb (tạo ở lần đăng bản Linux đầu)
+#   https://github.com/conbangtv/ChimToTV/releases/download/conbangtv_windows/ConBangTV-Windows.exe
+#   https://github.com/conbangtv/ChimToTV/releases/download/conbangtv_ios/ConBangTV-iPad.ipa
+#   https://github.com/conbangtv/ChimToTV/releases/download/conbangtv_macos/ConBangTV-Mac.zip   (tạo ở lần đăng bản Mac đầu)
+#   https://github.com/conbangtv/ChimToTV/releases/download/conbangtv_linux/ConBangTV-Linux.deb (tạo ở lần đăng bản Linux đầu)
+#   (link cũ Circling5714/… đã gửi đi vẫn chạy nhờ chuyển hướng — xem trên)
 # ĐỪNG đổi các tag / tên tệp này: link đã gửi cho người dùng và nằm trên trang giới thiệu. Các bộ tự cập nhật không nhìn
 # thấy các release này (TV đọc releases/latest; Windows / iPad / Mac / Linux chỉ nhận tag win-v… / ios-v… / mac-v… / linux-v…).
 #
@@ -63,7 +69,7 @@ if ($File) {
 }
 Set-Location $PSScriptRoot
 
-$repo = "Circling5714/ChimToTV"
+$repo = "conbangtv/ChimToTV"   # trước 15/11/2026: Circling5714/ChimToTV (vẫn chuyển hướng tới đây)
 # Tên cố định của APK bản TV: tên mới (link chính) và tên cũ (giữ cho mã Downloader + app đã cài — xem đầu tệp)
 $fixedName = "ConBangTV.apk"
 $legacyName = "ChimToTV.apk"
