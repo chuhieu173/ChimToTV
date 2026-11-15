@@ -16,6 +16,8 @@ enum Assets {
     static let wrapper = text("player", "html")
     static let hls = text("hls", "html")
     static let hlsJs = text("hls.light.min", "js")
+    /// Bản hls.js đầy đủ (luồng âm thanh tách rời) — chỉ cho Video.hls (dexter.pw).
+    static let hlsJsFull = text("hls.min", "js")
     static let pageFocus = text("page-focus", "js")
 
     /// Trang bọc: iframe trình phát của trang, origin = địa chỉ tập (xem player.html).
@@ -23,14 +25,30 @@ enum Assets {
         wrapper.replacingOccurrences(of: "{{SRC}}", with: htmlAttr(src))
     }
 
-    /// Trang phát HLS của app (hls.html). hls.js và agent được WKWebView chèn sẵn (WKUserScript), nên bỏ thẻ nạp
-    /// /__chimto/hls.js (bản Android trả tệp cho đường dẫn đó) và chỗ chèn agent.
-    static func hlsPage(src: String, start: Int, sub: String?) -> String {
-        hls.replacingOccurrences(of: "<script src=\"/__chimto/hls.js\"></script>", with: "")
+    /// Trang phát HLS của app (hls.html). hls.js và agent được WKWebView chèn sẵn (WKUserScript), nên bỏ thẻ nạp hls.js
+    /// (bản Android trả tệp cho đường dẫn /__chimto/hls.js) và chỗ chèn agent.
+    /// - subs: danh sách phụ đề chọn được (nil = không có danh sách — chỉ dùng sub); subIdx: tệp chọn sẵn (-1 = tắt);
+    ///   subDelay: lệch (giây). file: phát thẳng bằng <video> (MP4); cap: chọn bản không lớn hơn màn hình (dexter.pw).
+    static func hlsPage(src: String, start: Int, sub: String?, subs: [SubTrack]? = nil, subIdx: Int = -1, subDelay: Double = 0,
+                        file: Bool, cap: Bool = false) -> String {
+        hls.replacingOccurrences(of: "<script src=\"{{HLSJS}}\"></script>", with: "")
+            .replacingOccurrences(of: "<script src=\"/__chimto/hls.js\"></script>", with: "")
             .replacingOccurrences(of: "{{AGENT}}", with: "")
             .replacingOccurrences(of: "{{SRC}}", with: jsString(src))
             .replacingOccurrences(of: "{{START}}", with: String(start))
+            .replacingOccurrences(of: "{{SUBS}}", with: subs.map { subsJson($0) } ?? "null")
+            .replacingOccurrences(of: "{{SUBI}}", with: String(subIdx))
+            .replacingOccurrences(of: "{{SUBD}}", with: String(subDelay))
+            .replacingOccurrences(of: "{{FILE}}", with: file ? "true" : "false")
+            .replacingOccurrences(of: "{{CAP}}", with: cap ? "true" : "false")
             .replacingOccurrences(of: "{{SUB}}", with: sub.map { jsString($0) } ?? "null")
+    }
+
+    /// [{u, l, g}] cho hls.html (__chimtoSubs / SUBS) — an toàn trong thẻ script.
+    static func subsJson(_ list: [SubTrack]) -> String {
+        let arr = list.map { ["u": $0.url, "l": $0.label, "g": $0.lang] }
+        let data = (try? JSONSerialization.data(withJSONObject: arr)) ?? Data("[]".utf8)
+        return String(decoding: data, as: UTF8.self).replacingOccurrences(of: "</", with: "<\\/")
     }
 
     static func htmlAttr(_ s: String) -> String {

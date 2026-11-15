@@ -17,7 +17,7 @@ enum ApiSite {
     static let vsHost = "vsmov.com"
 
     private static let lock = NSLock()
-    private static var known: Set<String> = ["mephim.ddns.net", kkHost, vsHost, NguonC.host, Stremio.host]
+    private static var known: Set<String> = ["mephim.ddns.net", kkHost, vsHost, NguonC.host, Stremio.host, Dexter.host]
     private static var notApi: Set<String> = []
     private static let cdn = "https://phimimg.com"
     private static let limit = 24
@@ -126,6 +126,7 @@ enum ApiSite {
     static func home(_ base: String) async throws -> Home {
         if NguonC.isSite(base) { return try await NguonC.home(base) }
         if Stremio.isSite(base) { return try await Stremio.home(base) }
+        if Dexter.isSite(base) { return try await Dexter.home(base) }
         let o = origin(base)
         let kk = isKk(base), vs = isVs(base)
         // KKPhim không có khối thịnh hành / song ngữ: thêm hoạt hình thuyết minh, phim bộ, phim lẻ mới
@@ -155,6 +156,7 @@ enum ApiSite {
     static func menuOf(_ base: String) -> [Category] {
         if NguonC.isSite(base) { return NguonC.menuOf(base) }
         if Stremio.isSite(base) { return Stremio.menuOf(base) }
+        if Dexter.isSite(base) { return Dexter.menuOf(base) }
         let o = origin(base)
         return isVs(base) ? vsMenu.map { Category(title: $0.0, url: vsApi(o, $0.1, 1)) }
             : (isKk(base) ? kkMenu : menu).map { Category(title: $0.0, url: api(o, $0.1, 1)) }
@@ -202,6 +204,7 @@ enum ApiSite {
     static func list(_ url: String) async throws -> FilmPage {
         if NguonC.isSite(url) { return try await NguonC.list(url) }
         if Stremio.isSite(url) { return try await Stremio.list(url) }
+        if Dexter.isSite(url) { return try await Dexter.list(url) }
         return parseList(try await getJSON(url), url)
     }
 
@@ -223,6 +226,7 @@ enum ApiSite {
     static func newestUrl(_ base: String) -> String {
         if NguonC.isSite(base) { return NguonC.newestUrl(base) }
         if Stremio.isSite(base) { return Stremio.newestUrl(base) }
+        if Dexter.isSite(base) { return Dexter.newestUrl(base) }
         if isVs(base) { return "\(origin(base))/api/danh-sach/phim-moi-cap-nhat?page=1" }
         return "\(origin(base))/api/movies/newest?page=1&limit=\(limit)"
     }
@@ -230,6 +234,7 @@ enum ApiSite {
     static func searchUrl(_ base: String, _ query: String) -> String {
         if NguonC.isSite(base) { return NguonC.searchUrl(base, query) }
         if Stremio.isSite(base) { return Stremio.searchUrl(base, query) }
+        if Dexter.isSite(base) { return Dexter.searchUrl(base, query) }
         if isVs(base) { return "\(origin(base))/api/tim-kiem?keyword=" + query.trimmed.formEncoded + "&page=1&limit=\(limit)" }
         return "\(origin(base))/api/movies/search?keyword=" + query.trimmed.formEncoded + "&page=1&limit=\(limit)"
     }
@@ -237,6 +242,7 @@ enum ApiSite {
     static func filters(_ base: String) -> (genres: [Category], countries: [Category]) {
         if NguonC.isSite(base) { return NguonC.filters(base) }
         if Stremio.isSite(base) { return Stremio.filters(base) }
+        if Dexter.isSite(base) { return Dexter.filters(base) }
         let o = origin(base)
         if isVs(base) {
             return (vsGenres.map { Category(title: $0.0, url: vsApi(o, "the-loai/\($0.1)", 1)) },
@@ -265,6 +271,7 @@ enum ApiSite {
     static func detail(_ url: String) async throws -> FilmDetail {
         if NguonC.isSite(url) { return try await NguonC.detail(url) }
         if Stremio.isSite(url) { return try await Stremio.detail(url) }
+        if Dexter.isSite(url) { return try await Dexter.detail(url) }
         let film = try filmUrl(url)
         return try parseDetail(try await getJSON(try detailApi(film)), film)
     }
@@ -316,6 +323,7 @@ enum ApiSite {
     static func source(_ epUrl: String) async throws -> EpisodeSource {
         if NguonC.isSite(epUrl) { return try await NguonC.source(epUrl) }
         if Stremio.isSite(epUrl) { return try await Stremio.source(epUrl) }
+        if Dexter.isSite(epUrl) { return try await Dexter.source(epUrl) }
         let root = try await getJSON(try detailApi(try filmUrl(epUrl)))
         let sv = Int(URLComponents(string: epUrl)?.queryItems?.first { $0.name == "sv" }?.value ?? "") ?? 0
         let tap = (URL(string: epUrl)?.path ?? "").trimmingSuffix("/").afterLast("/")

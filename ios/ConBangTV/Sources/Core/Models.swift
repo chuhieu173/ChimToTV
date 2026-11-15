@@ -57,6 +57,8 @@ struct EpisodeGroup: Hashable, Identifiable {
     var id: String { name }
 }
 
+/// seasons: mỗi nhóm là một mùa (phim bộ của dexter.pw; nhóm tập đặc biệt — nếu có — đứng cuối) chứ không phải một bản
+/// (Vietsub / Thuyết Minh) của cùng các tập.
 struct FilmDetail {
     let url: String
     let title: String
@@ -65,11 +67,21 @@ struct FilmDetail {
     let description: String?
     let info: String?
     var groups: [EpisodeGroup]
+    var seasons: Bool = false
 
-    var episodeCount: Int { groups.map { $0.episodes.count }.max() ?? 0 }
+    /// Tên nhóm tập đặc biệt (mùa 0) của phim chia mùa.
+    static let specials = "Tập đặc biệt"
 
-    /// Tập mới nhất của bản nhiều tập nhất (bản Vietsub thường ra trước Thuyết Minh).
-    var latestEpisode: Episode? { groups.max { $0.episodes.count < $1.episodes.count }?.episodes.last }
+    /// Bản: số tập của bản nhiều tập nhất. Mùa: tổng số tập (mùa mới ra tập là tăng — để báo «có tập mới»).
+    var episodeCount: Int {
+        seasons ? groups.reduce(0) { $0 + $1.episodes.count } : (groups.map { $0.episodes.count }.max() ?? 0)
+    }
+
+    /// Bản: tập mới nhất của bản nhiều tập nhất (bản Vietsub thường ra trước Thuyết Minh). Mùa: tập cuối của mùa cuối.
+    var latestEpisode: Episode? {
+        if seasons { return (groups.last { $0.name != FilmDetail.specials } ?? groups.last)?.episodes.last }
+        return groups.max { $0.episodes.count < $1.episodes.count }?.episodes.last
+    }
 
     func groupOf(_ epUrl: String) -> EpisodeGroup? { groups.first { g in g.episodes.contains { $0.url == epUrl } } }
 }
@@ -80,12 +92,25 @@ struct Server: Hashable, Identifiable {
     var id: String { type }
 }
 
+/// Một phụ đề rời chọn được trong trình phát (dexter.pw: kho OpenSubtitles / Subsource). lang: "vi", "en".
+struct SubTrack: Hashable {
+    let label: String
+    let url: String
+    let lang: String
+}
+
 /// Link phát của một server: iframe trình phát / trang tập, hoặc luồng .m3u8 (kèm phụ đề rời nếu có).
 /// file: tệp video phát thẳng bằng <video> (MP4 của CLB Phim Xưa), không phải trang trình phát.
+/// hls: luồng HLS dù đường dẫn không có đuôi .m3u8 (dexter.pw /api/s/…), phát bằng bản hls.js đầy đủ (âm thanh tách rời).
+/// subs: phụ đề chọn được (trình phát chọn sẵn theo ngôn ngữ người xem ưa dùng); subsLater: địa chỉ danh sách phụ đề trang
+/// còn đang tìm — trình phát hỏi lại sau (Dexter.subtitlesFrom).
 struct Video {
     let url: String
     var subtitle: String?
     var file: Bool = false
+    var hls: Bool = false
+    var subs: [SubTrack] = []
+    var subsLater: String? = nil
 }
 
 /// Cách phát một tập (xem Site.kt): player.php → iframe; pageMode → mở thẳng trang tập; next → trang Next.js.

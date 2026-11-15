@@ -619,7 +619,7 @@ private struct MenuPanel: View {
                             }
                         }
                         if m.groups.count > 1 {
-                            PanelLabel("Bản phim")
+                            PanelLabel(m.seasons ? "Mùa" : "Bản phim")
                             LazyVGrid(columns: cols, alignment: .leading, spacing: 10) {
                                 ForEach(m.groups) { g in
                                     ChipButton(text: g.name, active: g == m.group) { m.switchGroup(g) }
@@ -634,6 +634,16 @@ private struct MenuPanel: View {
                                 .disabled(!m.started)
                             if m.hasIntro {
                                 ChipButton(text: "Bỏ mốc", icon: "trash") { m.clearIntro() }
+                            }
+                        }
+                        // Phụ đề rời (dexter.pw): chỉ hiện khi tập có phụ đề chọn được
+                        if !m.subs.isEmpty {
+                            PanelLabel("Phụ đề")
+                            LazyVGrid(columns: [GridItem(.adaptive(minimum: 220), spacing: 10, alignment: .leading)],
+                                      alignment: .leading, spacing: 10) {
+                                ChipButton(text: "Phụ đề: \(m.subText)", icon: "captions.bubble") { m.cycleSub() }
+                                ChipButton(text: "Chữ sớm hơn 0,5 s", icon: "gobackward") { m.nudgeSub(-0.5) }
+                                ChipButton(text: "Chữ muộn hơn 0,5 s", icon: "goforward") { m.nudgeSub(0.5) }
                             }
                         }
                         PanelLabel("Xem")

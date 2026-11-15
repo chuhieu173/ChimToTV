@@ -303,7 +303,8 @@ final class AppModel: ObservableObject {
         // Trang kiểu PhimMoi / trang API (mephim): đủ thể loại / quốc gia của bộ lọc (menu trang chỉ có vài mục)
         if NextSite.isKnown(Prefs.baseUrl) || ApiSite.isKnown(Prefs.baseUrl) {
             items.append(Entry(title: "Thể loại…", kind: .filter, url: "genre"))
-            items.append(Entry(title: "Quốc gia…", kind: .filter, url: "country"))
+            // dexter.pw không lọc theo nước: mục thứ hai là thập niên
+            items.append(Entry(title: Dexter.isSite(Prefs.baseUrl) ? "Thập niên…" : "Quốc gia…", kind: .filter, url: "country"))
         }
         items += [
             Entry(title: "Đổi trang phim", kind: .site),

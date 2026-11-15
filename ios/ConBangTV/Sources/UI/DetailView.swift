@@ -272,14 +272,20 @@ struct DetailView: View {
         if let latest = eps.last {
             let resume = m.resumeEp
             let cols = [GridItem(.adaptive(minimum: narrow ? 150 : 200), spacing: 12, alignment: .leading)]
+            // Phim chia mùa (phim bộ Âu Mỹ của dexter.pw): chưa xem thì xem từ tập đầu mùa 1; «Mới nhất» = tập cuối của mùa
+            // cuối; tên tập trên nút kèm tên mùa (mùa nào cũng có «Tập 1»)
+            let first = d.seasons ? (d.groups.first?.episodes.first ?? latest) : (eps.first ?? latest)
+            let newest = d.seasons ? (d.latestEpisode ?? latest) : latest
+            let name: (Episode) -> String = { e in d.seasons ? (d.groupOf(e.url).map { "\($0.name), \(e.title)" } ?? e.title) : e.title }
             LazyVGrid(columns: cols, alignment: .leading, spacing: 12) {
-                ChipButton(text: resume.map { "Xem tiếp \($0.title)" } ?? (eps.count == 1 ? "Xem phim" : "Xem \(latest.title) (mới nhất)"),
-                           icon: "play.fill", active: true) { m.play(resume ?? latest) }
-                if let r = resume, r != latest {
-                    ChipButton(text: "Mới nhất: \(latest.title)", icon: "forward.end") { m.play(latest) }
+                ChipButton(text: resume.map { "Xem tiếp \(name($0))" }
+                               ?? (d.seasons ? "Xem từ \(name(first))" : eps.count == 1 ? "Xem phim" : "Xem \(latest.title) (mới nhất)"),
+                           icon: "play.fill", active: true) { m.play(resume ?? (d.seasons ? first : latest)) }
+                if d.seasons ? (newest != first && newest != resume) : (resume != nil && resume != latest) {
+                    ChipButton(text: "Mới nhất: \(name(newest))", icon: "forward.end") { m.play(newest) }
                 }
-                if eps.count > 1, let first = eps.first {
-                    ChipButton(text: "Xem từ \(first.title)", icon: "backward.end") { m.play(first) }
+                if d.seasons ? (resume != nil && resume != first) : eps.count > 1 {
+                    ChipButton(text: "Xem từ \(name(first))", icon: "backward.end") { m.play(first) }
                 }
                 // Phim có ở nhiều nguồn (trang chủ tổng hợp): đổi nguồn
                 if links.count >= 2 {

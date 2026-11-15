@@ -547,7 +547,11 @@ enum Site {
     }
 
     /// Tên trang hiện trong app: tên miền, riêng add-on k-20 ghi «CLB Phim Xưa (sc.k-20.xyz)».
-    static func displayName(_ host: String) -> String { host == Stremio.host ? "\(Stremio.name) (\(host))" : host }
+    static func displayName(_ host: String) -> String {
+        if host == Stremio.host { return "\(Stremio.name) (\(host))" }
+        if host == Dexter.host { return "Phim Âu Mỹ 4K (\(host))" }
+        return host
+    }
 
     /// Tên ngắn ghi sau tên phim của trang khác: "yanhh3d", "nguonc" (bỏ nhãn chung "phim." / "www."), "CLB Phim Xưa".
     static func shortName(_ host: String) -> String {

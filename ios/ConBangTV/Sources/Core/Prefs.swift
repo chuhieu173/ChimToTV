@@ -22,7 +22,7 @@ enum Prefs {
 
     /// Các trang mẫu có sẵn trong danh sách lần đầu cài.
     static let presetSites = [defaultBase, "https://hoathinh3d.pw", "https://hoathinh3d.ee", "https://hhkungfu.ee", "https://phimmois.fun",
-                              "https://mephim.ddns.net", kkSite, ncSite, vsSite, k20Site]
+                              "https://mephim.ddns.net", kkSite, ncSite, vsSite, k20Site, dxSite]
 
     /// Trang KKPhim (từ 1.6) — dữ liệu lấy thẳng từ API công khai phimapi.com (xem ApiSite).
     static let kkSite = "https://www.kkphim.com"
@@ -32,8 +32,11 @@ enum Prefs {
     static let vsSite = "https://vsmov.com"
     static let k20Site = "https://sc.k-20.xyz"
 
+    /// Từ 1.19: dexter.pw — phim Âu Mỹ 4K, phụ đề OpenSubtitles / Subsource (xem Dexter.swift).
+    static let dxSite = "https://dexter.pw"
+
     /// Trang mẫu thêm ở bản sau: thêm một lần vào danh sách người xem đã lưu (xoá đi thì thôi, không thêm lại).
-    static let addedSites = ["https://mephim.ddns.net", kkSite, ncSite, vsSite, k20Site]
+    static let addedSites = ["https://mephim.ddns.net", kkSite, ncSite, vsSite, k20Site, dxSite]
 
     /// Gọi lúc mở app (sau migrateMovedHosts).
     static func addNewPresets() {
@@ -571,6 +574,27 @@ enum Prefs {
     static var videoFill: Bool {
         get { store.bool(forKey: k("video_fill")) }
         set { store.set(newValue, forKey: k("video_fill")) }
+    }
+
+    /// Phụ đề rời ưa dùng (dexter.pw), riêng từng người xem: "vi" (mặc định), "en" hoặc "off" (tắt).
+    static var subLang: String {
+        get { store.string(forKey: k("sub_lang")) ?? "vi" }
+        set { store.set(newValue, forKey: k("sub_lang")) }
+    }
+
+    /// Độ lệch phụ đề (giây, + = chữ hiện muộn hơn) đã chỉnh cho từng tập; giữ 100 tập chỉnh gần nhất (thứ tự trong "sub_delay_keys").
+    static func subDelay(_ epUrl: String) -> Double {
+        (store.dictionary(forKey: "sub_delay")?[epUrl] as? NSNumber)?.doubleValue ?? 0
+    }
+
+    static func setSubDelay(_ epUrl: String, _ seconds: Double) {
+        var d = store.dictionary(forKey: "sub_delay") ?? [:]
+        var keys = (store.stringArray(forKey: "sub_delay_keys") ?? []).filter { $0 != epUrl }
+        d[epUrl] = nil
+        if seconds != 0 { d[epUrl] = seconds; keys.append(epUrl) }
+        while keys.count > 100 { d[keys.removeFirst()] = nil }
+        store.set(d, forKey: "sub_delay")
+        store.set(keys, forKey: "sub_delay_keys")
     }
 
     // MARK: - Riêng tư

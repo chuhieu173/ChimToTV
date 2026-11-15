@@ -55,6 +55,12 @@ final class PlayerModel: NSObject, ObservableObject, WKNavigationDelegate, WKUID
     @Published private(set) var rate = 1.0
     @Published private(set) var sleepChoice = 0
     @Published private(set) var sleepAt: Int64 = 0
+    /// Phụ đề rời của tập đang phát (dexter.pw): danh sách, tệp đang hiện (-1 = tắt), độ lệch (giây, + = chữ muộn hơn).
+    @Published private(set) var subs: [SubTrack] = []
+    @Published private(set) var subIdx = -1
+    @Published private(set) var subDelay = 0.0
+    /// Lời nhắn phụ đề mới nhất đã hiện (số thứ tự hls.html đánh; trang nạp lại thì đếm lại từ 1).
+    private var subNoteShown = 0
     @Published private(set) var pageMode = false
     /// Đang kéo thanh thời gian (khỏi tự ẩn thanh, khỏi nhảy số).
     @Published var dragging = false {
@@ -264,10 +270,16 @@ final class PlayerModel: NSObject, ObservableObject, WKNavigationDelegate, WKUID
                 session = PlaySession(host: AppProxy.statsHost(Site.hostOf(src.epUrl)), server: s?.type ?? "embed", openedAt: loadStartedAt)
                 startHint = startFor()
                 Log.d("Player", "phát \(v.url) (server \(s?.type ?? "-"), báo trước \(startHint) s)")
-                if v.file || URL(string: v.url)?.path.hasSuffix(".m3u8") == true {
+                let m3u8 = URL(string: v.url)?.path.hasSuffix(".m3u8") == true
+                if v.file || v.hls || m3u8 {
                     hlsUrl = v.url
-                    installScripts(hls: true, page: false)
-                    loadHTML(Assets.hlsPage(src: v.url, start: startHint, sub: v.subtitle), base: src.epUrl)
+                    let listed = !v.subs.isEmpty || v.subsLater != nil
+                    setSubs(v.subs)
+                    subDelay = listed ? Prefs.subDelay(src.epUrl) : 0
+                    installScripts(hls: true, page: false, fullHls: v.hls)
+                    loadHTML(Assets.hlsPage(src: v.url, start: startHint, sub: v.subtitle, subs: listed ? subs : nil, subIdx: subIdx,
+                                            subDelay: subDelay, file: v.file || !(v.hls || m3u8), cap: v.hls), base: src.epUrl)
+                    if let later = v.subsLater { pollSubs(later, t) }
                 } else {
                     embedUrl = v.url
                     installScripts(hls: false, page: false)
@@ -282,13 +294,14 @@ final class PlayerModel: NSObject, ObservableObject, WKNavigationDelegate, WKUID
     }
 
     /// Script chèn vào trang phát: agent (mọi khung, kèm chỗ bắt đầu + số lần nạp), hls.js, phóng trình phát (trang tập).
-    private func installScripts(hls: Bool, page: Bool) {
+    private func installScripts(hls: Bool, page: Bool, fullHls: Bool = false) {
         let ucc = web.configuration.userContentController
         ucc.removeAllUserScripts()
         let prefix = "window.__chimtoStart=\(startHint);window.__chimtoLoad=\(pageLoad);\n"
         ucc.addUserScript(WKUserScript(source: prefix + Assets.agent, injectionTime: .atDocumentStart, forMainFrameOnly: false))
         ucc.addUserScript(WKUserScript(source: WebSetup.fillCss, injectionTime: .atDocumentStart, forMainFrameOnly: false))
-        if hls { ucc.addUserScript(WKUserScript(source: Assets.hlsJs, injectionTime: .atDocumentStart, forMainFrameOnly: true)) }
+        // dexter.pw (Video.hls): bản hls.js đầy đủ — luồng âm thanh tách rời
+        if hls { ucc.addUserScript(WKUserScript(source: fullHls ? Assets.hlsJsFull : Assets.hlsJs, injectionTime: .atDocumentStart, forMainFrameOnly: true)) }
         if page { ucc.addUserScript(WKUserScript(source: Assets.pageFocus, injectionTime: .atDocumentStart, forMainFrameOnly: true)) }
         #if DEVTOOLS
         if !page { ucc.addUserScript(WKUserScript(source: WebSetup.consoleHook, injectionTime: .atDocumentStart, forMainFrameOnly: true)) }
@@ -314,6 +327,10 @@ final class PlayerModel: NSObject, ObservableObject, WKNavigationDelegate, WKUID
         pageMode = false
         embedUrl = nil
         hlsUrl = nil
+        subs = []
+        subIdx = -1
+        subDelay = 0
+        subNoteShown = 0
         errShown = false
         lastAdAt = 0
         state = nil
@@ -354,6 +371,12 @@ final class PlayerModel: NSObject, ObservableObject, WKNavigationDelegate, WKUID
     func switchGroup(_ g: EpisodeGroup) {
         hidePanel()
         guard let d = detail, g != group, !g.episodes.isEmpty else { return }
+        // Phim chia mùa: chọn mùa là mở tập đầu của mùa đó
+        if d.seasons {
+            group = g
+            openEpisode(0)
+            return
+        }
         let cur = episodes[safe: index]
         let same = g.episodes.firstIndex { $0.title == cur?.title }
         let target = same ?? min(index, g.episodes.count - 1)
@@ -367,7 +390,20 @@ final class PlayerModel: NSObject, ObservableObject, WKNavigationDelegate, WKUID
     }
 
     func next() {
-        if index + 1 < episodes.count { openEpisode(index + 1) } else { showNotice("Đây là tập mới nhất.") }
+        if index + 1 < episodes.count { openEpisode(index + 1) } else if nextSeason() != nil { openNextSeason() } else { showNotice("Đây là tập mới nhất.") }
+    }
+
+    /// Phim chia mùa (dexter.pw): mùa sau của mùa đang xem (không sang nhóm tập đặc biệt); phim khác: nil.
+    private func nextSeason() -> EpisodeGroup? {
+        guard let d = detail, d.seasons, let g = group, let i = d.groups.firstIndex(of: g) else { return nil }
+        guard let n = d.groups[safe: i + 1], n.name != FilmDetail.specials, !n.episodes.isEmpty else { return nil }
+        return n
+    }
+
+    private func openNextSeason() {
+        guard let g = nextSeason() else { return }
+        group = g
+        openEpisode(0)
     }
 
     func prev() {
@@ -426,7 +462,7 @@ final class PlayerModel: NSObject, ObservableObject, WKNavigationDelegate, WKUID
     }
 
     private func poll() {
-        web.evaluateJavaScript("[window.__chimtoLoad||0,window.__chimtoState||null]") { [weak self] result, _ in
+        web.evaluateJavaScript("[window.__chimtoLoad||0,window.__chimtoState||null,window.__chimtoSubNote||null]") { [weak self] result, _ in
             Task { @MainActor in self?.onState(result) }
         }
     }
@@ -435,9 +471,12 @@ final class PlayerModel: NSObject, ObservableObject, WKNavigationDelegate, WKUID
     private static func flag(_ v: Any?) -> Bool { (v as? NSNumber)?.boolValue ?? false }
 
     private func onState(_ raw: Any?) {
-        // [lần nạp trang, trạng thái]: trạng thái của trang tập cũ (còn trả lời ngay sau khi chuyển tập) thì bỏ
+        // [lần nạp trang, trạng thái, lời nhắn phụ đề]: trạng thái của trang tập cũ (còn trả lời ngay sau khi chuyển tập) thì bỏ
         var o: [String: Any]?
-        if let arr = raw as? [Any], arr.count == 2, (arr[0] as? NSNumber)?.intValue == pageLoad { o = arr[1] as? [String: Any] }
+        if let arr = raw as? [Any], arr.count >= 2, (arr[0] as? NSNumber)?.intValue == pageLoad {
+            o = arr[1] as? [String: Any]
+            if arr.count >= 3, let note = arr[2] as? String { subNote(note) }
+        }
         let now = nowMs()
         let inAd = Self.flag(o?["ad"])
         if inAd { lastAdAt = now }
@@ -543,6 +582,9 @@ final class PlayerModel: NSObject, ObservableObject, WKNavigationDelegate, WKUID
             } else if Prefs.autoNext && index + 1 < episodes.count {
                 showNotice("Hết tập — chuyển sang \(episodes[index + 1].title)")
                 openEpisode(index + 1)
+            } else if Prefs.autoNext, let g = nextSeason() {
+                showNotice("Hết mùa — chuyển sang \(g.name), \(g.episodes[0].title)")
+                openNextSeason()
             }
         }
     }
@@ -607,6 +649,86 @@ final class PlayerModel: NSObject, ObservableObject, WKNavigationDelegate, WKUID
         Prefs.clearIntro(introKey)
         showNotice("Đã bỏ mốc nhạc mở đầu của phim này.")
         objectWillChange.send()
+    }
+
+    // MARK: - Phụ đề rời (dexter.pw)
+
+    /// Danh sách phụ đề mới → chọn sẵn theo ngôn ngữ người xem ưa dùng (không có tiếng Việt thì bản đầu tiên; "off" = tắt).
+    private func setSubs(_ list: [SubTrack]) {
+        subs = list
+        let want = Prefs.subLang
+        subIdx = (list.isEmpty || want == "off") ? -1 : (list.firstIndex { $0.lang == want } ?? 0)
+    }
+
+    var subText: String {
+        let name = subs[safe: subIdx]?.label ?? "Tắt"
+        return subDelay != 0 && subIdx >= 0 ? "\(name) · \(delayText(subDelay))" : name
+    }
+
+    private func delayText(_ d: Double) -> String {
+        let n = Swift.abs(d)
+        let v = n.truncatingRemainder(dividingBy: 1) == 0 ? String(Int(n)) : String(n).replacingOccurrences(of: ".", with: ",")
+        return (d > 0 ? "muộn " : "sớm ") + v + " s"
+    }
+
+    /// Đổi bản phụ đề (hết danh sách thì tắt, bấm nữa lại bản đầu); nhớ ngôn ngữ cho người xem này.
+    func cycleSub() {
+        guard !subs.isEmpty else { return }
+        subIdx = subIdx + 1 >= subs.count ? -1 : subIdx + 1
+        Prefs.subLang = subs[safe: subIdx]?.lang ?? "off"
+        web.evaluateJavaScript("window.__chimtoSub&&__chimtoSub(\(subIdx))", completionHandler: nil)
+    }
+
+    /// Chữ lệch với tiếng (bản phụ đề làm cho bản phim khác): dời 0,5 giây mỗi lần bấm, nhớ cho tập này.
+    func nudgeSub(_ d: Double) {
+        guard !subs.isEmpty else { return }
+        subDelay = (((subDelay + d) * 10).rounded()) / 10
+        Prefs.setSubDelay(source?.epUrl ?? "", subDelay)
+        web.evaluateJavaScript("window.__chimtoSubDelay&&__chimtoSubDelay(\(subDelay))", completionHandler: nil)
+        showNotice("Phụ đề: " + (subDelay == 0 ? "đúng như bản gốc" : delayText(subDelay) + " so với bản gốc"), 1.5)
+    }
+
+    /// Tệp phụ đề hỏng thì trang tự sang tệp sau — hỏi lại tệp đang hiện cho đúng chữ trên nút.
+    func syncSubIdx() {
+        guard !subs.isEmpty else { return }
+        web.evaluateJavaScript("window.__chimtoSubNow?__chimtoSubNow():null") { [weak self] r, _ in
+            guard let self = self, let i = (r as? NSNumber)?.intValue, i != self.subIdx else { return }
+            self.subIdx = i
+        }
+    }
+
+    /// hls.html báo "số|lời nhắn" (vd hết tệp tiếng Việt tải được → tạm dùng tiếng Anh; thử lại được) → hiện một lần.
+    private func subNote(_ raw: String) {
+        let parts = raw.split(separator: "|", maxSplits: 1).map(String.init)
+        guard parts.count == 2, let n = Int(parts[0]), n > subNoteShown else { return }
+        subNoteShown = n
+        showNotice(parts[1], 7)
+        syncSubIdx()
+    }
+
+    /// Trang còn đang tìm phụ đề (phim bộ: tập ít người xem có khi vài phút mới có, trình duyệt cũng vậy): hỏi lại mỗi
+    /// 4 giây, tối đa 3 phút như trang; có thì gắn ngay vào trình phát (phụ đề riêng của nguồn, nếu có, vẫn đứng đầu).
+    private func pollSubs(_ listUrl: String, _ t: Int) {
+        Task { [weak self] in
+            for _ in 0..<45 {
+                try? await Task.sleep(nanoseconds: 4_000_000_000)
+                guard let self = self, t == self.token else { return }
+                guard let r = try? await Dexter.subtitlesFrom(listUrl) else { continue }
+                guard t == self.token else { return }
+                if r.subs.isEmpty {
+                    if r.pending { continue }
+                    return
+                }
+                let keep: Int? = self.subs.isEmpty || self.subIdx < 0 ? nil : self.subIdx
+                self.setSubs(self.subs + r.subs.filter { n in !self.subs.contains { $0.url == n.url } })
+                if let k = keep { self.subIdx = k }
+                self.web.evaluateJavaScript("window.__chimtoSubs&&__chimtoSubs(\(Assets.subsJson(self.subs)),\(self.subIdx))", completionHandler: nil)
+                if let sub = self.subs[safe: self.subIdx] {
+                    self.showNotice("Đã có phụ đề \(sub.label.prefix(1).lowercased() + sub.label.dropFirst()) — mở Menu để chọn bản khác hoặc chỉnh chữ sớm / muộn.", 5)
+                }
+                return
+            }
+        }
     }
 
     // MARK: - Tốc độ / khung hình / hẹn giờ tắt
@@ -918,7 +1040,11 @@ final class PlayerModel: NSObject, ObservableObject, WKNavigationDelegate, WKUID
     func showPanel() {
         hideBar()
         panelShown = true
+        syncSubIdx()
     }
+
+    /// Phim chia mùa (nhóm tập = mùa, không phải bản Vietsub / Thuyết Minh).
+    var seasons: Bool { detail?.seasons == true }
 
     func hidePanel() { panelShown = false }
 
