@@ -12,7 +12,7 @@ default-members = ["core", "app"]
 # Số hiệu bản Linux (tag linux-v<bản>)
 version = "1.3.0"
 edition = "2021"
-license = "MIT"
+license = "GPL-3.0-only"
 
 [profile.release]
 opt-level = 3

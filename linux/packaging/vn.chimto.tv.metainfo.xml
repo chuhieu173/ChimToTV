@@ -4,7 +4,7 @@
   <name>Côn Bằng TV</name>
   <summary>Xem phim hoạt hình 3D và phim bộ bằng bàn phím / remote / chuột</summary>
   <metadata_license>CC0-1.0</metadata_license>
-  <project_license>LicenseRef-proprietary</project_license>
+  <project_license>GPL-3.0-only</project_license>
   <description>
     <p>Trang chủ tổng hợp phim mới từ nhiều nguồn, tìm kiếm trên mọi trang, xem tiếp, theo dõi tập mới, người xem có mã PIN và
       giới hạn giờ xem, đồng bộ trong nhà với TV / iPad / Windows, DNS mã hoá, vượt chặn nhà mạng, proxy SOCKS5 / Shadowsocks.</p>

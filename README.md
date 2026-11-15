@@ -32,6 +32,8 @@ Dữ liệu (danh sách phim, tập, server) đọc trực tiếp từ trang, n�
 (link cố định) · [release `linux-v1.3`](https://github.com/conbangtv/ChimToTV/releases/tag/linux-v1.3)
 — xem mục [Bản Linux](#bản-linux). Đồng bộ được với TV, iPad / iPhone, Windows và Mac.
 
+**Mã nguồn mở:** giấy phép GPL-3.0 — xem [Giấy phép](#giấy-phép).
+
 **Liên hệ** (góp ý, báo lỗi, hỏi đáp): nhóm Telegram [t.me/tivikit](https://t.me/tivikit) — trong app: **Cài đặt** →
 **Liên hệ**.
 
@@ -859,6 +861,15 @@ Thử OTA không cần phát hành thật: bản debug hỏi `http://127.0.0.1:8
 Dựng bản giả số hiệu cao hơn bằng `gradlew assembleDebug "-Pvc=5" "-Pvn=1.4"`, phục vụ JSON + APK từ máy tính
 rồi `adb reverse tcp:8765 tcp:8765`. Tệp APK lớn nên phục vụ ngay trên TV (`toybox nc`) vì `adb reverse` qua mạng
 hay cắt giữa chừng.
+
+## Giấy phép
+
+Mã nguồn của Côn Bằng TV là phần mềm tự do theo **GNU GPL phiên bản 3** (từ 15/11/2026, anh chọn) — văn bản đầy đủ ở
+[LICENSE](LICENSE); SPDX `GPL-3.0-only`, cũng ghi trong `linux/Cargo.toml` và metainfo của gói Linux. Ai sửa và phát hành lại app
+(hay một phần mã) thì phải phát hành kèm mã nguồn theo cùng giấy phép GPL-3.0. Thành phần bên thứ ba giữ giấy phép riêng: hls.js
+(`app/src/main/assets/hls*.min.js`, Apache 2.0), phông Inter (`linux/app/fonts/`, SIL OFL 1.1), GeckoView (MPL 2.0) và libmpv
+(LGPL 2.1+) tải về khi dựng. Giấy phép chỉ áp dụng cho mã nguồn, không cấp quyền gì với phim, hình ảnh hay nội dung của các trang
+web mà app đọc.
 
 ## Logo
 
