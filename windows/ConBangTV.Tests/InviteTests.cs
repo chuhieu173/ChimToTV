@@ -13,7 +13,7 @@ public class InviteTests
         Assert.Equal("aftv.news/" + Invite.Code, Invite.ShortUrl);
         // Link cố định: release đang là Latest, tệp tên cố định (release.ps1 đính kèm ở mọi bản TV)
         Assert.EndsWith("/releases/latest/download/ConBangTV.apk", Invite.ApkUrl);
-        Assert.StartsWith("https://github.com/Circling5714/ChimToTV/", Invite.GuideUrl);
+        Assert.StartsWith("https://github.com/conbangtv/ChimToTV/", Invite.GuideUrl);
     }
 
     /// Ba bản gửi cùng một tin nhắn — sửa câu chữ thì sửa cả ba bản và cả ba test.
@@ -26,7 +26,7 @@ public class InviteTests
             "2. Mở Downloader, nhập 9192365 rồi bấm Go.\n" +
             "3. Tải xong chọn Install. Lần đầu tivi hỏi cho phép Downloader cài ứng dụng thì cho phép.\n" +
             "Cài xong app tự cập nhật các bản sau.\n" +
-            "Hướng dẫn: https://github.com/Circling5714/ChimToTV/blob/main/README.md#downloader",
+            "Hướng dẫn: https://github.com/conbangtv/ChimToTV/blob/main/README.md#downloader",
             Invite.Message);
     }
 }

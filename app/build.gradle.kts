@@ -18,14 +18,14 @@ android {
         // Android 5.0 trở lên: chạy được cả trên các TV box đời cũ.
         minSdk = 21
         targetSdk = 35
-        versionCode = 42
-        versionName = "2.18"
+        versionCode = 43
+        versionName = "2.19"
         // Thử cập nhật OTA với bản giả số hiệu cao hơn: gradlew assembleDebug -Pvc=5 -Pvn=1.4
         (findProperty("vc") as String?)?.let { versionCode = it.toInt() }
         (findProperty("vn") as String?)?.let { versionName = it }
 
         // Nơi app hỏi bản phát hành mới nhất (GitHub Releases của repo)
-        buildConfigField("String", "UPDATE_URL", "\"https://api.github.com/repos/Circling5714/ChimToTV/releases/latest\"")
+        buildConfigField("String", "UPDATE_URL", "\"https://api.github.com/repos/conbangtv/ChimToTV/releases/latest\"")
 
         // Mã hồ sơ NextDNS của app (DNS mã hoá, xem Doh.kt): tệp keys/nextdns.txt — không đưa lên git. Không có tệp thì chuỗi
         // DNS mã hoá bắt đầu từ Cloudflare.

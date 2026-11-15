@@ -7,10 +7,10 @@ import Foundation
 enum Invite {
     static let code = "9192365"
     static let shortUrl = "aftv.news/\(code)"
-    static let apkUrl = "https://github.com/Circling5714/ChimToTV/releases/latest/download/ConBangTV.apk"
+    static let apkUrl = "https://github.com/conbangtv/ChimToTV/releases/latest/download/ConBangTV.apk"
 
     /// Trang hướng dẫn tiếng Việt (mục Downloader của README).
-    static let guideUrl = "https://github.com/Circling5714/ChimToTV/blob/main/README.md#downloader"
+    static let guideUrl = "https://github.com/conbangtv/ChimToTV/blob/main/README.md#downloader"
 
     /// Tin nhắn gửi cho người quen — cùng nội dung ở cả ba bản.
     static let message = [

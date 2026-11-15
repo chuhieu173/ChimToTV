@@ -8,10 +8,10 @@ public static class Invite
 {
     public const string Code = "9192365";
     public const string ShortUrl = "aftv.news/" + Code;
-    public const string ApkUrl = "https://github.com/Circling5714/ChimToTV/releases/latest/download/ConBangTV.apk";
+    public const string ApkUrl = "https://github.com/conbangtv/ChimToTV/releases/latest/download/ConBangTV.apk";
 
     /// Trang hướng dẫn tiếng Việt (mục Downloader của README).
-    public const string GuideUrl = "https://github.com/Circling5714/ChimToTV/blob/main/README.md#downloader";
+    public const string GuideUrl = "https://github.com/conbangtv/ChimToTV/blob/main/README.md#downloader";
 
     /// Tin nhắn gửi cho người quen — cùng nội dung ở cả ba bản. Ghép bằng "\n" (không dùng chuỗi nhiều dòng: xuống dòng trong
     /// tệp nguồn trên Windows là CRLF).

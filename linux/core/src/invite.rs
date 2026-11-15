@@ -5,10 +5,10 @@
 
 pub const CODE: &str = "9192365";
 pub const SHORT_URL: &str = "aftv.news/9192365";
-pub const APK_URL: &str = "https://github.com/Circling5714/ChimToTV/releases/latest/download/ConBangTV.apk";
+pub const APK_URL: &str = "https://github.com/conbangtv/ChimToTV/releases/latest/download/ConBangTV.apk";
 
 /// Trang hướng dẫn tiếng Việt (mục Downloader của README).
-pub const GUIDE_URL: &str = "https://github.com/Circling5714/ChimToTV/blob/main/README.md#downloader";
+pub const GUIDE_URL: &str = "https://github.com/conbangtv/ChimToTV/blob/main/README.md#downloader";
 
 /// Tin nhắn gửi cho người quen — cùng nội dung ở mọi bản. Ghép bằng "\n".
 pub fn message() -> String {
@@ -45,7 +45,7 @@ mod tests {
         assert_eq!(SHORT_URL, format!("aftv.news/{CODE}"));
         // Link cố định: release đang là Latest, tệp tên cố định (release.ps1 đính kèm ở mọi bản TV)
         assert!(APK_URL.ends_with("/releases/latest/download/ConBangTV.apk"));
-        assert!(GUIDE_URL.starts_with("https://github.com/Circling5714/ChimToTV/"));
+        assert!(GUIDE_URL.starts_with("https://github.com/conbangtv/ChimToTV/"));
         assert_eq!(spaced_code(), "9 1 9 2 3 6 5");
     }
 
@@ -59,7 +59,7 @@ mod tests {
              2. Mở Downloader, nhập 9192365 rồi bấm Go.\n\
              3. Tải xong chọn Install. Lần đầu tivi hỏi cho phép Downloader cài ứng dụng thì cho phép.\n\
              Cài xong app tự cập nhật các bản sau.\n\
-             Hướng dẫn: https://github.com/Circling5714/ChimToTV/blob/main/README.md#downloader"
+             Hướng dẫn: https://github.com/conbangtv/ChimToTV/blob/main/README.md#downloader"
         );
     }
 }

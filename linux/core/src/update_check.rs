@@ -11,8 +11,8 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::Duration;
 
-pub const RELEASES_API: &str = "https://api.github.com/repos/Circling5714/ChimToTV/releases?per_page=30";
-pub const RELEASES_PAGE: &str = "https://github.com/Circling5714/ChimToTV/releases";
+pub const RELEASES_API: &str = "https://api.github.com/repos/conbangtv/ChimToTV/releases?per_page=30";
+pub const RELEASES_PAGE: &str = "https://github.com/conbangtv/ChimToTV/releases";
 pub const PREFIX: &str = "linux-v";
 /// Tự kiểm tối đa 2 giờ một lần.
 pub const CHECK_EVERY: i64 = 2 * 60 * 60 * 1000;
