@@ -155,6 +155,21 @@ object DebugServer {
                     onMain { (top ?: app).startActivity(Intent(top ?: app, cls).addFlags(if (top == null) Intent.FLAG_ACTIVITY_NEW_TASK else 0)) }
                     text(out, 200, "ok")
                 }
+                "/site" -> {
+                    // Đổi trang đang dùng rồi mở lại app từ màn hình chính: /site?url=https://dexter.pw[&mix=0|1]
+                    // (mix: trang chủ tổng hợp bật / tắt — tắt để xem trang chủ riêng của trang)
+                    val url = q["url"] ?: return text(out, 400, "thiếu url")
+                    onMain {
+                        Prefs.baseUrl = url
+                        q["mix"]?.let { Prefs.homeMix = it == "1" }
+                        val ctx = top ?: app
+                        ctx.startActivity(
+                            Intent(ctx, MainActivity::class.java)
+                                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK),
+                        )
+                    }
+                    text(out, 200, "ok")
+                }
                 "/detail" -> {
                     // Mở trang phim: /detail?url=<địa chỉ phim>&title=<tên>
                     val url = q["url"] ?: return text(out, 400, "thiếu url")

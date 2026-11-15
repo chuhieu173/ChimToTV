@@ -26,24 +26,45 @@ data class Episode(val title: String, val url: String)
 /** Một danh sách tập, vd "Việt Sub" / "Thuyết Minh" (trang HaLim chia tập theo server). */
 data class EpisodeGroup(val name: String, val episodes: List<Episode>)
 
+/**
+ * seasons: mỗi nhóm là một mùa (phim bộ của dexter.pw, nhóm tập đặc biệt — nếu có — đứng cuối) chứ không phải một bản
+ * (Vietsub / Thuyết Minh) của cùng các tập.
+ */
 data class FilmDetail(
     val url: String, val title: String, val otherTitle: String?, val poster: String?,
-    val description: String?, val info: String?, val groups: List<EpisodeGroup>,
+    val description: String?, val info: String?, val groups: List<EpisodeGroup>, val seasons: Boolean = false,
 ) {
-    val episodeCount get() = groups.maxOfOrNull { it.episodes.size } ?: 0
+    /** Bản: số tập của bản nhiều tập nhất. Mùa: tổng số tập (mùa mới ra tập là tăng — để báo «có tập mới»). */
+    val episodeCount get() = if (seasons) groups.sumOf { it.episodes.size } else groups.maxOfOrNull { it.episodes.size } ?: 0
 
-    /** Tập mới nhất của bản nhiều tập nhất (bản Vietsub thường ra trước Thuyết Minh). */
-    val latestEpisode get() = groups.maxByOrNull { it.episodes.size }?.episodes?.lastOrNull()
+    /** Bản: tập mới nhất của bản nhiều tập nhất (bản Vietsub thường ra trước Thuyết Minh). Mùa: tập cuối của mùa cuối. */
+    val latestEpisode get() =
+        if (seasons) (groups.lastOrNull { it.name != SPECIALS } ?: groups.lastOrNull())?.episodes?.lastOrNull()
+        else groups.maxByOrNull { it.episodes.size }?.episodes?.lastOrNull()
+
+    companion object {
+        /** Tên nhóm tập đặc biệt (mùa 0) của phim chia mùa. */
+        const val SPECIALS = "Tập đặc biệt"
+    }
     fun groupOf(epUrl: String): EpisodeGroup? = groups.firstOrNull { g -> g.episodes.any { it.url == epUrl } }
 }
 
 data class Server(val label: String, val type: String)
 
+/** Một phụ đề rời chọn được trong trình phát (dexter.pw: kho OpenSubtitles / Subsource). lang: "vi", "en". */
+data class SubTrack(val label: String, val url: String, val lang: String)
+
 /**
  * Link phát của một server: iframe trình phát / trang tập, hoặc luồng .m3u8 (kèm phụ đề rời nếu có).
  * file: tệp video phát thẳng bằng <video> (MP4 của CLB Phim Xưa), không phải trang trình phát.
+ * hls: luồng HLS dù đường dẫn không có đuôi .m3u8 (dexter.pw /api/s/…), phát bằng bản hls.js đầy đủ (âm thanh tách rời).
+ * subs: phụ đề chọn được (trình phát chọn sẵn theo ngôn ngữ người xem ưa dùng); subsLater: địa chỉ danh sách phụ đề trang
+ * còn đang tìm — trình phát hỏi lại sau (Dexter.subtitlesFrom).
  */
-data class Video(val url: String, val subtitle: String? = null, val file: Boolean = false)
+data class Video(
+    val url: String, val subtitle: String? = null, val file: Boolean = false, val hls: Boolean = false,
+    val subs: List<SubTrack> = emptyList(), val subsLater: String? = null,
+)
 
 /**
  * Cách phát một tập.
@@ -469,8 +490,12 @@ object Site {
 
     private fun resolve(base: String, ref: String): String = URL(URL(base), ref).toString()
 
-    /** Tên trang hiện trong app: tên miền, riêng add-on k-20 ghi «CLB Phim Xưa (sc.k-20.xyz)». */
-    fun displayName(host: String): String = if (host == Stremio.HOST) "${Stremio.NAME} ($host)" else host
+    /** Tên trang hiện trong app: tên miền, riêng add-on k-20 ghi «CLB Phim Xưa (sc.k-20.xyz)», dexter.pw ghi rõ loại phim. */
+    fun displayName(host: String): String = when (host) {
+        Stremio.HOST -> "${Stremio.NAME} ($host)"
+        Dexter.HOST -> "Phim Âu Mỹ 4K ($host)"
+        else -> host
+    }
 
     fun hostOf(url: String): String? = try {
         URL(url).host.lowercase().removePrefix("www.")

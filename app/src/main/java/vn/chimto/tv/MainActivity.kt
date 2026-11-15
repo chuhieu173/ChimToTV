@@ -589,7 +589,8 @@ class MainActivity : BaseActivity() {
         // Trang kiểu PhimMoi / trang API (mephim): đủ thể loại / quốc gia của bộ lọc (menu trang chỉ có vài mục)
         if (NextSite.isKnown(Prefs.baseUrl) || ApiSite.isKnown(Prefs.baseUrl)) {
             items += Entry("Thể loại…", Kind.FILTER, "genre")
-            items += Entry("Quốc gia…", Kind.FILTER, "country")
+            // dexter.pw không lọc theo nước: mục thứ hai là thập niên
+            items += Entry(if (Dexter.isSite(Prefs.baseUrl)) "Thập niên…" else "Quốc gia…", Kind.FILTER, "country")
         }
         items += Entry("Đổi trang phim", Kind.SITE)
         items += Entry("Duyệt web", Kind.WEB)
@@ -1432,9 +1433,8 @@ class MainActivity : BaseActivity() {
         }
     }
 
-    private fun showKeyboard(v: View) {
-        v.post { (getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager).showSoftInput(v, 0) }
-    }
+    /** Mở bàn phím ảo (thử lại tới khi hệ thống nhận — Android 11+ hay lờ lần gọi đầu, xem openKeyboard). */
+    private fun showKeyboard(v: View) = v.openKeyboard()
 
     private fun hideKeyboard(v: View) {
         (getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager).hideSoftInputFromWindow(v.windowToken, 0)

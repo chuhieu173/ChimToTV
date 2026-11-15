@@ -93,6 +93,30 @@ fun View.focusZoom(scale: Float = 1.07f) {
  * Ô nhập một dòng: ▲/▼ của bàn phím vật lý luôn chuyển sang mục khác
  * (Android mặc định giữ phím mũi tên của bàn phím trong ô chữ, remote thì không).
  */
+/**
+ * Mở bàn phím ảo cho ô nhập vừa nhận tiêu điểm bằng mã (vd chọn «Tìm kiếm» trong menu). Lỗi gặp trên tivi Skyworth
+ * (Android 11) và TX3 (Android 9), 11/2026: tiêu điểm vào ô ngay trong lúc xử lý phím OK của menu thì Android không báo cho
+ * bàn phím (bàn phím vẫn gắn với mục menu: showSoftInput trả false, bấm OK vào ô cũng không mở) — di tiêu điểm bằng
+ * phím lên / xuống thì được. Cách làm: thử mở; bàn phím chưa nhận ô (imm.isActive = false) thì trả tiêu điểm khỏi ô rồi
+ * đặt lại để Android báo lại cho bàn phím; thử lại mỗi 150 ms, tối đa khoảng 1,5 giây, thôi ngay khi người xem đã rời ô.
+ * Android 11+ gọi thêm cách mới (WindowInsetsController).
+ */
+fun View.openKeyboard(tries: Int = 0) {
+    postDelayed({
+        if (!isAttachedToWindow || !hasFocus()) return@postDelayed
+        val imm = context.getSystemService(Context.INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager
+        if (!imm.isActive(this) && tries > 0 && hasWindowFocus()) {
+            // Báo lại cho bàn phím: bỏ tiêu điểm rồi lấy lại (cùng ô, người xem không thấy khác)
+            isFocusable = false
+            isFocusable = true
+            requestFocus()
+        }
+        if (Build.VERSION.SDK_INT >= 30) windowInsetsController?.show(android.view.WindowInsets.Type.ime())
+        val sent = imm.showSoftInput(this, 0)
+        if ((!sent || !imm.isActive(this)) && tries < 10) openKeyboard(tries + 1)
+    }, if (tries == 0) 0L else 150L)
+}
+
 fun EditText.leaveWithUpDown() {
     setOnKeyListener { v, keyCode, e ->
         val dir = when (keyCode) {

@@ -177,6 +177,9 @@ class PlayerActivity : BaseActivity() {
         /** hls.html tải hls.js từ đường dẫn này (cùng origin với trang tập), app trả tệp trong assets. */
         private const val HLS_JS = "/__chimto/hls.js"
 
+        /** Bản hls.js đầy đủ (có luồng âm thanh tách rời) — chỉ trang dùng Video.hls (dexter.pw). */
+        private const val HLS_FULL_JS = "/__chimto/hls-full.js"
+
         private val DROP_HEADERS = setOf(
             "content-security-policy", "content-security-policy-report-only", "content-length",
             "content-encoding", "transfer-encoding", "set-cookie", "content-type",
@@ -239,7 +242,7 @@ class PlayerActivity : BaseActivity() {
     private lateinit var serverLabel: TextView
     private var serverHint: CharSequence = ""
     private lateinit var groupRow: LinearLayout
-    private lateinit var groupLabel: View
+    private lateinit var groupLabel: TextView
     private lateinit var notice: Notice
     private lateinit var introLabel: TextView
     private lateinit var btnIntroStart: TextView
@@ -258,6 +261,9 @@ class PlayerActivity : BaseActivity() {
     private val hideTouchBar = Runnable { touchBar.visibility = View.INVISIBLE }
     private lateinit var btnFit: TextView
     private lateinit var btnSleep: TextView
+    private lateinit var btnSub: TextView
+    private lateinit var btnSubEarly: TextView
+    private lateinit var btnSubLate: TextView
 
     private var agentJs = ""
     private var focusJs = ""
@@ -288,6 +294,11 @@ class PlayerActivity : BaseActivity() {
 
     // Đang phát link HLS bằng hls.html (không qua iframe)
     private var hlsUrl: String? = null
+
+    /** Phụ đề rời của tập đang phát (dexter.pw): danh sách, tệp đang hiện (-1 = tắt), độ lệch (giây, + = chữ muộn hơn). */
+    private var subs: List<SubTrack> = emptyList()
+    private var subIdx = -1
+    private var subDelay = 0.0
     private var errShown = false
     private var lastAdAt = 0L
 
@@ -335,7 +346,7 @@ class PlayerActivity : BaseActivity() {
 
     private val poll = object : Runnable {
         override fun run() {
-            web.evaluateJavascript("[window.__chimtoLoad||0,window.__chimtoState||null]") { onState(it) }
+            web.evaluateJavascript("[window.__chimtoLoad||0,window.__chimtoState||null,window.__chimtoSubNote||null]") { onState(it) }
             mainHandler.postDelayed(this, 1000)
         }
     }
@@ -388,6 +399,9 @@ class PlayerActivity : BaseActivity() {
         touchPlay = findViewById(R.id.touchPlay)
         btnFit = findViewById(R.id.btnFit)
         btnSleep = findViewById(R.id.btnSleep)
+        btnSub = findViewById(R.id.btnSub)
+        btnSubEarly = findViewById(R.id.btnSubEarly)
+        btnSubLate = findViewById(R.id.btnSubLate)
 
         agentJs = assets.open("player-agent.js").use { it.readBytes().toString(Charsets.UTF_8) }
         focusJs = assets.open("page-focus.js").use { it.readBytes().toString(Charsets.UTF_8) }
@@ -527,6 +541,7 @@ class PlayerActivity : BaseActivity() {
 
     private fun intercept(req: WebResourceRequest): WebResourceResponse? {
         if (req.url.path == HLS_JS) return WebResourceResponse("application/javascript", "utf-8", assets.open("hls.light.min.js"))
+        if (req.url.path == HLS_FULL_JS) return WebResourceResponse("application/javascript", "utf-8", assets.open("hls.min.js"))
         if (AdBlock.isAd(req.url.host)) return AdBlock.empty()
         if (req.isForMainFrame || req.method != "GET") return null
         val url = req.url.toString()
@@ -713,13 +728,23 @@ class PlayerActivity : BaseActivity() {
                 val url = v.url
                 loadStartedAt = System.currentTimeMillis()
                 session = PlaySession(AppProxy.statsHost(Site.hostOf(src.epUrl)), s?.type ?: "embed", loadStartedAt)
-                if (v.file || Uri.parse(url).path.orEmpty().endsWith(".m3u8")) {
+                val m3u8 = Uri.parse(url).path.orEmpty().endsWith(".m3u8")
+                if (v.file || v.hls || m3u8) {
                     hlsUrl = url
                     startHint = startFor()
+                    val listed = v.subs.isNotEmpty() || v.subsLater != null
+                    setSubs(v.subs)
+                    subDelay = if (listed) Prefs.subDelay(src.epUrl) else 0.0
+                    showSubButtons()
                     val page = hlsHtml.replace("{{SRC}}", JSONObject.quote(url)).replace("{{START}}", startHint.toString())
                         .replace("{{SUB}}", v.subtitle?.let { JSONObject.quote(it) } ?: "null")
+                        .replace("{{SUBS}}", if (listed) subsJson(subs) else "null")
+                        .replace("{{SUBI}}", subIdx.toString()).replace("{{SUBD}}", subDelay.toString())
+                        .replace("{{FILE}}", (v.file || !(v.hls || m3u8)).toString())
+                        .replace("{{HLSJS}}", if (v.hls) HLS_FULL_JS else HLS_JS).replace("{{CAP}}", v.hls.toString())
                         .replace("{{AGENT}}", agentJs)
                     web.loadDataWithBaseURL(src.epUrl, marked(page), "text/html", "utf-8", null)
+                    v.subsLater?.let { pollSubs(it, t) }
                 } else {
                     embedUrl = url
                     startHint = startFor()
@@ -741,6 +766,11 @@ class PlayerActivity : BaseActivity() {
         pageMode = false
         embedUrl = null
         hlsUrl = null
+        subs = emptyList()
+        subIdx = -1
+        subDelay = 0.0
+        subNoteShown = 0
+        showSubButtons()
         errShown = false
         lastAdAt = 0
         state = null
@@ -809,6 +839,7 @@ class PlayerActivity : BaseActivity() {
     private fun buildGroupButtons(d: FilmDetail) {
         groupRow.removeAllViews()
         groupLabel.visibility = if (d.groups.size > 1) View.VISIBLE else View.GONE
+        groupLabel.text = if (d.seasons) "Mùa" else "Bản phim"
         if (d.groups.size < 2) return
         val inflater = LayoutInflater.from(this)
         for (g in d.groups) {
@@ -818,6 +849,12 @@ class PlayerActivity : BaseActivity() {
             b.setOnClickListener {
                 hidePanel()
                 if (g == group) return@setOnClickListener
+                // Phim chia mùa: chọn mùa là mở tập đầu của mùa đó
+                if (d.seasons) {
+                    group = g
+                    openEpisode(0)
+                    return@setOnClickListener
+                }
                 // Sang bản khác: mở tập cùng tên (vd "Tập 165") và xem tiếp đúng chỗ đang xem. Bản đó chưa có tập này
                 // (vd Thuyết Minh mới tới Tập 107) thì mở tập cùng vị trí / tập cuối của bản đó, không mang giờ sang
                 val cur = episodes.getOrNull(index)
@@ -865,12 +902,101 @@ class PlayerActivity : BaseActivity() {
             cmd("fit", if (Prefs.videoFill) 1 else 0)
             showViewButtons()
         }
+        btnSub.setOnClickListener {
+            if (subs.isEmpty()) return@setOnClickListener
+            subIdx = if (subIdx + 1 >= subs.size) -1 else subIdx + 1
+            Prefs.subLang = subs.getOrNull(subIdx)?.lang ?: "off"
+            web.evaluateJavascript("window.__chimtoSub&&__chimtoSub($subIdx)", null)
+            showSubButtons()
+        }
+        btnSubEarly.setOnClickListener { nudgeSub(-0.5) }
+        btnSubLate.setOnClickListener { nudgeSub(0.5) }
         btnSleep.setOnClickListener {
             sleepChoice = (sleepChoice + 1) % SLEEP.size
             val min = SLEEP[sleepChoice]
             sleepAt = if (min > 0) System.currentTimeMillis() + min * 60_000L else 0
             showViewButtons()
         }
+    }
+
+    /** Danh sách phụ đề mới → chọn sẵn theo ngôn ngữ người xem ưa dùng (không có tiếng Việt thì bản đầu tiên; "off" = tắt). */
+    private fun setSubs(list: List<SubTrack>) {
+        subs = list
+        val want = Prefs.subLang
+        subIdx = when {
+            list.isEmpty() || want == "off" -> -1
+            else -> list.indexOfFirst { it.lang == want }.let { if (it >= 0) it else 0 }
+        }
+    }
+
+    private fun subsJson(list: List<SubTrack>) =
+        JSONArray(list.map { JSONObject().put("u", it.url).put("l", it.label).put("g", it.lang) }).toString()
+
+    /** Ba nút phụ đề chỉ hiện khi tập có phụ đề rời chọn được. */
+    private fun showSubButtons() {
+        val has = subs.isNotEmpty()
+        for (b in listOf(btnSub, btnSubEarly, btnSubLate)) b.visibility = if (has) View.VISIBLE else View.GONE
+        if (!has) return
+        btnSub.text = "Phụ đề: " + (subs.getOrNull(subIdx)?.label ?: "Tắt") +
+            if (subDelay != 0.0 && subIdx >= 0) " · ${delayText(subDelay)}" else ""
+    }
+
+    private fun delayText(d: Double) =
+        (if (d > 0) "muộn " else "sớm ") + abs(d).toString().removeSuffix(".0").replace('.', ',') + " s"
+
+    /** Chữ lệch với tiếng (bản phụ đề làm cho bản phim khác): dời 0,5 giây mỗi lần bấm, nhớ cho tập này. */
+    private fun nudgeSub(d: Double) {
+        if (subs.isEmpty()) return
+        subDelay = Math.round((subDelay + d) * 10) / 10.0
+        Prefs.setSubDelay(source?.epUrl ?: episodeUrl, subDelay)
+        web.evaluateJavascript("window.__chimtoSubDelay&&__chimtoSubDelay($subDelay)", null)
+        showSubButtons()
+        showHud("Phụ đề: " + if (subDelay == 0.0) "đúng như bản gốc" else delayText(subDelay) + " so với bản gốc", ms = 1500)
+    }
+
+    /** Lời nhắn phụ đề mới nhất đã hiện (số thứ tự hls.html đánh; trang nạp lại thì đếm lại từ 1). */
+    private var subNoteShown = 0
+
+    /** hls.html báo "số|lời nhắn" (vd hết tệp tiếng Việt tải được → tạm dùng tiếng Anh; thử lại được) → hiện một lần. */
+    private fun subNote(raw: String) {
+        val n = raw.substringBefore('|').toIntOrNull() ?: return
+        if (n <= subNoteShown) return
+        subNoteShown = n
+        notice.show(raw.substringAfter('|'), 7000)
+        syncSubIdx()
+    }
+
+    /** Tệp phụ đề hỏng thì trang tự sang tệp sau — hỏi lại tệp đang hiện cho đúng chữ trên nút. */
+    private fun syncSubIdx() {
+        if (subs.isEmpty()) return
+        web.evaluateJavascript("window.__chimtoSubNow?__chimtoSubNow():null") { r ->
+            r?.trim()?.toIntOrNull()?.let { if (it != subIdx) { subIdx = it; showSubButtons() } }
+        }
+    }
+
+    /**
+     * Trang còn đang tìm phụ đề (phim bộ: tập ít người xem có khi vài phút mới có, trình duyệt cũng vậy): hỏi lại mỗi
+     * 4 giây, tối đa 3 phút như trang; có thì gắn ngay vào trình phát (phụ đề riêng của nguồn, nếu có, vẫn đứng đầu).
+     */
+    private fun pollSubs(listUrl: String, t: Int, tries: Int = 0) {
+        if (tries >= 45) return
+        mainHandler.postDelayed({
+            if (t != token || isFinishing || isDestroyed) return@postDelayed
+            background({ Dexter.subtitlesFrom(listUrl) }) { r ->
+                if (t != token) return@background
+                val (list, pending) = r.getOrNull() ?: (emptyList<SubTrack>() to true)
+                if (list.isEmpty()) {
+                    if (pending) pollSubs(listUrl, t, tries + 1)
+                    return@background
+                }
+                val keep = subIdx.takeIf { subs.isNotEmpty() && it >= 0 }
+                setSubs(subs + list.filter { n -> subs.none { it.url == n.url } })
+                keep?.let { subIdx = it }
+                showSubButtons()
+                web.evaluateJavascript("window.__chimtoSubs&&__chimtoSubs(${subsJson(subs)},$subIdx)", null)
+                subs.getOrNull(subIdx)?.let { notice.show("Đã có phụ đề ${it.label.replaceFirstChar { c -> c.lowercase() }} — ▼ để chọn bản khác hoặc chỉnh chữ sớm / muộn.", 5000) }
+            }
+        }, 4000)
     }
 
     private fun showViewButtons() {
@@ -902,7 +1028,25 @@ class PlayerActivity : BaseActivity() {
     }
 
     private fun next() {
-        if (index + 1 < episodes.size) openEpisode(index + 1) else notice.show("Đây là tập mới nhất.")
+        when {
+            index + 1 < episodes.size -> openEpisode(index + 1)
+            nextSeason() != null -> openNextSeason()
+            else -> notice.show("Đây là tập mới nhất.")
+        }
+    }
+
+    /** Phim chia mùa (dexter.pw): mùa sau của mùa đang xem (không sang nhóm tập đặc biệt); phim khác: null. */
+    private fun nextSeason(): EpisodeGroup? {
+        val d = detail?.takeIf { it.seasons } ?: return null
+        val i = d.groups.indexOf(group ?: return null)
+        return d.groups.getOrNull(i + 1)?.takeIf { it.name != FilmDetail.SPECIALS && it.episodes.isNotEmpty() }
+    }
+
+    private fun openNextSeason() {
+        val g = nextSeason() ?: return
+        group = g
+        for (i in 0 until groupRow.childCount) groupRow.getChildAt(i).let { it.isActivated = it.tag == g.name }
+        openEpisode(0)
     }
 
     private fun prev() {
@@ -912,12 +1056,14 @@ class PlayerActivity : BaseActivity() {
     // ---- Trạng thái phát ----
 
     private fun onState(raw: String?) {
-        // [lần nạp trang, trạng thái]: trạng thái của trang tập cũ (còn trả lời ngay sau khi chuyển tập) thì bỏ
-        val json = try {
-            JSONArray(raw).takeIf { it.optInt(0) == pageLoad }?.optJSONObject(1)?.toString()
+        // [lần nạp trang, trạng thái, lời nhắn phụ đề]: trạng thái của trang tập cũ (còn trả lời ngay sau khi chuyển tập) thì bỏ
+        val arr = try {
+            JSONArray(raw).takeIf { it.optInt(0) == pageLoad }
         } catch (e: Exception) {
             null
         }
+        val json = arr?.optJSONObject(1)?.toString()
+        arr?.opt(2)?.let { if (it is String) subNote(it) }
         // Mở 25 giây mà video chưa chạy (chưa nạp, hoặc nạp rồi mà đứng yên). Không tính lúc trình phát chạy quảng
         // cáo (đếm lại từ khi hết quảng cáo), không đè lên thông báo lỗi server đang hiện.
         val inAd = json?.contains("\"ad\":true") == true
@@ -1018,6 +1164,11 @@ class PlayerActivity : BaseActivity() {
             } else if (Prefs.autoNext && index + 1 < episodes.size) {
                 notice.show("Hết tập — chuyển sang ${episodes[index + 1].title}")
                 openEpisode(index + 1)
+            } else if (Prefs.autoNext) {
+                nextSeason()?.let { g ->
+                    notice.show("Hết mùa — chuyển sang ${g.name}, ${g.episodes.first().title}")
+                    openNextSeason()
+                }
             }
         }
     }
@@ -1320,6 +1471,8 @@ class PlayerActivity : BaseActivity() {
         serverLabel.text = session?.describe()?.let { "Server — lần xem này: $it" } ?: serverHint
         showIntroRow()
         showViewButtons()
+        showSubButtons()
+        syncSubIdx()
         panel.visibility = View.VISIBLE
         val active = ((0 until serverRow.childCount).map { serverRow.getChildAt(it) } +
             (0 until groupRow.childCount).map { groupRow.getChildAt(it) }).firstOrNull { it.isActivated }

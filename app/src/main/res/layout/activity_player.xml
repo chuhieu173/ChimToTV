@@ -349,6 +349,24 @@
                     style="@style/TvButton"
                     android:text="Danh sách tập" />
 
+                <!-- Phụ đề rời (dexter.pw): chỉ hiện khi tập có phụ đề chọn được -->
+                <TextView
+                    android:id="@+id/btnSub"
+                    style="@style/TvButton"
+                    android:visibility="gone" />
+
+                <TextView
+                    android:id="@+id/btnSubEarly"
+                    style="@style/TvButton"
+                    android:text="Chữ sớm hơn 0,5 s"
+                    android:visibility="gone" />
+
+                <TextView
+                    android:id="@+id/btnSubLate"
+                    style="@style/TvButton"
+                    android:text="Chữ muộn hơn 0,5 s"
+                    android:visibility="gone" />
+
                 <TextView
                     android:id="@+id/btnSpeed"
                     style="@style/TvButton" />

@@ -31,9 +31,9 @@ object ApiSite {
      */
     const val VS_HOST = "vsmov.com"
 
-    /** Trang đã biết là kiểu này (có sẵn + trang dò thấy lúc chạy, xem probe). NguonC / k-20 có định dạng riêng. */
+    /** Trang đã biết là kiểu này (có sẵn + trang dò thấy lúc chạy, xem probe). NguonC / k-20 / dexter.pw có định dạng riêng. */
     private val known = ConcurrentHashMap.newKeySet<String>().apply {
-        add("mephim.ddns.net"); add(KK_HOST); add(VS_HOST); add(NguonC.HOST); add(Stremio.HOST)
+        add("mephim.ddns.net"); add(KK_HOST); add(VS_HOST); add(NguonC.HOST); add(Stremio.HOST); add(Dexter.HOST)
     }
     private val notApi = ConcurrentHashMap.newKeySet<String>()
     private const val CDN = "https://phimimg.com"
@@ -142,6 +142,7 @@ object ApiSite {
     fun home(base: String): Home {
         if (NguonC.isSite(base)) return NguonC.home(base)
         if (Stremio.isSite(base)) return Stremio.home(base)
+        if (Dexter.isSite(base)) return Dexter.home(base)
         val o = origin(base)
         val kk = isKk(base)
         val vs = isVs(base)
@@ -178,6 +179,7 @@ object ApiSite {
     fun menu(base: String): List<Category> {
         if (NguonC.isSite(base)) return NguonC.menu(base)
         if (Stremio.isSite(base)) return Stremio.menu(base)
+        if (Dexter.isSite(base)) return Dexter.menu(base)
         val o = origin(base)
         return if (isVs(base)) {
             VS_MENU.map { (t, p) -> Category(t, vsApi(o, p, 1)) }
@@ -216,6 +218,7 @@ object ApiSite {
     fun list(url: String): FilmPage = when {
         NguonC.isSite(url) -> NguonC.list(url)
         Stremio.isSite(url) -> Stremio.list(url)
+        Dexter.isSite(url) -> Dexter.list(url)
         else -> parseList(get(url), url)
     }
 
@@ -236,6 +239,7 @@ object ApiSite {
     fun newestUrl(base: String) = when {
         NguonC.isSite(base) -> NguonC.newestUrl(base)
         Stremio.isSite(base) -> Stremio.newestUrl(base)
+        Dexter.isSite(base) -> Dexter.newestUrl(base)
         isVs(base) -> "${origin(base)}/api/danh-sach/phim-moi-cap-nhat?page=1"
         else -> "${origin(base)}/api/movies/newest?page=1&limit=$LIMIT"
     }
@@ -245,6 +249,7 @@ object ApiSite {
         return when {
             NguonC.isSite(base) -> NguonC.searchUrl(base, query)
             Stremio.isSite(base) -> Stremio.searchUrl(base, query)
+            Dexter.isSite(base) -> Dexter.searchUrl(base, query)
             isVs(base) -> "${origin(base)}/api/tim-kiem?keyword=$q&page=1&limit=$LIMIT"
             else -> "${origin(base)}/api/movies/search?keyword=$q&page=1&limit=$LIMIT"
         }
@@ -253,6 +258,7 @@ object ApiSite {
     fun filters(base: String): Pair<List<Category>, List<Category>> {
         if (NguonC.isSite(base)) return NguonC.filters(base)
         if (Stremio.isSite(base)) return Stremio.filters(base)
+        if (Dexter.isSite(base)) return Dexter.filters(base)
         val o = origin(base)
         if (isVs(base)) {
             return VS_GENRES.map { (n, s) -> Category(n, vsApi(o, "the-loai/$s", 1)) } to
@@ -283,6 +289,7 @@ object ApiSite {
     fun detail(url: String): FilmDetail = when {
         NguonC.isSite(url) -> NguonC.detail(url)
         Stremio.isSite(url) -> Stremio.detail(url)
+        Dexter.isSite(url) -> Dexter.detail(url)
         else -> parseDetail(get(detailApi(url)), filmUrl(url))
     }
 
@@ -330,6 +337,7 @@ object ApiSite {
     fun source(epUrl: String): EpisodeSource {
         if (NguonC.isSite(epUrl)) return NguonC.source(epUrl)
         if (Stremio.isSite(epUrl)) return Stremio.source(epUrl)
+        if (Dexter.isSite(epUrl)) return Dexter.source(epUrl)
         val film = filmUrl(epUrl)
         val body = get(detailApi(film))
         val root = JSONObject(body)

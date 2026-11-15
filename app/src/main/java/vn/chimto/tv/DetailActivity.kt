@@ -420,6 +420,7 @@ class DetailActivity : BaseActivity() {
 
     private fun updateButtons() {
         val d = detail ?: return
+        if (d.seasons) return updateSeasonButtons(d)
         val eps = group?.episodes.orEmpty()
         if (eps.isEmpty()) return
         val latest = eps.last()
@@ -441,6 +442,29 @@ class DetailActivity : BaseActivity() {
         btnFirst.visibility = if (eps.size > 1) View.VISIBLE else View.GONE
         btnFirst.text = "Xem từ ${eps.first().title}"
         btnFirst.setOnClickListener { play(eps.first()) }
+    }
+
+    /**
+     * Phim chia mùa (phim bộ Âu Mỹ của dexter.pw): chưa xem thì xem từ tập đầu mùa 1; «Mới nhất» = tập cuối của mùa cuối.
+     * Tên tập trên nút kèm tên mùa (mùa nào cũng có «Tập 1»).
+     */
+    private fun updateSeasonButtons(d: FilmDetail) {
+        val first = d.groups.firstOrNull()?.episodes?.firstOrNull() ?: return
+        val latest = d.latestEpisode ?: first
+        val name = { e: Episode -> d.groupOf(e.url)?.let { "${it.name}, ${e.title}" } ?: e.title }
+        val resume = Prefs.historyFor(d.url)?.let { h -> d.groups.firstNotNullOfOrNull { g -> g.episodes.firstOrNull { it.url == h.epUrl } } }
+
+        btnPlay.visibility = View.VISIBLE
+        btnPlay.text = if (resume != null) "▶  Xem tiếp ${name(resume)}" else "▶  Xem từ ${name(first)}"
+        btnPlay.setOnClickListener { play(resume ?: first) }
+
+        btnLatest.visibility = if (latest != first && latest != resume) View.VISIBLE else View.GONE
+        btnLatest.text = "Mới nhất: ${name(latest)}"
+        btnLatest.setOnClickListener { play(latest) }
+
+        btnFirst.visibility = if (resume != null && resume != first) View.VISIBLE else View.GONE
+        btnFirst.text = "Xem từ ${name(first)}"
+        btnFirst.setOnClickListener { play(first) }
     }
 
     private fun play(ep: Episode) {

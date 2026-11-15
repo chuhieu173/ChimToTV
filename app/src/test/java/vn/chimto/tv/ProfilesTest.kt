@@ -248,10 +248,11 @@ class ProfilesTest {
         sp.map["preset_added@https://phimmoir.fun"] = true
         sp.map["history"] = """[{"filmUrl":"https:\/\/phimmoir.fun\/phim\/a","title":"A"}]"""
         Prefs.init(sp)
-        // mephim.ddns.net (2.5), KKPhim (2.6), NguonC / VSMOV / CLB Phim Xưa (2.7): trang mẫu thêm ở bản sau → thêm một lần
+        // mephim.ddns.net (2.5), KKPhim (2.6), NguonC / VSMOV / CLB Phim Xưa (2.7), dexter.pw (2.19): trang mẫu thêm ở bản
+        // sau → thêm một lần
         assertEquals(
             listOf("https://yanhh3d.ee", "https://phimmois.fun", "https://mephim.ddns.net", "https://www.kkphim.com",
-                "https://phim.nguonc.com", "https://vsmov.com", "https://sc.k-20.xyz"),
+                "https://phim.nguonc.com", "https://vsmov.com", "https://sc.k-20.xyz", "https://dexter.pw"),
             Prefs.sites,
         )
         assertEquals("https://phimmois.fun", Prefs.baseUrl)

@@ -12,29 +12,122 @@
 </head>
 <body>
 <video id="v" playsinline></video>
-<script src="/__chimto/hls.js"></script>
+<script src="{{HLSJS}}"></script>
 <script>
 // Phát thẳng luồng HLS (.m3u8) của trang Next.js kiểu PhimMoi (nguồn KKPhim…) bằng hls.js đóng kèm app
-// (PlayerActivity trả tệp cho đường dẫn /__chimto/hls.js). player-agent.js ở trên điều khiển <video> như mọi trang.
+// (PlayerActivity trả tệp cho đường dẫn /__chimto/hls.js — dexter.pw dùng bản đầy đủ /__chimto/hls-full.js vì có luồng
+// âm thanh tách rời). player-agent.js ở trên điều khiển <video> như mọi trang.
 // Lỗi hẳn (vd server chết, không tải được video) thì đặt window.__chimtoErr để app báo và gợi ý đổi server.
 (function () {
-  var SRC = {{SRC}}, SUB = {{SUB}}, START = {{START}}, BUFFER = 120;
+  // CAP: chọn bản không lớn hơn màn hình (dexter.pw có 4K / 1080p / 720p — TV box 720p yếu giải mã 1080p rớt khung hình)
+  var SRC = {{SRC}}, SUB = {{SUB}}, SUBS = {{SUBS}}, SUBI = {{SUBI}}, SUBD = {{SUBD}}, FILE = {{FILE}}, CAP = {{CAP}}, START = {{START}}, BUFFER = 120;
   var v = document.getElementById('v');
   window.__chimtoBuffer = BUFFER;
 
-  // Phụ đề rời (bản Song Ngữ của server HD không in chữ vào hình): tệp WebVTT ngụy trang ảnh PNG (ảnh 1×1 đứng
-  // trước chữ "WEBVTT") → tải về, bỏ phần ảnh, gắn vào <video> dạng track để WebView tự hiện chữ.
-  if (SUB) {
-    fetch(SUB).then(function (r) { return r.text(); }).then(function (t) {
-      var i = t.indexOf('WEBVTT');
-      if (i < 0) return;
-      var tr = document.createElement('track');
-      tr.kind = 'subtitles'; tr.srclang = 'vi'; tr.default = true;
-      tr.src = URL.createObjectURL(new Blob([t.slice(i)], { type: 'text/vtt' }));
-      v.appendChild(tr);
-      tr.track.mode = 'showing';
-    }).catch(function () {});
+  // Phụ đề rời: một tệp (SUB — bản Song Ngữ của server HD phimmois không in chữ vào hình) hoặc danh sách chọn được
+  // (SUBS [{u, l, g}] — dexter.pw, kho OpenSubtitles / Subsource; SUBI = tệp chọn sẵn, -1 = tắt; SUBD = lệch, giây).
+  // Tệp có thể ngụy trang ảnh PNG (ảnh 1×1 đứng trước chữ "WEBVTT") → bỏ phần trước "WEBVTT", gắn vào <video> dạng
+  // track để WebView tự hiện chữ. Tệp lỗi (vd 404 «No such subtitle») → tự thử tệp sau cùng thứ tiếng.
+  var subs = SUBS || (SUB ? [{ u: SUB, l: 'Phụ đề', g: 'vi' }] : []);
+  var cur = -1, delay = SUBD || 0, raw = null, track = null, gen = 0, cache = {};
+  function secs(x) { var p = x.replace(',', '.').split(':'), t = 0; for (var i = 0; i < p.length; i++) t = t * 60 + parseFloat(p[i]); return t; }
+  function two(n) { return (n < 10 ? '0' : '') + n; }
+  function stamp(t) {
+    var ms = Math.max(0, Math.round(t * 1000)), s = Math.floor(ms / 1000);
+    return two(Math.floor(s / 3600)) + ':' + two(Math.floor(s / 60) % 60) + ':' + two(s % 60) + '.' + ('00' + ms % 1000).slice(-3);
   }
+  // Dời mọi mốc thời gian của các dòng "00:01:02.345 --> 00:01:04.000" đi d giây
+  function shift(text, d) {
+    if (!d) return text;
+    return text.split('\n').map(function (l) {
+      return l.indexOf('-->') < 0 ? l : l.replace(/(\d+:)?\d{1,2}:\d{2}[.,]\d{1,3}/g, function (x) { return stamp(secs(x) + d); });
+    }).join('\n');
+  }
+  function show() {
+    if (track) { try { track.track.mode = 'disabled'; v.removeChild(track); } catch (e) {} track = null; }
+    if (raw == null || cur < 0) return;
+    track = document.createElement('track');
+    track.kind = 'subtitles'; track.srclang = subs[cur].g || 'vi'; track.default = true;
+    track.src = URL.createObjectURL(new Blob([shift(raw, delay)], { type: 'text/vtt' }));
+    v.appendChild(track);
+    track.track.mode = 'showing';
+  }
+  // Tải một tệp phụ đề (đã tải thì lấy lại trong bộ nhớ). Máy chủ của dexter.pw chỉ có sẵn một số tệp, tệp khác nó tải
+  // từ OpenSubtitles / Subsource lúc được hỏi: có khi giữ kết nối cả phút, có khi trả 404 «No such subtitle» rồi vài phút
+  // sau mới có → chờ tối đa 20 giây mỗi tệp (máy chủ vẫn tải tiếp, lần thử lại sau có thể đã có).
+  function loadSub(u) {
+    if (cache[u]) return Promise.resolve(cache[u]);
+    var ctl = window.AbortController ? new AbortController() : null, timer = 0;
+    var late = new Promise(function (ok, fail) {
+      timer = setTimeout(function () { if (ctl) ctl.abort(); fail(new Error('quá 20 giây')); }, 20000);
+    });
+    var req = fetch(u, ctl ? { credentials: 'same-origin', signal: ctl.signal } : { credentials: 'same-origin' }).then(function (r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.text();
+    }).then(function (t) {
+      if (t.indexOf('WEBVTT') < 0) throw new Error('không phải WebVTT');
+      cache[u] = t;
+      return t;
+    });
+    return Promise.race([req, late]).then(function (t) { clearTimeout(timer); return t; },
+      function (e) { clearTimeout(timer); throw e; });
+  }
+  // Báo cho app (đọc mỗi giây cùng trạng thái phát): "số|lời nhắn", số tăng mỗi lần có lời nhắn mới
+  var notes = 0;
+  function note(t) { window.__chimtoSubNote = (++notes) + '|' + t; }
+  function low(s) { return s.charAt(0).toLowerCase() + s.slice(1); }
+  function langName(g) { return g === 'vi' ? 'tiếng Việt' : g === 'en' ? 'tiếng Anh' : 'đã chọn'; }
+  var failed = {}, manual = false, retries = 0, retryTimer = 0;
+  // auto: app / trang tự chọn (không phải người xem bấm) — người xem tự chọn thì thôi tự thử lại
+  function pick(i, auto) {
+    var my = ++gen;
+    if (!auto) { manual = true; clearTimeout(retryTimer); }
+    raw = null; cur = (i >= 0 && i < subs.length) ? i : -1; show();
+    if (cur < 0) return;
+    var s = subs[cur];
+    loadSub(s.u).then(function (t) {
+      if (my !== gen) return;
+      raw = t.slice(t.indexOf('WEBVTT')); show();
+    }).catch(function () {
+      if (my !== gen) return;
+      failed[s.u] = 1;
+      var j;
+      for (j = cur + 1; j < subs.length; j++) if (subs[j].g === s.g && !failed[subs[j].u]) { pick(j, true); return; }
+      // Hết tệp của thứ tiếng này: tạm dùng thứ tiếng khác (vd tiếng Anh), lát nữa thử lại
+      var alt = -1;
+      for (j = 0; j < subs.length; j++) if (subs[j].g !== s.g && !failed[subs[j].u]) { alt = j; break; }
+      note('Chưa tải được phụ đề ' + langName(s.g) + ' (máy chủ của trang chưa có tệp)' +
+        (alt >= 0 ? ' — tạm dùng ' + low(subs[alt].l) : '') + '. App sẽ tự thử lại.');
+      pick(alt, true);
+      if (!manual && retries < 3) retryTimer = setTimeout(function () { retry(s.g); }, 45000);
+    });
+  }
+  // Thử lại các tệp của một thứ tiếng (không đổi phụ đề đang hiện cho tới khi tải được tệp)
+  function retry(g) {
+    if (manual) return;
+    retries++;
+    var list = [], j;
+    for (j = 0; j < subs.length; j++) if (subs[j].g === g) list.push(j);
+    (function next(k) {
+      if (manual) return;
+      if (k >= list.length) {
+        if (retries < 3) retryTimer = setTimeout(function () { retry(g); }, 45000);
+        return;
+      }
+      loadSub(subs[list[k]].u).then(function () {
+        if (manual) return;
+        delete failed[subs[list[k]].u];
+        pick(list[k], true);
+        note('Đã có phụ đề ' + low(subs[list[k]].l) + '.');
+      }).catch(function () { next(k + 1); });
+    })(0);
+  }
+  // App gọi: đổi tệp (-1 = tắt; người xem bấm), đặt lệch, có danh sách mới (phụ đề trang tìm xong sau), hỏi tệp đang dùng
+  window.__chimtoSub = function (i) { pick(i); return cur; };
+  window.__chimtoSubDelay = function (d) { delay = d || 0; show(); return delay; };
+  window.__chimtoSubs = function (list, i) { subs = list || []; pick(i, !manual); return cur; };
+  window.__chimtoSubNow = function () { return cur; };
+  if (subs.length) pick(SUBS ? SUBI : 0, true);
 
   // KKPhim chèn quảng cáo cờ bạc ~30 s giữa phim: một khối DISCONTINUITY mà mọi đoạn đều có dạng
   // /vN/<32 ký tự hex>/segment_NNNN.ts (đoạn phim tên ngẫu nhiên nằm cạnh index.m3u8) → bỏ cả khối.
@@ -68,8 +161,7 @@
     return out.join('\n');
   }
 
-  // Tệp video thường (MP4 của CLB Phim Xưa, không phải .m3u8): phát thẳng bằng <video>
-  var FILE = !/\.m3u8$/i.test(SRC.split('?')[0].split('#')[0]);
+  // Tệp video thường (MP4 của CLB Phim Xưa, không phải HLS): phát thẳng bằng <video> (FILE do app tính)
   if (FILE || !window.Hls || !Hls.isSupported()) {
     // WebView không có MediaSource: thử để Android tự phát HLS (không bỏ được quảng cáo)
     v.src = SRC;
@@ -127,8 +219,11 @@
       errorRetry: { maxNumRetry: 3, retryDelayMs: 1000, maxRetryDelayMs: 8000 } } };
   }
   // START > 0: app báo trước chỗ bắt đầu (xem tiếp / hết nhạc mở đầu) → tải thẳng đoạn ở đó
+  // Bản hls.js đầy đủ (dexter.pw): phụ đề do trang này tự gắn (ở trên) — tắt phần phụ đề / chữ nhúng của hls.js
   var hls = new Hls({ pLoader: AdFreeLoader, fLoader: FragLoader, maxBufferLength: BUFFER, maxMaxBufferLength: 600, backBufferLength: 30,
-    manifestLoadPolicy: load(Infinity), playlistLoadPolicy: load(10000), startPosition: START > 0 ? START : -1 });
+    manifestLoadPolicy: load(Infinity), playlistLoadPolicy: load(10000), startPosition: START > 0 ? START : -1,
+    enableWebVTT: false, enableIMSC1: false, enableCEA708Captions: false, subtitleDisplay: false,
+    capLevelToPlayerSize: CAP, capLevelOnFPSDrop: CAP });
 
   // Phục hồi khi lỗi hẳn: tối đa vài lần trong 2 phút (phim dài, mạng rớt lẻ tẻ cách xa nhau vẫn phục hồi được)
   var fixes = { media: [], net: [] };

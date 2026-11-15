@@ -41,7 +41,7 @@ object Prefs {
     /** Các trang mẫu có sẵn trong danh sách lần đầu cài. */
     val PRESET_SITES = listOf(
         DEFAULT_BASE, "https://hoathinh3d.pw", "https://hoathinh3d.ee", "https://hhkungfu.ee", "https://phimmois.fun",
-        "https://mephim.ddns.net", KK_SITE, NC_SITE, VS_SITE, K20_SITE,
+        "https://mephim.ddns.net", KK_SITE, NC_SITE, VS_SITE, K20_SITE, DX_SITE,
     )
 
     /** Trang KKPhim (từ 2.6) — dữ liệu lấy thẳng từ API công khai phimapi.com (xem ApiSite). */
@@ -52,8 +52,11 @@ object Prefs {
     const val VS_SITE = "https://vsmov.com"
     const val K20_SITE = "https://sc.k-20.xyz"
 
+    /** Từ 2.19: dexter.pw — phim Âu Mỹ 4K, phụ đề OpenSubtitles / Subsource (xem Dexter.kt). */
+    const val DX_SITE = "https://dexter.pw"
+
     /** Trang mẫu thêm ở bản sau: thêm một lần vào danh sách người xem đã lưu (xoá đi thì thôi, không thêm lại). */
-    private val ADDED_SITES = listOf("https://phimmois.fun", "https://mephim.ddns.net", KK_SITE, NC_SITE, VS_SITE, K20_SITE)
+    private val ADDED_SITES = listOf("https://phimmois.fun", "https://mephim.ddns.net", KK_SITE, NC_SITE, VS_SITE, K20_SITE, DX_SITE)
 
     /**
      * Trang đổi hẳn tên miền, đường dẫn giữ nguyên (tên cũ chuyển hướng 301 sang tên mới). Tên cũ hay bị nhà mạng chặn nên
@@ -827,6 +830,24 @@ object Prefs {
     var videoFill: Boolean
         get() = sp.getBoolean(k("video_fill"), false)
         set(value) = sp.edit().putBoolean(k("video_fill"), value).apply()
+
+    /** Phụ đề rời ưa dùng (dexter.pw), riêng từng người xem: "vi" (mặc định), "en" hoặc "off" (tắt). */
+    var subLang: String
+        get() = sp.getString(k("sub_lang"), "vi") ?: "vi"
+        set(value) = sp.edit().putString(k("sub_lang"), value).apply()
+
+    /** Độ lệch phụ đề (giây, + = chữ hiện muộn hơn) đã chỉnh cho từng tập; giữ 100 tập chỉnh gần nhất. */
+    fun subDelay(epUrl: String): Double =
+        runCatching { JSONObject(sp.getString("sub_delay", "{}") ?: "{}").optDouble(epUrl, 0.0) }.getOrDefault(0.0)
+
+    fun setSubDelay(epUrl: String, seconds: Double) {
+        val o = runCatching { JSONObject(sp.getString("sub_delay", "{}") ?: "{}") }.getOrDefault(JSONObject())
+        o.remove(epUrl)
+        if (seconds != 0.0) o.put(epUrl, seconds)
+        val keys = o.keys().asSequence().toList()
+        keys.take((keys.size - 100).coerceAtLeast(0)).forEach { o.remove(it) }
+        sp.edit().putString("sub_delay", o.toString()).apply()
+    }
 
     // ---- Riêng tư ----
 
