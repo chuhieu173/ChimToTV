@@ -144,6 +144,20 @@ public static class Related
     public static Task<List<Row>> Load(string title, string url) => Native.Call<List<Row>>("related.load", new { title, url });
 }
 
+/// dexter.pw — phim Âu Mỹ 4K + phim bộ chia mùa, phụ đề rời OpenSubtitles / Subsource (lõi: dexter.rs).
+public static class Dexter
+{
+    public const string Host = "dexter.pw";
+
+    /// Danh sách phụ đề hỏi lại: Pending = trang vẫn đang tìm thêm.
+    public sealed record SubsFrom(List<SubTrack> Subs, bool Pending);
+
+    public static bool IsSite(string url) => Site.HostOf(url) == Host;
+
+    /// Hỏi lại danh sách phụ đề trang còn «đang tìm» (Video.SubsLater — phim bộ, tập ít người xem).
+    public static Task<SubsFrom> SubtitlesFrom(string url) => Native.Call<SubsFrom>("dexter.subtitlesFrom", new { url });
+}
+
 /// «Điểm IMDb cao» (menu) và xếp theo điểm IMDb ở danh sách KKPhim.
 public static class ImdbTop
 {

@@ -79,14 +79,18 @@ public sealed class DetailPage : Page
         Button? main = null;
         var h = Prefs.HistoryFor(d.Url);
         var eps = _group?.Episodes ?? new List<Episode>();
-        if (h != null && d.GroupOf(h.EpUrl) != null)
+        if (d.Seasons)
+        {
+            main = SeasonButtons(d, h, buttons);
+        }
+        else if (h != null && d.GroupOf(h.EpUrl) != null)
         {
             var pos = Prefs.PositionOf(h.EpUrl);
             var label = Prefs.Finished(h.EpUrl) ? $"▶  Xem tiếp (sau {h.EpTitle})" : $"▶  Xem tiếp {h.EpTitle}" + (pos > 0 ? $" ({Util.FormatTime(pos)})" : "");
             main = Ui.Pill(label, () => Main.Play(d.Url, h.EpUrl, true), "active");
             buttons.Children.Add(main);
         }
-        if (eps.Count > 0)
+        if (!d.Seasons && eps.Count > 0)
         {
             var first = Ui.Pill(eps.Count == 1 ? "▶  Xem phim" : $"▶  Xem từ {eps[0].Title}", () => Main.Play(d.Url, eps[0].Url), main == null ? "active" : null);
             buttons.Children.Add(first);
@@ -126,7 +130,7 @@ public sealed class DetailPage : Page
 
         if (d.Groups.Count > 1)
         {
-            Body.Children.Add(Ui.Header("Bản", new Thickness(0, 8, 0, 12)));
+            Body.Children.Add(Ui.Header(d.Seasons ? "Mùa" : "Bản", new Thickness(0, 8, 0, 12)));
             var groups = new WrapPanel();
             foreach (var g in d.Groups)
             {
@@ -166,6 +170,34 @@ public sealed class DetailPage : Page
             _relatedLoading = true;
             _ = LoadRelated(d);
         }
+    }
+
+    /// Nút xem của phim chia mùa (phim bộ Âu Mỹ của dexter.pw): chưa xem thì xem từ tập đầu mùa 1; «Mới nhất» = tập cuối của mùa
+    /// cuối; tên tập trên nút kèm tên mùa (mùa nào cũng có «Tập 1»). Trả về nút chính (chọn sẵn).
+    private Button? SeasonButtons(FilmDetail d, HistoryItem? h, WrapPanel buttons)
+    {
+        var first = d.Groups.FirstOrDefault()?.Episodes.FirstOrDefault();
+        if (first == null) return null;
+        var latest = d.LatestEpisode ?? first;
+        var resume = h == null ? null : d.Groups.SelectMany(g => g.Episodes).FirstOrDefault(e => e.Url == h.EpUrl);
+        string Name(Episode e) => d.GroupOf(e.Url) is { } g ? $"{g.Name}, {e.Title}" : e.Title;
+        Button? main = null;
+        if (resume != null)
+        {
+            var pos = Prefs.PositionOf(resume.Url);
+            var label = Prefs.Finished(resume.Url) ? $"▶  Xem tiếp (sau {Name(resume)})"
+                : $"▶  Xem tiếp {Name(resume)}" + (pos > 0 ? $" ({Util.FormatTime(pos)})" : "");
+            main = Ui.Pill(label, () => Main.Play(d.Url, resume.Url, true), "active");
+            buttons.Children.Add(main);
+        }
+        if (resume != first)
+        {
+            var b = Ui.Pill($"▶  Xem từ {Name(first)}", () => Main.Play(d.Url, first.Url), main == null ? "active" : null);
+            buttons.Children.Add(b);
+            main ??= b;
+        }
+        if (latest != first && latest != resume) buttons.Children.Add(Ui.Pill($"Mới nhất: {Name(latest)}", () => Main.Play(d.Url, latest.Url)));
+        return main;
     }
 
     /// Phim lẻ (một bản, một tập): không cần ô tập — nút Xem là đủ, hàng phim liên quan lên ngay dưới.

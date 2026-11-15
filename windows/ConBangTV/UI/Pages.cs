@@ -722,7 +722,7 @@ public sealed class FollowsPage : Page
     public override void Returned() => Build();
 }
 
-/// Thể loại / Quốc gia đủ danh sách (trang Next.js kiểu PhimMoi, trang API kiểu mephim).
+/// Thể loại / Quốc gia (dexter.pw: Thập niên) đủ danh sách (trang Next.js kiểu PhimMoi, trang API kiểu mephim).
 public sealed class FilterPage : Page
 {
     private readonly bool _genres;
@@ -740,7 +740,8 @@ public sealed class FilterPage : Page
         var f = ApiSite.IsKnown(b) ? ApiSite.Filters(b) : await NextSite.Filters(b);
         var list = _genres ? f.Genres : f.Countries;
         Body.Children.Clear();
-        Body.Children.Add(Ui.Header(_genres ? "Thể loại" : "Quốc gia"));
+        // dexter.pw: danh sách thứ hai là thập niên (trang không lọc theo nước)
+        Body.Children.Add(Ui.Header(_genres ? "Thể loại" : Dexter.IsSite(b) ? "Thập niên" : "Quốc gia"));
         var grid = new WrapPanel();
         foreach (var c in list) grid.Children.Add(Ui.Pill(c.Title, () => Main.Push(new ListPage(c.Title, c.Url) { MenuKey = MenuKey }), minWidth: 150));
         Body.Children.Add(grid);

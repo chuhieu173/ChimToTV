@@ -273,7 +273,8 @@ public partial class MainWindow : Window
         if (NextSite.IsKnown(b) || ApiSite.IsKnown(b))
         {
             yield return new("genres", "Thể loại…", () => ShowRoot(new FilterPage(true)));
-            yield return new("countries", "Quốc gia…", () => ShowRoot(new FilterPage(false)));
+            // dexter.pw không lọc theo nước: mục thứ hai là thập niên
+            yield return new("countries", Dexter.IsSite(b) ? "Thập niên…" : "Quốc gia…", () => ShowRoot(new FilterPage(false)));
         }
         yield return new("sites", "🌐  Đổi trang phim", () => ShowRoot(new SitesPage()));
         yield return new("sync", "⇄  Đồng bộ trong nhà", () => ShowRoot(new SyncPage()));

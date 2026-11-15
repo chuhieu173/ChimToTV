@@ -2,6 +2,8 @@ using System.Globalization;
 using System.IO;
 using System.Reflection;
 using System.Text.Json;
+using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -84,7 +86,13 @@ public sealed class PlayerView : UserControl
     private Task? _init;
     private readonly string _agentJs, _focusJs, _wrapperHtml, _hlsHtml;
     private readonly byte[] _hlsJs;
+    /// Bản hls.js đầy đủ (luồng âm thanh tách rời) — chỉ trang dùng Video.Hls (dexter.pw); đọc lần đầu cần.
+    private byte[]? _hlsFullJs;
     private string? _scriptId;
+
+    /// hls.html tải hls.js từ các đường dẫn này (cùng origin với trang tập), app trả tệp đóng kèm (OnResource).
+    private const string HlsJsPath = "/__chimto/hls.js";
+    private const string HlsFullJsPath = "/__chimto/hls-full.js";
 
     // Trang bọc trả lời tại địa chỉ trang tập (một lần)
     private string? _serveUrl;
@@ -119,6 +127,19 @@ public sealed class PlayerView : UserControl
     private int _pageLoad;
     private string? _embedUrl;
     private string? _hlsUrl;
+
+    /// Phụ đề rời của tập đang phát (dexter.pw): danh sách, tệp đang hiện (-1 = tắt), độ lệch (giây, + = chữ muộn hơn).
+    private List<SubTrack> _subs = new();
+    private int _subIdx = -1;
+    private double _subDelay;
+    /// Lời nhắn phụ đề mới nhất đã hiện (số thứ tự hls.html đánh; trang nạp lại thì đếm lại từ 1).
+    private int _subNoteShown;
+    /// Nút «Phụ đề: …» trong bảng tuỳ chọn đang mở (đổi chữ tại chỗ, khỏi dựng lại bảng — giữ ô đang chọn).
+    private Button? _subButton;
+
+    /// Các bản của luồng HLS đang phát (chiều cao, cao → thấp) — hls.html báo khi mở bảng ▼; nút «Chất lượng» của bảng đang mở.
+    private List<int> _levels = new();
+    private Button? _qualityButton;
     private string _episodeUrl = "";
     private bool _errShown;
     private long _lastAdAt;
@@ -162,12 +183,7 @@ public sealed class PlayerView : UserControl
         _focusJs = Res("page-focus.js");
         _wrapperHtml = Res("player.html");
         _hlsHtml = Res("hls.html");
-        using (var s = Assembly.GetExecutingAssembly().GetManifestResourceStream("hls.light.min.js")!)
-        using (var ms = new MemoryStream())
-        {
-            s.CopyTo(ms);
-            _hlsJs = ms.ToArray();
-        }
+        _hlsJs = ResBytes("hls.light.min.js");
 
         _ov = new PlayerOverlay { Owner = main };
         SetupOverlay();
@@ -197,6 +213,14 @@ public sealed class PlayerView : UserControl
         using var s = Assembly.GetExecutingAssembly().GetManifestResourceStream(name)!;
         using var r = new StreamReader(s);
         return r.ReadToEnd();
+    }
+
+    private static byte[] ResBytes(string name)
+    {
+        using var s = Assembly.GetExecutingAssembly().GetManifestResourceStream(name)!;
+        using var ms = new MemoryStream();
+        s.CopyTo(ms);
+        return ms.ToArray();
     }
 
     // ---- WebView2 ----
@@ -243,7 +267,8 @@ public sealed class PlayerView : UserControl
             if (IsOpen) ShowError("Trình duyệt bị lỗi khi phát.\nNhấn ▼ → «Tải lại».");
         };
         foreach (var f in AdBlock.Filters()) c.AddWebResourceRequestedFilter(f, CoreWebView2WebResourceContext.All);
-        c.AddWebResourceRequestedFilter("*/__chimto/hls.js", CoreWebView2WebResourceContext.All);
+        c.AddWebResourceRequestedFilter("*" + HlsJsPath, CoreWebView2WebResourceContext.All);
+        c.AddWebResourceRequestedFilter("*" + HlsFullJsPath, CoreWebView2WebResourceContext.All);
         c.AddWebResourceRequestedFilter("*", CoreWebView2WebResourceContext.Document);
         c.WebResourceRequested += OnResource;
         Log.D("player", $"WebView2 sẵn sàng, UA: {st.UserAgent}");
@@ -259,9 +284,11 @@ public sealed class PlayerView : UserControl
             e.Response = env.CreateWebResourceResponse(null, 403, "Blocked", "Content-Type: text/plain");
             return;
         }
-        if (u.AbsolutePath.EndsWith("/__chimto/hls.js"))
+        var full = u.AbsolutePath.EndsWith(HlsFullJsPath);
+        if (full || u.AbsolutePath.EndsWith(HlsJsPath))
         {
-            e.Response = env.CreateWebResourceResponse(new MemoryStream(_hlsJs), 200, "OK",
+            var js = full ? _hlsFullJs ??= ResBytes("hls.min.js") : _hlsJs;
+            e.Response = env.CreateWebResourceResponse(new MemoryStream(js), 200, "OK",
                 "Content-Type: application/javascript; charset=utf-8\nCache-Control: no-store");
             return;
         }
@@ -437,8 +464,15 @@ public sealed class PlayerView : UserControl
         }
         _group = g;
         var i = Math.Max(0, g.Episodes.FindIndex(e => e.Url == epUrl));
-        var next = _resumeOpen && Prefs.Finished(epUrl) && i + 1 < g.Episodes.Count;
-        OpenEpisode(next ? i + 1 : i);
+        var finished = _resumeOpen && Prefs.Finished(epUrl);
+        // Xem tiếp sau tập cuối của một mùa (phim chia mùa): sang tập đầu của mùa sau
+        if (finished && i + 1 >= g.Episodes.Count && NextSeason(g) is { } ns)
+        {
+            _group = ns;
+            OpenEpisode(0);
+            return;
+        }
+        OpenEpisode(finished && i + 1 < g.Episodes.Count ? i + 1 : i);
     }
 
     /// Thoát trình phát (lưu chỗ xem, về trang trước).
@@ -590,10 +624,12 @@ public sealed class PlayerView : UserControl
             if (t != _token || !IsOpen) return;
             _loadStartedAt = Util.NowMs();
             _startHint = StartFor();
-            var isHls = v.File || Uri.TryCreate(v.Url, UriKind.Absolute, out var vu) && vu.AbsolutePath.EndsWith(".m3u8");
+            var m3u8 = Uri.TryCreate(v.Url, UriKind.Absolute, out var vu) && vu.AbsolutePath.EndsWith(".m3u8");
+            var isHls = v.File || v.Hls || m3u8;
             var native = NativeAllowed;
-            // Trình phát native: luồng .m3u8 / tệp video phát thẳng bằng mpv
-            if (isHls && native)
+            // Trình phát native: luồng .m3u8 / tệp video phát thẳng bằng mpv. Luồng Video.Hls (dexter.pw) luôn phát bằng hls.html:
+            // phụ đề chọn được / chỉnh lệch nằm ở trang đó (mpv cho dexter.pw làm sau)
+            if (isHls && native && !v.Hls)
             {
                 _hlsUrl = v.Url;
                 if (PlayNative(v.Url, v.Subtitle, src.EpUrl, _startHint, false)) return;
@@ -605,17 +641,19 @@ public sealed class PlayerView : UserControl
             if (isHls)
             {
                 _hlsUrl = v.Url;
-                page = _hlsHtml.Replace("{{SRC}}", JsonSerializer.Serialize(v.Url))
-                    .Replace("{{START}}", _startHint.ToString(CultureInfo.InvariantCulture))
-                    .Replace("{{SUB}}", v.Subtitle != null ? JsonSerializer.Serialize(v.Subtitle) : "null")
-                    .Replace("{{AGENT}}", "");
+                var listed = v.Subs is { Count: > 0 } || v.SubsLater != null;
+                SetSubs(v.Subs ?? new());
+                _subDelay = listed ? Prefs.SubDelay(src.EpUrl) : 0;
+                page = HlsPage(v, file: v.File || !(v.Hls || m3u8), subs: listed ? SubsJson(_subs) : null);
+                if (v.SubsLater is { } later) _ = PollSubs(later, t);
             }
             else
             {
                 _embedUrl = v.Url;
                 page = _wrapperHtml.Replace("{{SRC}}", System.Net.WebUtility.HtmlEncode(v.Url));
             }
-            Log.D("player", $"Phát {(isHls ? "HLS" : "iframe")} {v.Url} (server {s?.Label}, bắt đầu {_startHint}s)");
+            Log.D("player", $"Phát {(isHls ? v.Hls ? "HLS (hls.js đầy đủ)" : "HLS" : "iframe")} {v.Url} (server {s?.Label}, bắt đầu {_startHint}s" +
+                            (_subs.Count > 0 || v.SubsLater != null ? $", {_subs.Count} phụ đề, chọn {_subIdx}{(v.SubsLater != null ? ", còn đang tìm" : "")}" : "") + ")");
             await Navigate(src.EpUrl, page, _startHint);
         }
         catch (Exception e)
@@ -624,6 +662,240 @@ public sealed class PlayerView : UserControl
             ShowError($"{Util.Friendly(e)}\nNhấn ▼ (hoặc ☰) để chọn server khác.");
             ShowPanel();
         }
+    }
+
+    /// Trang phát HLS / tệp video của app (hls.html dùng chung với bản Android — Android điền ở PlayerActivity): điền mọi chỗ
+    /// {{…}} trong một lượt (link / tên phụ đề có lỡ chứa «{{…}}» cũng không bị thay tiếp). Sót chỗ nào là trang lỗi cú pháp JS,
+    /// mọi luồng HLS / MP4 không phát được → ghi nhật ký. file: phát thẳng bằng &lt;video&gt;; subs: JSON [{u, l, g}] hoặc null
+    /// (không có danh sách — chỉ dùng phụ đề rời Subtitle nếu có).
+    private string HlsPage(Video v, bool file, string? subs)
+    {
+        var fill = new Dictionary<string, string>
+        {
+            // dexter.pw (Video.Hls): bản hls.js đầy đủ — luồng âm thanh tách rời
+            ["HLSJS"] = v.Hls ? HlsFullJsPath : HlsJsPath,
+            // agent đã được chèn vào mọi khung (Navigate → AddScriptToExecuteOnDocumentCreated); thẻ script này (trong <head>,
+            // chạy trước script phát) chỉ báo chất lượng muốn xem — hls.html đọc window.__chimtoWantH lúc có danh sách bản
+            ["AGENT"] = $"window.__chimtoWantH={Prefs.VideoQuality.ToString(CultureInfo.InvariantCulture)};",
+            ["SRC"] = JsonSerializer.Serialize(v.Url),
+            ["SUB"] = v.Subtitle != null ? JsonSerializer.Serialize(v.Subtitle) : "null",
+            ["SUBS"] = subs ?? "null",
+            ["SUBI"] = _subIdx.ToString(CultureInfo.InvariantCulture),
+            ["SUBD"] = _subDelay.ToString(CultureInfo.InvariantCulture),
+            ["FILE"] = file ? "true" : "false",
+            // chọn bản không lớn hơn khung phát + tự hạ bản khi rớt khung hình (dexter.pw có 4K / 1080p / 720p)
+            ["CAP"] = v.Hls ? "true" : "false",
+            ["START"] = _startHint.ToString(CultureInfo.InvariantCulture),
+        };
+        return Regex.Replace(_hlsHtml, @"\{\{([A-Z]+)\}\}", m =>
+        {
+            if (fill.TryGetValue(m.Groups[1].Value, out var s)) return s;
+            Log.D("player", $"hls.html có chỗ app chưa điền: {m.Value}");
+            return m.Value;
+        });
+    }
+
+    // ---- Phụ đề rời (dexter.pw) ----
+
+    /// [{u, l, g}] cho hls.html (SUBS / __chimtoSubs). JsonSerializer mặc định mã hoá cả «&lt;» → an toàn trong thẻ script.
+    private static string SubsJson(List<SubTrack> list) => JsonSerializer.Serialize(list.Select(s => new { u = s.Url, l = s.Label, g = s.Lang }));
+
+    /// Danh sách phụ đề mới → chọn sẵn theo ngôn ngữ người xem ưa dùng (không có tiếng Việt thì bản đầu tiên; "off" = tắt).
+    private void SetSubs(List<SubTrack> list)
+    {
+        _subs = list;
+        var want = Prefs.SubLang;
+        _subIdx = list.Count == 0 || want == "off" ? -1 : Math.Max(0, list.FindIndex(s => s.Lang == want));
+    }
+
+    private string SubText() =>
+        "Phụ đề: " + (_subIdx >= 0 && _subIdx < _subs.Count ? _subs[_subIdx].Label : "Tắt") +
+        (_subDelay != 0 && _subIdx >= 0 ? " · " + DelayText(_subDelay) : "");
+
+    private static string DelayText(double d) =>
+        (d > 0 ? "muộn " : "sớm ") + Math.Abs(d).ToString("0.#", CultureInfo.InvariantCulture).Replace('.', ',') + " s";
+
+    private void ShowSubButton()
+    {
+        if (_subButton != null) _subButton.Content = SubText();
+    }
+
+    /// Chạy lệnh trong trang phát (hls.html) — không đợi kết quả.
+    private void PageJs(string code)
+    {
+        if (_nativeOn || _web.CoreWebView2 == null) return;
+        _ = _web.CoreWebView2.ExecuteScriptAsync(code);
+    }
+
+    /// Đổi bản phụ đề (hết danh sách thì tắt, bấm nữa lại bản đầu); nhớ ngôn ngữ cho người xem này.
+    private void CycleSub()
+    {
+        if (_subs.Count == 0) return;
+        _subIdx = _subIdx + 1 >= _subs.Count ? -1 : _subIdx + 1;
+        Prefs.SubLang = _subIdx >= 0 ? _subs[_subIdx].Lang : "off";
+        PageJs($"window.__chimtoSub&&__chimtoSub({_subIdx})");
+        ShowSubButton();
+    }
+
+    /// Chữ lệch với tiếng (bản phụ đề làm cho bản phim khác): dời 0,5 giây mỗi lần bấm, nhớ cho tập này.
+    private void NudgeSub(double d)
+    {
+        if (_subs.Count == 0) return;
+        _subDelay = Math.Round((_subDelay + d) * 10) / 10.0;
+        Prefs.SetSubDelay(_source?.EpUrl ?? _episodeUrl, _subDelay);
+        PageJs($"window.__chimtoSubDelay&&__chimtoSubDelay({_subDelay.ToString(CultureInfo.InvariantCulture)})");
+        ShowSubButton();
+        Notice("Phụ đề: " + (_subDelay == 0 ? "đúng như bản gốc" : DelayText(_subDelay) + " so với bản gốc"), 1500);
+    }
+
+    /// Tệp phụ đề hỏng thì trang tự sang tệp sau — hỏi lại tệp đang hiện cho đúng chữ trên nút.
+    private async Task SyncSubIdx()
+    {
+        if (_subs.Count == 0 || _nativeOn || _web.CoreWebView2 == null) return;
+        var load = _pageLoad;
+        string r;
+        try
+        {
+            r = await _web.CoreWebView2.ExecuteScriptAsync("window.__chimtoSubNow?__chimtoSubNow():null");
+        }
+        catch (Exception)
+        {
+            return;
+        }
+        if (load != _pageLoad || !int.TryParse(r, NumberStyles.Integer, CultureInfo.InvariantCulture, out var i)) return;
+        if (i == _subIdx || i < -1 || i >= _subs.Count) return;
+        _subIdx = i;
+        ShowSubButton();
+    }
+
+    /// hls.html báo "số|lời nhắn" (vd hết tệp tiếng Việt tải được → tạm dùng tiếng Anh; thử lại được) → hiện một lần.
+    private void SubNote(string raw)
+    {
+        var bar = raw.IndexOf('|');
+        if (bar <= 0 || !int.TryParse(raw[..bar], NumberStyles.Integer, CultureInfo.InvariantCulture, out var n) || n <= _subNoteShown) return;
+        _subNoteShown = n;
+        Notice(raw[(bar + 1)..], 7000);
+        _ = SyncSubIdx();
+    }
+
+    /// Trang còn đang tìm phụ đề (phim bộ: tập ít người xem có khi vài phút mới có, trình duyệt cũng vậy): hỏi lại mỗi 4 giây,
+    /// tối đa 3 phút như trang, chừng nào còn mở đúng lần phát này (t); có thì gắn ngay vào trình phát (phụ đề riêng của nguồn,
+    /// nếu có, vẫn đứng đầu).
+    private async Task PollSubs(string listUrl, int t)
+    {
+        for (var tries = 0; tries < 45; tries++)
+        {
+            await Task.Delay(4000);
+            if (t != _token || !IsOpen) return;
+            Dexter.SubsFrom r;
+            try
+            {
+                r = await Dexter.SubtitlesFrom(listUrl);
+            }
+            catch (Exception)
+            {
+                continue; // lỗi mạng: coi như trang vẫn đang tìm
+            }
+            if (t != _token || !IsOpen) return;
+            var found = r.Subs ?? new();
+            if (found.Count == 0)
+            {
+                if (r.Pending) continue;
+                return;
+            }
+            int? keep = _subs.Count > 0 && _subIdx >= 0 ? _subIdx : null;
+            SetSubs(_subs.Concat(found.Where(n => _subs.All(s => s.Url != n.Url))).ToList());
+            if (keep is { } k) _subIdx = k;
+            ShowSubButton();
+            PageJs($"window.__chimtoSubs&&__chimtoSubs({SubsJson(_subs)},{_subIdx})");
+            Log.D("player", $"Có thêm phụ đề sau {(tries + 1) * 4}s: {found.Count} tệp, chọn {_subIdx}");
+            if (_subIdx >= 0 && _subIdx < _subs.Count)
+            {
+                var label = _subs[_subIdx].Label;
+                var low = label.Length > 0 ? char.ToLower(label[0]) + label[1..] : label;
+                Notice($"Đã có phụ đề {low} — ▼ để chọn bản khác hoặc chỉnh chữ sớm / muộn.", 5000);
+            }
+            return;
+        }
+    }
+
+    // ---- Chất lượng (luồng HLS có nhiều bản, vd 4K của dexter.pw) ----
+
+    private static string QualityName(int h) => h >= 2160 ? "4K" : h >= 1440 ? "2K" : $"{h}p";
+
+    /// Hỏi hls.html danh sách bản (__chimtoLevels) hoặc đổi bản (__chimtoQuality) → nút «Chất lượng». Trình phát native / trang
+    /// không phải hls.html: không có nút.
+    private async Task SyncQuality(string code = "window.__chimtoLevels?__chimtoLevels():null")
+    {
+        if (_hlsUrl == null || _nativeOn || _web.CoreWebView2 == null)
+        {
+            ShowQuality(null);
+            return;
+        }
+        var load = _pageLoad;
+        string? r;
+        try
+        {
+            r = await _web.CoreWebView2.ExecuteScriptAsync(code);
+        }
+        catch (Exception)
+        {
+            r = null;
+        }
+        if (load != _pageLoad) return;
+        ShowQuality(r);
+    }
+
+    /// {levels: [chiều cao…] (cao → thấp), want, now} (chuỗi JSON hls.html trả) → chữ trên nút; dưới hai bản thì ẩn nút.
+    private void ShowQuality(string? raw)
+    {
+        var levels = new List<int>();
+        var now = 0;
+        try
+        {
+            if (raw != null && JsonSerializer.Deserialize<string>(raw) is { } s && JsonNode.Parse(s) is JsonObject o)
+            {
+                if (o["levels"] is JsonArray a) levels = a.Select(x => x is JsonValue jv && jv.TryGetValue<int>(out var h) ? h : 0).Where(h => h > 0).ToList();
+                if (o["now"] is JsonValue nv && nv.TryGetValue<int>(out var n)) now = n;
+            }
+        }
+        catch (Exception)
+        {
+        }
+        _levels = levels;
+        if (_qualityButton == null) return;
+        _qualityButton.Visibility = levels.Count > 1 ? Visibility.Visible : Visibility.Collapsed;
+        if (levels.Count < 2) return;
+        var want = Prefs.VideoQuality;
+        _qualityButton.Content = "Chất lượng: " + (want <= 0
+            ? "Tự động" + (now > 0 ? $" ({QualityName(now)})" : "")
+            : QualityName(want) + (now > 0 && now != want ? $" (đang {QualityName(now)})" : ""));
+    }
+
+    /// Tự động → bản cao nhất (4K) → … → bản thấp nhất → tự động; nhớ cho các phim sau (người xem này). Bản đã lưu không có ở
+    /// phim này thì tính từ bản thấp hơn gần nhất.
+    private void CycleQuality()
+    {
+        if (_levels.Count < 2) return;
+        var options = new List<int> { 0 };
+        options.AddRange(_levels);
+        var cur = Prefs.VideoQuality;
+        var i = options.IndexOf(cur);
+        if (i < 0) i = options.FindIndex(h => h >= 1 && h <= cur);
+        if (i < 0) i = 0;
+        var next = options[(i + 1) % options.Count];
+        Prefs.VideoQuality = next;
+        _ = QualityChanged(next);
+        Notice("Chất lượng: " + (next == 0 ? "Tự động (vừa màn hình)" : QualityName(next)), 1500);
+    }
+
+    /// Đổi bản ngay trong trang; vài giây sau (bản mới đã chạy) hỏi lại để chữ «đang …» trên nút đúng.
+    private async Task QualityChanged(int h)
+    {
+        var load = _pageLoad;
+        await SyncQuality($"window.__chimtoQuality?__chimtoQuality({h.ToString(CultureInfo.InvariantCulture)}):null");
+        await Task.Delay(3000);
+        if (load == _pageLoad && _ov.Panel.Visibility == Visibility.Visible) await SyncQuality();
     }
 
     // ---- Trình phát native (libmpv) ----
@@ -768,6 +1040,13 @@ public sealed class PlayerView : UserControl
         _pageMode = false;
         _embedUrl = null;
         _hlsUrl = null;
+        _subs = new();
+        _subIdx = -1;
+        _subDelay = 0;
+        _subNoteShown = 0;
+        ShowSubButton();
+        _levels = new();
+        if (_qualityButton != null) _qualityButton.Visibility = Visibility.Collapsed;
         _errShown = false;
         _lastAdAt = 0;
         _state = null;
@@ -807,7 +1086,29 @@ public sealed class PlayerView : UserControl
     private void Next()
     {
         if (_index + 1 < Episodes.Count) OpenEpisode(_index + 1);
+        else if (NextSeason() != null) OpenNextSeason();
         else Notice("Đây là tập mới nhất.");
+    }
+
+    /// Còn tập sau (kể cả tập đầu của mùa sau — phim chia mùa).
+    private bool HasNext => _index + 1 < Episodes.Count || NextSeason() != null;
+
+    /// Phim chia mùa (dexter.pw): mùa sau của mùa g (mặc định mùa đang xem), không sang nhóm tập đặc biệt; phim khác: null.
+    private EpisodeGroup? NextSeason(EpisodeGroup? g = null)
+    {
+        g ??= _group;
+        if (_detail is not { Seasons: true } d || g == null) return null;
+        var i = d.Groups.IndexOf(g);
+        if (i < 0 || i + 1 >= d.Groups.Count) return null;
+        var n = d.Groups[i + 1];
+        return n.Name != FilmDetail.Specials && n.Episodes.Count > 0 ? n : null;
+    }
+
+    private void OpenNextSeason()
+    {
+        if (NextSeason() is not { } g) return;
+        _group = g;
+        OpenEpisode(0);
     }
 
     private void Prev()
@@ -820,7 +1121,14 @@ public sealed class PlayerView : UserControl
     private void SwitchGroup(EpisodeGroup g)
     {
         HidePanel();
-        if (g == _group || _detail == null) return;
+        if (g == _group || _detail == null || g.Episodes.Count == 0) return;
+        // Phim chia mùa: chọn mùa là mở tập đầu của mùa đó (mùa nào cũng có «Tập 1» — so theo tên tập là sai)
+        if (_detail.Seasons)
+        {
+            _group = g;
+            OpenEpisode(0);
+            return;
+        }
         var cur = _index < Episodes.Count ? Episodes[_index] : null;
         var same = g.Episodes.FindIndex(e => e.Title == cur?.Title);
         var target = same >= 0 ? same : Math.Min(_index, g.Episodes.Count - 1);
@@ -856,7 +1164,9 @@ public sealed class PlayerView : UserControl
         string? raw;
         try
         {
-            raw = await _web.CoreWebView2.ExecuteScriptAsync("JSON.stringify([window.__chimtoLoad||0,window.__chimtoState||null,window.__chimtoSrc||null])");
+            // [lần nạp trang, trạng thái, link luồng của trình phát nhúng (ExtractJs), lời nhắn phụ đề của hls.html]
+            raw = await _web.CoreWebView2.ExecuteScriptAsync(
+                "JSON.stringify([window.__chimtoLoad||0,window.__chimtoState||null,window.__chimtoSrc||null,window.__chimtoSubNote||null])");
         }
         catch (Exception)
         {
@@ -884,6 +1194,7 @@ public sealed class PlayerView : UserControl
                     _extract = false;
                     _ = ProbeAndPlay(J.Str(found, "u"), J.Str(found, "p"), J.Str(found, "s"), found.TryGetValue("h", out var h) && h is long hv && hv > 0);
                 }
+                if (arr.Count >= 4 && arr[3] is string note) SubNote(note);
             }
         }
         catch (Exception e)
@@ -979,6 +1290,11 @@ public sealed class PlayerView : UserControl
             {
                 Notice($"Hết tập — chuyển sang {Episodes[_index + 1].Title}");
                 OpenEpisode(_index + 1);
+            }
+            else if (Prefs.AutoNext && NextSeason() is { } g)
+            {
+                Notice($"Hết mùa — chuyển sang {g.Name}, {g.Episodes[0].Title}");
+                OpenNextSeason();
             }
         }
     }
@@ -1324,7 +1640,7 @@ public sealed class PlayerView : UserControl
             : Math.Abs(_rate - 1) > 0.01 ? $"Đang phát · {RateText(_rate)}" : "Đang phát";
         _ov.BtnPlay.Content = s is { Paused: false } ? "⏸  Dừng" : "▶  Phát";
         _ov.BtnPrev.IsEnabled = _index > 0;
-        _ov.BtnNext.IsEnabled = _index + 1 < Episodes.Count;
+        _ov.BtnNext.IsEnabled = HasNext;
     }
 
     public void Notice(string text, int ms = 4000)
@@ -1399,10 +1715,25 @@ public sealed class PlayerView : UserControl
 
         if (_detail is { Groups.Count: > 1 } d)
         {
-            Section("Bản");
+            // Phim chia mùa (dexter.pw): mỗi nhóm là một mùa — chọn mùa là mở tập đầu
+            Section(d.Seasons ? "Mùa" : "Bản");
             var row = Row();
             foreach (var g in d.Groups)
                 row.Children.Add(Ui.Pill(g.Name, () => SwitchGroup(g), g == _group ? "active" : null));
+        }
+
+        // Phụ đề rời (dexter.pw): chỉ hiện khi tập có phụ đề chọn được
+        _subButton = null;
+        if (_subs.Count > 0)
+        {
+            Section("Phụ đề", "Đổi bản / tắt phụ đề; chữ lệch với tiếng thì dời sớm / muộn (app nhớ cho tập này).");
+            var row = Row();
+            _subButton = Ui.Pill(SubText(), CycleSub);
+            row.Children.Add(_subButton);
+            row.Children.Add(Ui.Pill("Chữ sớm hơn 0,5 s", () => NudgeSub(-0.5)));
+            row.Children.Add(Ui.Pill("Chữ muộn hơn 0,5 s", () => NudgeSub(0.5)));
+            // Tệp phụ đề hỏng thì trang đã tự sang tệp sau — hỏi lại cho đúng chữ trên nút
+            _ = SyncSubIdx();
         }
 
         Section("Xem");
@@ -1418,7 +1749,7 @@ public sealed class PlayerView : UserControl
             HidePanel();
             Next();
         });
-        next.IsEnabled = _index + 1 < Episodes.Count;
+        next.IsEnabled = HasNext;
         view.Children.Add(prev);
         view.Children.Add(next);
         view.Children.Add(Ui.Pill("↻  Tải lại", Reload));
@@ -1436,12 +1767,22 @@ public sealed class PlayerView : UserControl
                 ShowPanel();
             }, Math.Abs(_rate - r) < 0.01 ? "active" : null, 64));
         }
-        Row().Children.Add(Ui.Pill(Prefs.VideoFill ? "Khung hình: Lấp đầy" : "Khung hình: Vừa màn hình", () =>
+        var fitRow = Row();
+        fitRow.Children.Add(Ui.Pill(Prefs.VideoFill ? "Khung hình: Lấp đầy" : "Khung hình: Vừa màn hình", () =>
         {
             Prefs.VideoFill = !Prefs.VideoFill;
             Cmd("fit", Prefs.VideoFill ? 1 : 0);
             ShowPanel();
         }));
+        // Chất lượng (luồng HLS có nhiều bản, vd 4K của dexter.pw): nút ẩn tới khi hls.html báo từ hai bản trở lên
+        _qualityButton = null;
+        if (_hlsUrl != null && !_nativeOn)
+        {
+            _qualityButton = Ui.Pill("Chất lượng", CycleQuality);
+            _qualityButton.Visibility = Visibility.Collapsed;
+            fitRow.Children.Add(_qualityButton);
+            _ = SyncQuality();
+        }
 
         // Nhạc mở đầu
         var t = (int)(_state?.T ?? 0);
@@ -1557,6 +1898,8 @@ public sealed class PlayerView : UserControl
         $"native={(_nativeOn && _native != null ? "on " + _native.Debug() : _extract ? "đang lấy link từ trình phát nhúng" : $"off (forceWeb={_forceWeb})")} " +
         $"open={IsOpen} pageMode={_pageMode} started={_started} server={_server?.Label} ep={_episodeUrl} t={_state?.T:0.0} d={_state?.D:0.0} " +
         $"paused={_state?.Paused} embed={_embedUrl} hls={_hlsUrl} load={_pageLoad} " +
+        $"subs={_subs.Count} subIdx={_subIdx} subDelay={_subDelay.ToString(CultureInfo.InvariantCulture)} group={_group?.Name} " +
+        $"quality={Prefs.VideoQuality} levels={string.Join("/", _levels)} " +
         $"web={(_web.CoreWebView2 != null ? "sẵn sàng" : _init == null ? "chưa tạo" : "đang tạo " + _init.Status)} " +
         $"webVis={_web.Visibility} webSize={_web.ActualWidth:0}x{_web.ActualHeight:0} webLoaded={_web.IsLoaded}";
 
@@ -1565,6 +1908,19 @@ public sealed class PlayerView : UserControl
     {
         if (!_nativeOn || _native == null) return "không đang phát native";
         _native.DebugFail();
+        return "ok";
+    }
+
+    /// Cổng gỡ lỗi: giả trang còn «đang tìm» phụ đề (bỏ danh sách đang có rồi hỏi lại địa chỉ list như Video.SubsLater) — thử
+    /// đường PollSubs mà không cần tìm tập ít người xem.
+    public string DebugSubsLater(string listUrl)
+    {
+        if (_hlsUrl == null || _nativeOn) return "không đang phát bằng hls.html";
+        _subs = new();
+        _subIdx = -1;
+        ShowSubButton();
+        PageJs("window.__chimtoSubs&&__chimtoSubs([],-1)");
+        _ = PollSubs(listUrl, _token);
         return "ok";
     }
 

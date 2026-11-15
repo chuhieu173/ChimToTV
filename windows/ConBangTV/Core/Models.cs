@@ -33,8 +33,13 @@ public sealed record Episode(string Title, string Url);
 /// Một danh sách tập, vd "Việt Sub" / "Thuyết Minh".
 public sealed record EpisodeGroup(string Name, List<Episode> Episodes);
 
+/// Seasons: mỗi nhóm là một mùa (phim bộ của dexter.pw; nhóm tập đặc biệt — nếu có — đứng cuối) chứ không phải một bản
+/// (Vietsub / Thuyết Minh) của cùng các tập. Lõi Rust nhận lại FilmDetail (kk.source, home.markSeen…) nên phải giữ đủ trường.
 public sealed class FilmDetail
 {
+    /// Tên nhóm tập đặc biệt (mùa 0) của phim chia mùa.
+    public const string Specials = "Tập đặc biệt";
+
     public required string Url;
     public required string Title;
     public string? OtherTitle;
@@ -42,20 +47,32 @@ public sealed class FilmDetail
     public string? Description;
     public string? Info;
     public List<EpisodeGroup> Groups = new();
+    public bool Seasons;
 
-    public int EpisodeCount => Groups.Count == 0 ? 0 : Groups.Max(g => g.Episodes.Count);
+    /// Bản: số tập của bản nhiều tập nhất. Mùa: tổng số tập (mùa mới ra tập là tăng — để báo «có tập mới»).
+    public int EpisodeCount => Groups.Count == 0 ? 0 : Seasons ? Groups.Sum(g => g.Episodes.Count) : Groups.Max(g => g.Episodes.Count);
 
-    /// Tập mới nhất của bản nhiều tập nhất (bản Vietsub thường ra trước Thuyết Minh).
-    public Episode? LatestEpisode => Groups.Count == 0 ? null : Groups.MaxBy(g => g.Episodes.Count)!.Episodes.LastOrDefault();
+    /// Bản: tập mới nhất của bản nhiều tập nhất (bản Vietsub thường ra trước Thuyết Minh). Mùa: tập cuối của mùa cuối (không
+    /// tính nhóm tập đặc biệt).
+    public Episode? LatestEpisode => Groups.Count == 0 ? null
+        : Seasons ? (Groups.LastOrDefault(g => g.Name != Specials) ?? Groups[^1]).Episodes.LastOrDefault()
+        : Groups.MaxBy(g => g.Episodes.Count)!.Episodes.LastOrDefault();
 
     public EpisodeGroup? GroupOf(string epUrl) => Groups.FirstOrDefault(g => g.Episodes.Any(e => e.Url == epUrl));
 }
 
 public sealed record Server(string Label, string Type);
 
+/// Một phụ đề rời chọn được trong trình phát (dexter.pw: kho OpenSubtitles / Subsource). Lang: "vi", "en".
+public sealed record SubTrack(string Label, string Url, string Lang);
+
 /// Link phát của một server: iframe trình phát / trang tập, hoặc luồng .m3u8 (kèm phụ đề rời nếu có).
 /// File: tệp video phát thẳng bằng &lt;video&gt; (MP4 của CLB Phim Xưa), không phải trang trình phát.
-public sealed record Video(string Url, string? Subtitle = null, bool File = false);
+/// Hls: luồng HLS dù đường dẫn không có đuôi .m3u8 (dexter.pw /api/s/…) — phát bằng hls.html với bản hls.js đầy đủ (âm thanh
+/// tách rời). Subs: phụ đề chọn được (trình phát chọn sẵn theo ngôn ngữ ưa dùng); SubsLater: địa chỉ danh sách phụ đề trang còn
+/// đang tìm — trình phát hỏi lại sau (Dexter.SubtitlesFrom). Lõi nhận lại Video (EpisodeSource.Links) nên phải giữ đủ trường.
+public sealed record Video(string Url, string? Subtitle = null, bool File = false, bool Hls = false, List<SubTrack>? Subs = null,
+    string? SubsLater = null);
 
 /// Cách phát một tập: player.php → iframe; PageMode → mở thẳng trang tập; Next → trang Next.js / trang API.
 public sealed class EpisodeSource

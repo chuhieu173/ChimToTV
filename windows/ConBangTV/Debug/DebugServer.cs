@@ -16,7 +16,7 @@ using ConBangTV.UI;
 
 namespace ConBangTV;
 
-/// Cổng gỡ lỗi của bản Debug (giống DebugServer của bản Android, cổng 8790, chỉ máy này): xem trạng thái, chụp màn hình,
+/// Cổng gỡ lỗi của bản Debug (giống DebugServer của bản Android, cổng 8790 — đổi bằng biến CONBANG_DEBUG_PORT, chỉ máy này): xem trạng thái, chụp màn hình,
 /// bấm phím / bấm nút theo chữ, chạy JS trong trình phát, đọc nhật ký. Bản Release không có tệp này.
 public static class DebugServer
 {
@@ -25,18 +25,20 @@ public static class DebugServer
     public static void Start(MainWindow w)
     {
         _w = w;
+        // Cổng khác (CONBANG_DEBUG_PORT): khi 8790 đang bận, vd adb forward tới cổng gỡ lỗi của bản Android
+        var port = int.TryParse(Environment.GetEnvironmentVariable("CONBANG_DEBUG_PORT"), out var p) && p > 0 ? p : 8790;
         var l = new HttpListener();
-        l.Prefixes.Add("http://localhost:8790/");
+        l.Prefixes.Add($"http://localhost:{port}/");
         try
         {
             l.Start();
         }
         catch (Exception e)
         {
-            Log.D("debug", "Không mở được cổng 8790: " + e.Message);
+            Log.D("debug", $"Không mở được cổng {port}: " + e.Message);
             return;
         }
-        Log.D("debug", "Cổng gỡ lỗi: http://localhost:8790/");
+        Log.D("debug", $"Cổng gỡ lỗi: http://localhost:{port}/");
         Task.Run(async () =>
         {
             while (l.IsListening)
@@ -144,6 +146,18 @@ public static class DebugServer
                 case "/native":
                     // Thử đường tự chuyển của trình phát native: /native?fail=1 (mpv báo lỗi giữa chừng)
                     body = Text(await _w!.Dispatcher.InvokeAsync(() => q["fail"] == "1" ? _w.OpenPlayer?.DebugNativeFail() ?? "trình phát chưa mở" : "ok"));
+                    break;
+                case "/subs":
+                    // dexter.pw: /subs?url=<…/api/subs/list/…> (hỏi danh sách phụ đề qua lõi); thêm &later=1 = trình phát đang mở giả
+                    // trang còn «đang tìm» phụ đề rồi tự hỏi lại địa chỉ này (đường Video.SubsLater)
+                    if (q["later"] == "1")
+                    {
+                        body = Text(await _w!.Dispatcher.InvokeAsync(() => _w.OpenPlayer?.DebugSubsLater(q["url"]!) ?? "trình phát chưa mở"));
+                        break;
+                    }
+                    var subs = await Dexter.SubtitlesFrom(q["url"]!);
+                    body = Text(System.Text.Json.JsonSerializer.Serialize(subs));
+                    type = "application/json; charset=utf-8";
                     break;
                 case "/play":
                     await _w!.Dispatcher.InvokeAsync(() => _w.Play(q["film"]!, q["ep"]!));

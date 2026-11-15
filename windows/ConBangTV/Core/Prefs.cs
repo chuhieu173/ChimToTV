@@ -16,7 +16,7 @@ public static class Prefs
     public static readonly string[] PresetSites =
     {
         DefaultBase, "https://hoathinh3d.pw", "https://hoathinh3d.ee", "https://hhkungfu.ee", "https://phimmois.fun", "https://mephim.ddns.net",
-        KkSite, NcSite, VsSite, K20Site,
+        KkSite, NcSite, VsSite, K20Site, DxSite,
     };
 
     /// Trang KKPhim (từ 1.3) — dữ liệu lấy thẳng từ API công khai phimapi.com (xem ApiSite).
@@ -27,8 +27,11 @@ public static class Prefs
     public const string VsSite = "https://vsmov.com";
     public const string K20Site = "https://sc.k-20.xyz";
 
+    /// Từ 1.17: dexter.pw — phim Âu Mỹ 4K, phụ đề OpenSubtitles / Subsource (lõi: dexter.rs).
+    public const string DxSite = "https://dexter.pw";
+
     /// Trang mẫu thêm ở bản sau: thêm một lần vào danh sách đã lưu (xoá đi thì thôi, không thêm lại).
-    public static readonly string[] AddedSites = { KkSite, NcSite, VsSite, K20Site };
+    public static readonly string[] AddedSites = { KkSite, NcSite, VsSite, K20Site, DxSite };
 
     private const int MaxHistory = 60;
     private const int MaxPositions = 400;
@@ -130,7 +133,7 @@ public static class Prefs
     {
         "history", "positions_v2", "follows", "last_follow_check", "private_mode",
         "hist_del", "follow_del",
-        "base_url", "seek_step", "auto_next", "video_fill",
+        "base_url", "seek_step", "auto_next", "video_fill", "sub_lang", "video_quality",
         "limit_min", "bedtime", "watch_day", "watch_sec", "watch_extra", "unblock_until",
         // Trang chủ tổng hợp (HomeFeed): kiểu trang chủ, chủ đề đã chọn, tập mới nhất đã thấy, hồ sơ trẻ em, ngôn ngữ bản hay xem
         "home_mix", "home_topics", "seen_eps", "kids", "watch_langs",
@@ -897,6 +900,53 @@ public static class Prefs
     {
         get => Get<bool>(K("video_fill"));
         set => Set(K("video_fill"), value);
+    }
+
+    /// Chất lượng muốn xem cho luồng có nhiều bản (dexter.pw: 4K / 1080p / 720p…), riêng từng người xem: chiều cao (2160 = 4K),
+    /// 0 = tự động (hls.js tự chọn, không vượt kích thước khung phát). Phim không có đúng bản đó thì lấy bản cao nhất thấp hơn
+    /// (hls.html đọc window.__chimtoWantH).
+    public static int VideoQuality
+    {
+        get => Get<int>(K("video_quality"));
+        set => Set(K("video_quality"), value);
+    }
+
+    /// Phụ đề rời ưa dùng (dexter.pw), riêng từng người xem: "vi" (mặc định), "en" hoặc "off" (tắt).
+    public static string SubLang
+    {
+        get => Get<string>(K("sub_lang")) is { Length: > 0 } v ? v : "vi";
+        set => Set(K("sub_lang"), value);
+    }
+
+    private const int MaxSubDelays = 100;
+
+    /// Độ lệch phụ đề (giây, + = chữ hiện muộn hơn) đã chỉnh cho từng tập — khoá chung "sub_delay" như lõi (prefs.rs).
+    public static double SubDelay(string epUrl)
+    {
+        try
+        {
+            return Raw("sub_delay") is JsonObject m && m[epUrl] is JsonValue v ? v.GetValue<double>() : 0;
+        }
+        catch (Exception)
+        {
+            return 0;
+        }
+    }
+
+    /// Nhớ độ lệch của một tập (0 = bỏ); giữ MaxSubDelays tập chỉnh gần nhất (thứ tự chèn, bỏ tập chỉnh lâu nhất).
+    public static void SetSubDelay(string epUrl, double seconds)
+    {
+        lock (Lock)
+        {
+            var m = new JsonObject();
+            if (Raw("sub_delay") is JsonObject old)
+                foreach (var (k, v) in old)
+                    if (k != epUrl)
+                        m[k] = v?.DeepClone();
+            if (seconds != 0) m[epUrl] = seconds;
+            while (m.Count > MaxSubDelays) m.Remove(m.First().Key);
+            SetRaw("sub_delay", m);
+        }
     }
 
     /// Trình phát native (mpv) cho luồng .m3u8 / tệp video — cài đặt của máy (không theo người xem), mặc định bật; như bản Linux.
