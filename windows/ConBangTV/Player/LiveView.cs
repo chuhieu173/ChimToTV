@@ -658,7 +658,9 @@ public sealed class LiveView : UserControl
         if (c == null) return;
         _radioName.Text = Iptv.S(c, "n");
         var (p, _) = Programmes();
-        _radioSong.Text = _icy != null ? "♪ " + _icy : p != null ? Iptv.S(p, "t") : "";
+        // Đài chỉ gửi lại tên đài làm «bài đang phát» (BBC…): bỏ, khỏi lặp tên ba lần
+        var icy = _icy != null && !string.Equals(_icy, Iptv.S(c, "n"), StringComparison.OrdinalIgnoreCase) ? _icy : null;
+        _radioSong.Text = icy != null ? "♪ " + icy : p != null ? Iptv.S(p, "t") : "";
         _radioSong.Visibility = _radioSong.Text == "" ? Visibility.Collapsed : Visibility.Visible;
         _radioInfo.Text = _radioDesc != null ? "📻 Radio · " + _radioDesc : "📻 Radio";
         var logo = Iptv.S(c, "logo");

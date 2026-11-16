@@ -66,8 +66,8 @@ public partial class MainWindow : Window
         Activated += (_, _) =>
         {
             _player?.Reactivate();
-            // Rời app hơn 30 phút (không xem phim): hỏi lại ai đang xem
-            if (_deactivatedAt > 0 && Util.NowMs() - _deactivatedAt > 30 * 60_000 && Player == null && Prefs.Profiles.Count > 1 &&
+            // Rời app hơn 30 phút (không xem phim / truyền hình): hỏi lại ai đang xem
+            if (_deactivatedAt > 0 && Util.NowMs() - _deactivatedAt > 30 * 60_000 && Player == null && Live == null && Prefs.Profiles.Count > 1 &&
                 (Prefs.AskProfile || Prefs.CurrentProfile.Locked))
                 _ = PickProfile(!Prefs.CurrentProfile.Locked);
             // Quay lại app (vd vừa xem trên tivi): đồng bộ, tối đa 1 phút một lần
@@ -467,6 +467,9 @@ public partial class MainWindow : Window
     /// Nhắc giờ phát / bóng lăn (Truyền hình): mỗi 15 giây khi app đang mở.
     private async Task CheckReminders()
     {
+        // Đang có hộp thoại (miễn trừ trách nhiệm, «Ai đang xem?», cập nhật…): để lần sau — hộp mới sẽ đóng hộp đang mở,
+        // qua mặt được màn chặn / mã PIN. Nhắc chưa lấy ra khỏi danh sách nên vẫn còn đó.
+        if (DialogLayer.Visibility == Visibility.Visible || _picking || Disclaimer.Needed) return;
         var r = Iptv.DueReminder();
         if (r == null) return;
         var text = Iptv.S(r, "text");

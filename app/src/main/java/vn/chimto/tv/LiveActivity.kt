@@ -884,7 +884,9 @@ class LiveActivity : BaseActivity() {
         val c = channel ?: return
         radioName.text = c.n
         val p = programmes.nowAt(nowSec())
-        radioSong.text = radioTitle?.let { "♪ $it" } ?: p?.t ?: ""
+        // Đài chỉ gửi lại tên đài làm «bài đang phát» (BBC…): bỏ, khỏi lặp tên ba lần
+        val icy = radioTitle?.takeUnless { it.equals(c.n, ignoreCase = true) }
+        radioSong.text = icy?.let { "♪ $it" } ?: p?.t ?: ""
         radioSong.visibility = if (radioSong.text.isNullOrEmpty()) View.GONE else View.VISIBLE
         radioInfo.text = radioDesc?.let { "📻 Radio · $it" } ?: "📻 Radio"
         if (c.logo != radioLogoUrl) {

@@ -841,7 +841,10 @@ impl Live {
         let ch = self.st.borrow().ch.clone();
         self.radio_name.set_text(&s(&ch, "n"));
         let (p, _) = self.programmes();
-        let song = match &self.st.borrow().icy {
+        // Đài chỉ gửi lại tên đài làm «bài đang phát» (BBC…): bỏ, khỏi lặp tên ba lần
+        let name = s(&ch, "n");
+        let icy = self.st.borrow().icy.clone().filter(|t| t.to_lowercase() != name.to_lowercase());
+        let song = match &icy {
             Some(t) => format!("♪ {t}"),
             None => p.map(|p| s(&p, "t")).unwrap_or_default(),
         };

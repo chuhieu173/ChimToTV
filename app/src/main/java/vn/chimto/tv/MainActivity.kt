@@ -106,6 +106,9 @@ class MainActivity : BaseActivity() {
 
     /** Màn "Ai đang xem?"; mainStarted: đã chọn xong người xem và tải màn chính lần đầu. */
     private lateinit var picker: ProfilePicker
+
+    /** Màn «Ai đang xem?» đang phủ màn chính (nhắc giờ phát chờ tới khi chọn xong). */
+    val pickerShown get() = ::picker.isInitialized && picker.shown
     private var mainStarted = false
     private var loadedProfile: String? = null
 

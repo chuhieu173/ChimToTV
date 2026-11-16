@@ -219,7 +219,10 @@ impl App {
             let a = app();
             // Ô đang chọn mất lúc cửa sổ ở dưới (trang dựng lại khi đồng bộ…) thì lúc quay lại chọn lại
             ui::after(150, || app().refocus_if_lost());
-            if away > 0 && now - away > 30 * 60_000 && a.playing().is_none() && prefs::profiles().len() > 1 {
+            // Rời app hơn 30 phút (không xem phim / truyền hình): hỏi lại ai đang xem
+            if away > 0 && now - away > 30 * 60_000 && a.playing().is_none() && crate::live::current().is_none()
+                && prefs::profiles().len() > 1
+            {
                 let cur = prefs::current_profile();
                 if prefs::ask_profile() || cur.locked() {
                     crate::profiles::pick_profile(!cur.locked());
@@ -574,6 +577,11 @@ impl App {
     /// Nhắc giờ phát / bóng lăn (Truyền hình): mỗi 15 giây khi app đang mở.
     pub fn start_reminders(&self) {
         glib::timeout_add_local(std::time::Duration::from_secs(15), || {
+            // Đang có hộp thoại (miễn trừ trách nhiệm, «Ai đang xem?», cập nhật…): để lần sau — hộp mới sẽ huỷ hộp đang mở,
+            // qua mặt được màn chặn / mã PIN. Nhắc chưa lấy ra khỏi danh sách nên vẫn còn đó.
+            if app().dialog_open() || cbtv::disclaimer::needed() {
+                return glib::ControlFlow::Continue;
+            }
             let Some(r) = cbtv::iptv::due_reminder() else { return glib::ControlFlow::Continue };
             let text = r["text"].as_str().unwrap_or("").to_string();
             let key = r["k"].as_str().unwrap_or("").to_string();

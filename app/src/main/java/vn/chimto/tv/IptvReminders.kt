@@ -114,6 +114,9 @@ object IptvReminders {
     private fun check() {
         val a = resumed ?: return
         if (showing || a.isFinishing) return
+        // Màn miễn trừ trách nhiệm / «Ai đang xem?» đang chặn cửa: để lần sau (nhắc chưa lấy ra khỏi danh sách) — không thì
+        // «Xem ngay» mở được kênh đè lên màn chọn người xem, qua mặt mã PIN
+        if (a is DisclaimerActivity || Disclaimer.needed() || (a is MainActivity && a.pickerShown)) return
         val now = System.currentTimeMillis()
         val list = all()
         val due = list.firstOrNull { it.optLong("at") <= now } ?: return
