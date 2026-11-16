@@ -43,6 +43,29 @@ object Http {
         throw IOException("Chuyển hướng quá nhiều lần: $url")
     }
 
+    /**
+     * Như [open] nhưng đi thẳng bằng mạng của máy (DNS của máy, không qua cổng nội bộ) — chỉ để thử lại khi mạng của app hỏng
+     * với một máy chủ (Truyền hình: danh sách kênh / lịch / luồng), không dùng khi đang bật proxy.
+     */
+    fun openDirect(url: String, headers: Map<String, String> = emptyMap()): HttpURLConnection {
+        var current = url
+        repeat(8) {
+            val c = URL(current).openConnection(java.net.Proxy.NO_PROXY) as HttpURLConnection
+            c.instanceFollowRedirects = false
+            c.connectTimeout = 15_000
+            c.readTimeout = 20_000
+            c.setRequestProperty("User-Agent", UA)
+            for ((k, v) in headers) c.setRequestProperty(k, v)
+            val code = c.responseCode
+            if (code !in 300..399) return c
+            val location = c.getHeaderField("Location")
+            c.disconnect()
+            if (location.isNullOrBlank()) throw IOException("HTTP $code không có Location")
+            current = URL(URL(current), location).toString()
+        }
+        throw IOException("Chuyển hướng quá nhiều lần: $url")
+    }
+
     /** Bật proxy thì đi qua cổng SOCKS5 nội bộ của AppProxy, không thì theo mạng mặc định của máy. */
     private fun connection(url: String): HttpURLConnection {
         val proxy = AppProxy.javaProxy()

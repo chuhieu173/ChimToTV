@@ -179,6 +179,8 @@ object Prefs {
         "home_mix", "home_topics", "seen_eps", "kids", "watch_langs",
         // Các hàng trang chủ người xem bật / tắt, sắp thứ tự (HomeFeed.rowPrefs); hàng tự thêm (HomeFeed.CustomRow); nguồn tắt
         "home_rows", "home_custom", "home_src_off",
+        // Truyền hình (Iptv.kt): kênh yêu thích, kênh vừa xem
+        "iptv_favs", "iptv_recent",
     )
     private val PROFILE_PREFIXES = listOf("server_type@", "server_label@")
 
@@ -1018,4 +1020,18 @@ object Prefs {
             .putString("sites_add", stampsJson(s.add)).putString("sites_del", stampsJson(s.del)).commit()
         return true
     }
+
+    // ---- Truyền hình (IPTV, Iptv.kt) — cùng tên khoá với bản Legacy ----
+
+    /** Giá trị chuỗi của khoá IPTV; [own] = khoá riêng của người xem đang dùng (iptv_favs, iptv_recent). */
+    fun iptvGet(key: String, own: Boolean = false): String? = sp.getString(if (own) k(key) else key, null)
+
+    fun iptvSet(key: String, value: String?, own: Boolean = false) {
+        val kk = if (own) k(key) else key
+        sp.edit().apply { if (value == null) remove(kk) else putString(kk, value) }.apply()
+    }
+
+    fun iptvFlag(key: String, default: Boolean): Boolean = sp.getBoolean(key, default)
+
+    fun setIptvFlag(key: String, on: Boolean) = sp.edit().putBoolean(key, on).apply()
 }

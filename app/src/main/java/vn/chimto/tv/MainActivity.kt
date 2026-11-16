@@ -42,7 +42,7 @@ class MainActivity : BaseActivity() {
         finish()
     }
 
-    private enum class Kind { PIP_EXPAND, PIP_CLOSE, PROFILE, HOME, SEARCH, HISTORY, FOLLOWS, IMDB, CATEGORY, FILTER, SITE, WEB, CLEAR, INVITE, SETTINGS }
+    private enum class Kind { PIP_EXPAND, PIP_CLOSE, PROFILE, HOME, SEARCH, HISTORY, FOLLOWS, IMDB, TV, CATEGORY, FILTER, SITE, WEB, CLEAR, INVITE, SETTINGS }
 
     private data class Entry(val title: String, val kind: Kind, val url: String? = null)
 
@@ -585,6 +585,8 @@ class MainActivity : BaseActivity() {
         items += Entry("Lịch sử xem", Kind.HISTORY)
         items += Entry(followsTitle(), Kind.FOLLOWS)
         items += Entry("Điểm IMDb cao", Kind.IMDB)
+        // Truyền hình / radio: danh sách kênh M3U người xem tự thêm (TvActivity)
+        items += Entry("Truyền hình · Radio", Kind.TV)
         categories.forEach { items += Entry(it.title, Kind.CATEGORY, it.url) }
         // Trang kiểu PhimMoi / trang API (mephim): đủ thể loại / quốc gia của bộ lọc (menu trang chỉ có vài mục)
         if (NextSite.isKnown(Prefs.baseUrl) || ApiSite.isKnown(Prefs.baseUrl)) {
@@ -652,6 +654,10 @@ class MainActivity : BaseActivity() {
             }
             Kind.INVITE -> {
                 InviteActivity.open(this)
+                return
+            }
+            Kind.TV -> {
+                TvActivity.open(this)
                 return
             }
             Kind.SITE -> {
