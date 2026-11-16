@@ -117,8 +117,121 @@ const MIST = `<linearGradient id="mist" x1="0" y1="0" x2="0" y2="1">
   <stop offset="0" stop-color="#bfe3ff" stop-opacity="0"/><stop offset=".6" stop-color="#bfe3ff" stop-opacity=".22"/>
   <stop offset="1" stop-color="#bfe3ff" stop-opacity="0"/></linearGradient>`;
 
-// ---------- 3 phương án: mỗi cái có icon (512) và banner (640×360) ----------
+// ---------- Đĩa kính 3D (phương án D, như icon bản Legacy — ConBangTV_Legacy/design/icon.html phương án A) ----------
+// Mọi id có tiền tố g3 để không đè lên defs của các phương án khác khi cùng nằm trong một trang.
+// Ánh sáng chung: chiếu từ trên-trái (azimuth 235°), để vòng vàng, ấn đỏ, đĩa kính cùng một hướng sáng.
+const G3_LIGHT = `<feDistantLight azimuth="235" elevation="40"/>`;
+const G3_DEFS = `
+  <linearGradient id="g3gold" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#ffe7a0"/><stop offset=".4" stop-color="#f5bf45"/>
+    <stop offset=".75" stop-color="#d48d22"/><stop offset="1" stop-color="#9c5a14"/>
+  </linearGradient>
+  <linearGradient id="g3sealRed" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#e5453f"/><stop offset=".5" stop-color="#c3272b"/><stop offset="1" stop-color="#8c161b"/>
+  </linearGradient>
+  <linearGradient id="g3cream" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#fff6e2"/><stop offset="1" stop-color="#ecd3a2"/>
+  </linearGradient>
+  <filter id="g3brush" x="-10%" y="-10%" width="120%" height="120%">
+    <feTurbulence type="fractalNoise" baseFrequency=".035 .6" numOctaves="2" seed="3" result="n"/>
+    <feDisplacementMap in="SourceGraphic" in2="n" scale="9"/>
+  </filter>
+  <filter id="g3stamp" x="-10%" y="-10%" width="120%" height="120%">
+    <feTurbulence type="fractalNoise" baseFrequency=".9" numOctaves="2" seed="7" result="n"/>
+    <feDisplacementMap in="SourceGraphic" in2="n" scale="5"/>
+  </filter>
+  <!-- Khối nổi: lấy độ mờ của hình làm bản đồ cao, chiếu sáng khuếch tán + phản quang -->
+  <filter id="g3bevelGold" x="-15%" y="-15%" width="130%" height="130%" color-interpolation-filters="sRGB">
+    <feGaussianBlur in="SourceAlpha" stdDeviation="7" result="h"/>
+    <feDiffuseLighting in="h" surfaceScale="10" diffuseConstant="1.1" result="diff">${G3_LIGHT}</feDiffuseLighting>
+    <feSpecularLighting in="h" surfaceScale="10" specularConstant="1.05" specularExponent="30" lighting-color="#fff4d2" result="spec">${G3_LIGHT}</feSpecularLighting>
+    <feComposite in="SourceGraphic" in2="diff" operator="arithmetic" k1="1.3" result="shade"/>
+    <feComposite in="spec" in2="SourceAlpha" operator="in" result="specIn"/>
+    <feComposite in="shade" in2="specIn" operator="arithmetic" k2="1" k3=".85" result="lit"/>
+    <feComposite in="lit" in2="SourceAlpha" operator="in"/>
+  </filter>
+  <filter id="g3bevelSeal" x="-15%" y="-15%" width="130%" height="130%" color-interpolation-filters="sRGB">
+    <feGaussianBlur in="SourceAlpha" stdDeviation="5" result="h"/>
+    <feDiffuseLighting in="h" surfaceScale="7" diffuseConstant="1.1" result="diff">${G3_LIGHT}</feDiffuseLighting>
+    <feSpecularLighting in="h" surfaceScale="7" specularConstant=".9" specularExponent="30" lighting-color="#ffe9e0" result="spec">${G3_LIGHT}</feSpecularLighting>
+    <feComposite in="SourceGraphic" in2="diff" operator="arithmetic" k1="1.3" result="shade"/>
+    <feComposite in="spec" in2="SourceAlpha" operator="in" result="specIn"/>
+    <feComposite in="shade" in2="specIn" operator="arithmetic" k2="1" k3=".7" result="lit"/>
+    <feComposite in="lit" in2="SourceAlpha" operator="in"/>
+  </filter>
+  <filter id="g3bevelGlyph" x="-15%" y="-15%" width="130%" height="130%" color-interpolation-filters="sRGB">
+    <feGaussianBlur in="SourceAlpha" stdDeviation="1.6" result="h"/>
+    <feDiffuseLighting in="h" surfaceScale="3" diffuseConstant="1.05" result="diff">${G3_LIGHT}</feDiffuseLighting>
+    <feComposite in="SourceGraphic" in2="diff" operator="arithmetic" k1="1.35" result="shade"/>
+    <feComposite in="shade" in2="SourceAlpha" operator="in" result="lit"/>
+    <!-- bóng chữ đổ xuống nền đỏ: chữ như nổi lên khỏi mặt ấn -->
+    <feOffset in="SourceAlpha" dx="2" dy="3" result="off"/>
+    <feGaussianBlur in="off" stdDeviation="1.5" result="offb"/>
+    <feFlood flood-color="#4a0508" flood-opacity=".6"/>
+    <feComposite in2="offb" operator="in" result="sh"/>
+    <feMerge><feMergeNode in="sh"/><feMergeNode in="lit"/></feMerge>
+  </filter>
+  <filter id="g3drop" x="-20%" y="-20%" width="140%" height="150%">
+    <feDropShadow dx="0" dy="8" stdDeviation="8" flood-color="#000" flood-opacity=".45"/>
+  </filter>
+  <filter id="g3blur6" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="6"/></filter>
+  <filter id="g3glow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="16"/></filter>
+  <!-- Kính tối trong suốt -->
+  <radialGradient id="g3glass" cx="50%" cy="36%" r="68%">
+    <stop offset="0" stop-color="#4b2f1b" stop-opacity=".62"/>
+    <stop offset=".62" stop-color="#1c110a" stop-opacity=".55"/>
+    <stop offset="1" stop-color="#080503" stop-opacity=".72"/>
+  </radialGradient>
+  <linearGradient id="g3gloss" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#ffffff" stop-opacity=".4"/>
+    <stop offset=".45" stop-color="#ffffff" stop-opacity=".1"/>
+    <stop offset=".8" stop-color="#ffffff" stop-opacity="0"/>
+  </linearGradient>
+  <linearGradient id="g3rim" x1=".15" y1="0" x2=".85" y2="1">
+    <stop offset="0" stop-color="#fff4d0" stop-opacity=".95"/>
+    <stop offset=".45" stop-color="#d7a94f" stop-opacity=".45"/>
+    <stop offset="1" stop-color="#3a2108" stop-opacity=".9"/>
+  </linearGradient>
+  <radialGradient id="g3edgeLight" cx="50%" cy="50%" r="50%">
+    <stop offset=".8" stop-color="#ffd98a" stop-opacity="0"/>
+    <stop offset=".97" stop-color="#ffd98a" stop-opacity=".22"/>
+    <stop offset="1" stop-color="#ffd98a" stop-opacity="0"/>
+  </radialGradient>
+  <clipPath id="g3discClip"><circle cx="256" cy="256" r="238"/></clipPath>
+  <mask id="g3outsideDisc"><rect width="512" height="512" fill="#fff"/><circle cx="256" cy="256" r="237" fill="#000"/></mask>`;
+
+// Đĩa kính tròn R = 238 (hệ 512, tâm 256), vòng ensō vàng nổi khối, ấn đỏ 鵬 nổi khối — nền ngoài đĩa trong suốt
+function glassDisc() {
+  const C = 256, R = 238;
+  const p = (a, rr) => `${C + rr * Math.cos(a)} ${C + rr * Math.sin(a)}`;
+  const a0 = -100 * Math.PI / 180, a1 = 235 * Math.PI / 180;
+  const r = 186, w = 42, k = r + w * .3;
+  const s = 206, cy = 263, x = C - s / 2, y = cy - s / 2, b = s * .09;
+  return `
+  <g mask="url(#g3outsideDisc)"><circle cx="${C}" cy="${C + 5}" r="${R}" fill="#000" opacity=".5" filter="url(#g3blur6)"/></g>
+  <circle cx="${C}" cy="${C}" r="${R}" fill="url(#g3glass)"/>
+  <circle cx="${C}" cy="${C}" r="${R}" fill="url(#g3edgeLight)"/>
+  <g clip-path="url(#g3discClip)"><ellipse cx="${C}" cy="${C - R * .42}" rx="${R * 1.05}" ry="${R * .66}" fill="url(#g3gloss)"/></g>
+  <circle cx="${C}" cy="${C}" r="${R - 2.5}" fill="none" stroke="url(#g3rim)" stroke-width="5"/>
+  <circle cx="${C}" cy="${C}" r="160" fill="#f0b443" opacity=".16" filter="url(#g3glow)"/>
+  <g filter="url(#g3drop)"><g filter="url(#g3bevelGold)"><g filter="url(#g3brush)">
+    <path d="M${p(a0, r)} A${r} ${r} 0 1 1 ${p(a1, r)}" stroke="url(#g3gold)" stroke-width="${w}" fill="none" stroke-linecap="round"/>
+  </g></g></g>
+  <g filter="url(#g3brush)" opacity=".45">
+    <path d="M${p(a0 + .25, k)} A${k} ${k} 0 1 1 ${p(a1 - .35, k)}" stroke="#fff6d4" stroke-width="${w * .08}" fill="none"/>
+  </g>
+  <g filter="url(#g3drop)"><g filter="url(#g3bevelSeal)"><g filter="url(#g3stamp)">
+    <rect x="${x}" y="${y}" width="${s}" height="${s}" rx="${s * .09}" fill="url(#g3sealRed)"/>
+  </g></g></g>
+  <g filter="url(#g3bevelGlyph)"><g filter="url(#g3stamp)">
+    <rect x="${x + b}" y="${y + b}" width="${s - 2 * b}" height="${s - 2 * b}" rx="${s * .045}" fill="none" stroke="url(#g3cream)" stroke-width="${s * .036}"/>
+    <text x="${C}" y="${cy + s * .02}" text-anchor="middle" dominant-baseline="central" font-family="Yuji Boku" font-size="${s * .7}" fill="url(#g3cream)">鵬</text>
+  </g></g>`;
+}
+
+// ---------- các phương án: mỗi cái có icon (512) và banner (640×360) ----------
 // layer: 'full' (icon vuông bo góc), 'bg' / 'fg' (2 lớp icon thích ứng 108dp, vùng an toàn 66dp)
+// round: icon là đĩa tròn nền trong suốt (không khung vuông, không nền) — phương án D
 const concepts = {
   a: {
     name: 'Hạc & Trăng', note: 'Tiên hạc bay qua trăng vàng, núi sương',
@@ -166,6 +279,17 @@ const concepts = {
       ${mountains(640, 360, .74, ['#24170f', '#0f0907'])}
       <g transform="translate(372 44) scale(.53)">${concepts.c.mark()}</g>`,
   },
+  d: {
+    name: 'Đĩa kính 3D', note: 'Như icon bản Legacy: đĩa kính tròn trong suốt, vòng vàng và ấn 鵬 nổi khối (chọn 17/11/2026)',
+    round: true,
+    bgDefs: `${G3_DEFS}<radialGradient id="bgC" cx="50%" cy="42%" r="78%"><stop offset="0" stop-color="#3a2416"/><stop offset=".6" stop-color="#1a0f0a"/><stop offset="1" stop-color="#080504"/></radialGradient>`,
+    bg: (w, h) => `<rect width="${w}" height="${h}" fill="url(#bgC)"/>`,
+    mark: () => glassDisc(),
+    icon: () => ``,
+    banner: () => `
+      ${mountains(640, 360, .74, ['#24170f', '#0f0907'])}
+      <g transform="translate(388 60) scale(.47)">${glassDisc()}</g>`,
+  },
 };
 
 function defs(c) {
@@ -173,27 +297,41 @@ function defs(c) {
     <clipPath id="clipIcon"><rect width="512" height="512" rx="112"/></clipPath></defs>`;
 }
 
-// Icon vuông bo góc (launcher cũ) — 512 hệ toạ độ
+// Icon vuông bo góc (launcher cũ) — 512 hệ toạ độ; phương án tròn: chỉ đĩa, ngoài đĩa trong suốt
 function iconSvg(c, px) {
+  if (c.round) return `<svg width="${px}" height="${px}" viewBox="0 0 512 512">${defs(c)}${c.mark()}</svg>`;
   return `<svg width="${px}" height="${px}" viewBox="0 0 512 512">${defs(c)}
     <g clip-path="url(#clipIcon)">${c.bg(512, 512)}${c.icon()}${c.mark()}</g></svg>`;
 }
 
 // Icon thích ứng: hệ 108dp → 512; vùng an toàn 66dp ≈ 313px, dấu hình thu vào giữa
+// Phương án tròn: lớp nền trong suốt (ic_launcher.xml dùng màu trong suốt), đĩa phủ đúng vùng hiện 72dp của khung 108dp
 function adaptiveSvg(c, px, layer) {
+  if (c.round) {
+    const k = 72 / 108, off = (512 - 512 * k) / 2;
+    const body = layer === 'bg' ? '' : `<g transform="translate(${off} ${off}) scale(${k})">${c.mark()}</g>`;
+    return `<svg width="${px}" height="${px}" viewBox="0 0 512 512">${defs(c)}${body}</svg>`;
+  }
   const k = 313 / 512, off = (512 - 512 * k) / 2;
   const body = layer === 'bg' ? `${c.bg(512, 512)}${c.icon()}`
     : `<g transform="translate(${off} ${off}) scale(${k})">${c.mark()}</g>`;
   return `<svg width="${px}" height="${px}" viewBox="0 0 512 512">${defs(c)}${body}</svg>`;
 }
 
-// Icon iOS: vuông đầy, không bo góc (iOS tự bo), không trong suốt
+// Icon iOS: vuông đầy, không bo góc (iOS tự bo), không trong suốt. Phương án tròn: đĩa trên nền trong suốt — iOS tô
+// phần trong suốt thành đen (đúng như Legacy trên iOS 6)
 function iosIconSvg(c, px) {
+  if (c.round) return iconSvg(c, px);
   return `<svg width="${px}" height="${px}" viewBox="0 0 512 512">${defs(c)}${c.bg(512, 512)}${c.icon()}${c.mark()}</svg>`;
 }
 
 // Icon macOS (bản Mac Catalyst): macOS không tự bo góc → khung bo góc 824/1024 ở giữa theo lưới icon của macOS, có bóng đổ
 function macIconSvg(c, px) {
+  // Phương án tròn: macOS giữ nguyên dáng tròn trong suốt — đĩa thu còn ~84% khung theo lưới icon của macOS
+  if (c.round) {
+    const k = .86, off = (512 - 512 * k) / 2;
+    return `<svg width="${px}" height="${px}" viewBox="0 0 512 512">${defs(c)}<g transform="translate(${off} ${off}) scale(${k})">${c.mark()}</g></svg>`;
+  }
   const s = 412 / 512;
   return `<svg width="${px}" height="${px}" viewBox="0 0 512 512">${defs(c)}
     <defs><clipPath id="clipMac"><rect x="50" y="50" width="412" height="412" rx="92"/></clipPath>
@@ -217,8 +355,30 @@ function bannerSvg(c, w) {
   </svg>`;
 }
 
+// Đặt danh sách [tên tệp, svg] lên trang (render.mjs chụp từng cái)
+function place(items) {
+  let y = 0;
+  for (const [name, svg] of items) {
+    const div = document.createElement('div');
+    div.className = 'asset';
+    div.dataset.name = name;
+    div.style.top = y + 'px';
+    div.innerHTML = svg;
+    document.body.appendChild(div);
+    y += div.firstElementChild.getAttribute('height') * 1 + 20;
+  }
+}
+
 function render() {
-  if (P.get('mode') === 'mac') {
+  if (P.get('mode') === 'desktop') {
+    // Windows: các cỡ ghép thành app.ico (tên @ico/<cỡ>: render.mjs ghép, không ghi tệp riêng) + logo trong app; Linux: icon gói .deb
+    const c = concepts[P.get('concept') || 'a'];
+    const items = [];
+    for (const px of [256, 128, 64, 48, 40, 32, 24, 20, 16]) items.push([`@ico/${px}`, iconSvg(c, px)]);
+    items.push(['../../../../windows/ConBangTV/logo.png', iconSvg(c, 256)]);
+    for (const px of [32, 48, 64, 128, 256, 512]) items.push([`../../../../linux/packaging/icons/${px}.png`, iconSvg(c, px)]);
+    place(items);
+  } else if (P.get('mode') === 'mac') {
     // Bản Mac: các cỡ icon macOS vào cùng bộ AppIcon của bản iPad (không đụng icon-1024.png của iPad)
     const c = concepts[P.get('concept') || 'a'];
     let y = 0;
@@ -254,7 +414,8 @@ function render() {
     for (const [d, px] of [['mdpi', 48], ['hdpi', 72], ['xhdpi', 96], ['xxhdpi', 144], ['xxxhdpi', 192]]) {
       items.push([`mipmap-${d}/ic_launcher.png`, iconSvg(c, px)]);
       const ap = px * 108 / 48;
-      items.push([`mipmap-${d}/ic_launcher_background.png`, adaptiveSvg(c, ap, 'bg')]);
+      // phương án tròn: lớp nền là màu trong suốt trong ic_launcher.xml, khỏi tệp ảnh
+      if (!c.round) items.push([`mipmap-${d}/ic_launcher_background.png`, adaptiveSvg(c, ap, 'bg')]);
       items.push([`mipmap-${d}/ic_launcher_foreground.png`, adaptiveSvg(c, ap, 'fg')]);
     }
     for (const [d, w] of [['xhdpi', 320], ['xxhdpi', 480], ['xxxhdpi', 640]]) {
