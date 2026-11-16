@@ -109,6 +109,11 @@ public static class Prefs
 
     public static void Remove(string key) => Set<object>(key, null);
 
+    /// Khoá cờ dùng chung cả nhà (Truyền hình: iptv_hide_bad, iptv_auto_source…).
+    public static bool GetBool(string key, bool def) => Has(key) ? Get<bool>(key) : def;
+
+    public static void SetBool(string key, bool on) => Set(key, on);
+
 #if DEBUG
     /// Cổng gỡ lỗi: đặt một khoá bằng JSON (thử giới hạn giờ xem…).
     public static void DebugSet(string key, string json)
@@ -139,6 +144,8 @@ public static class Prefs
         "home_mix", "home_topics", "seen_eps", "kids", "watch_langs",
         // Các hàng trang chủ (bật / tắt, thứ tự) và hàng tự thêm
         "home_rows", "home_custom", "home_src_off",
+        // Truyền hình (Iptv.cs — lõi cbtv::iptv): kênh yêu thích, kênh vừa xem
+        "iptv_favs", "iptv_recent",
     };
 
     private static readonly string[] ProfilePrefixes = { "server_type@", "server_label@" };

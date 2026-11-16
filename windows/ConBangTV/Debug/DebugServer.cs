@@ -159,6 +159,28 @@ public static class DebugServer
                     body = Text(System.Text.Json.JsonSerializer.Serialize(subs));
                     type = "application/json; charset=utf-8";
                     break;
+                case "/tv":
+                    // Truyền hình: /tv (mở màn), /tv?add=<địa chỉ>&name=… (thêm danh sách + tải), /tv?play=<khoá kênh>, /tv?use=<số>
+                    body = Text(await await _w!.Dispatcher.InvokeAsync(async () =>
+                    {
+                        if (q["add"] is { } add)
+                        {
+                            Iptv.Add(add, q["name"]);
+                            _ = Iptv.Refresh(true);
+                        }
+                        if (int.TryParse(q["use"], out var use) && Iptv.Lists().ElementAtOrDefault(use) is { } ul)
+                        {
+                            Iptv.SetActive(Iptv.S(ul, "id"));
+                            _ = Iptv.Refresh(false);
+                        }
+                        if (q["play"] is { } key) await _w.PlayLiveKey(key);
+                        else if (_w.Live == null) _w.ShowRoot(new TvPage());
+                        return _w.Live?.DebugStatus() ?? Iptv.Status().ToJsonString();
+                    }));
+                    break;
+                case "/tvstatus":
+                    body = Text(await _w!.Dispatcher.InvokeAsync(() => _w.Live?.DebugStatus() ?? Iptv.Status().ToJsonString()));
+                    break;
                 case "/play":
                     await _w!.Dispatcher.InvokeAsync(() => _w.Play(q["film"]!, q["ep"]!));
                     body = Text("ok");

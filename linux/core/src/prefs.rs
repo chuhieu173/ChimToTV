@@ -59,6 +59,8 @@ const PROFILE_KEYS: &[&str] = &[
     "home_mix", "home_topics", "seen_eps", "kids", "watch_langs",
     // Các hàng trang chủ (bật / tắt, thứ tự) và hàng tự thêm
     "home_rows", "home_custom", "home_src_off",
+    // Truyền hình (iptv.rs): kênh yêu thích, kênh vừa xem
+    "iptv_favs", "iptv_recent",
 ];
 const PROFILE_PREFIXES: &[&str] = &["server_type@", "server_label@"];
 /// Người thêm sau bắt đầu với trang phim / server ưu tiên / cách xem của người đang dùng.

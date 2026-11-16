@@ -53,6 +53,9 @@ pub fn sync(m: &str, a: &Value) -> Option<Res> {
     if let Some(r) = crate::media::sync(m, a) {
         return Some(r);
     }
+    if let Some(r) = crate::iptv::sync(m, a) {
+        return Some(r);
+    }
     if let Some(r) = crate::webfn::sync(m, a) {
         return Some(r);
     }
@@ -167,6 +170,9 @@ pub async fn call(id: u64, m: &str, a: Value) -> Res {
         return r;
     }
     if let Some(r) = crate::media::call(m, &a).await {
+        return r;
+    }
+    if let Some(r) = crate::iptv::call(m, &a).await {
         return r;
     }
     match m {

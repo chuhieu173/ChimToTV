@@ -23,6 +23,7 @@ public partial class MainWindow : Window
     private string _activeMenu = "home";
     private PlayerView? _player;
     private readonly DispatcherTimer _toastTimer = new() { Interval = TimeSpan.FromSeconds(4) };
+    private readonly DispatcherTimer _remindTimer = new() { Interval = TimeSpan.FromSeconds(15) };
     private TaskCompletionSource<int>? _dialog;
     private FrameworkElement? _focusBeforeDialog;
 
@@ -50,9 +51,13 @@ public partial class MainWindow : Window
         LoadBounds();
         ApplyScale();
         Loaded += (_, _) => Start();
+        // Truyền hình: nhắc giờ phát / bóng lăn khi app đang mở
+        _remindTimer.Tick += (_, _) => _ = CheckReminders();
+        _remindTimer.Start();
         Closing += (_, _) =>
         {
             SaveBounds();
+            _live?.Close();
             _player?.Close(false);
             SyncService.Stop();
             Prefs.Flush();
@@ -267,6 +272,8 @@ public partial class MainWindow : Window
         yield return new("follows", "★  Theo dõi" + (fresh > 0 ? $"  ({fresh} mới)" : ""), () => ShowRoot(new FollowsPage()));
         yield return new("imdb", "⭐  Điểm IMDb cao",
             () => ShowRoot(new ListPage("Điểm IMDb cao", "imdb:top", () => ImdbTop.Page(Prefs.Kids)) { MenuKey = "imdb" }));
+        // Truyền hình / radio: danh sách kênh M3U người xem tự thêm (TvPage, lõi cbtv::iptv)
+        yield return new("tv", "📺  Truyền hình · Radio", () => ShowRoot(new TvPage()));
         foreach (var c in _categories)
             yield return new("cat:" + c.Url, c.Title, () => ShowRoot(new ListPage(c.Title, c.Url) { MenuKey = "cat:" + c.Url }));
         var b = Prefs.BaseUrl;
@@ -413,6 +420,65 @@ public partial class MainWindow : Window
         RebuildMenu();
     }
 
+    private LiveView? _live;
+
+    /// Trình phát truyền hình đang mở.
+    public LiveView? Live => _live is { IsOpen: true } ? _live : null;
+
+    /// Mở kênh ở vị trí index của bộ lọc (lưới / lịch phát sóng). Phim đang phát (kể cả cửa sổ nhỏ) thì tắt.
+    public void PlayLive(IptvFilter filter, int index)
+    {
+        if (Current is { } cur) cur.LastFocus = Keyboard.FocusedElement as FrameworkElement;
+        if (_player is { IsOpen: true } p) p.Close();
+        _live ??= new LiveView(this);
+        PlayerHost.Content = _live;
+        PlayerHost.Visibility = Visibility.Visible;
+        Shell.Visibility = Visibility.Hidden;
+        _live.Open(filter, index);
+    }
+
+    /// Mở kênh theo khoá (kênh vừa xem / nhắc giờ phát) trong cả danh sách đang chọn.
+    public async Task PlayLiveKey(string key)
+    {
+        var all = new IptvFilter();
+        var i = await Iptv.IndexOf(all, key);
+        if (i < 0) Toast("Danh sách kênh đang chọn không có kênh này.");
+        else PlayLive(all, i);
+    }
+
+    /// Trình phát truyền hình đã đóng: về trang trước.
+    public void LiveClosed()
+    {
+        PlayerHost.Content = _player;
+        PlayerHost.Visibility = Visibility.Collapsed;
+        Shell.Visibility = Visibility.Visible;
+        Activate();
+        if (Current is { } p)
+        {
+            p.Returned();
+            Dispatcher.BeginInvoke(DispatcherPriority.Loaded, () =>
+            {
+                if (p.LastFocus is { IsVisible: true } f) KeyNav.FocusAndShow(f);
+                else p.FocusFirst();
+            });
+        }
+    }
+
+    /// Nhắc giờ phát / bóng lăn (Truyền hình): mỗi 15 giây khi app đang mở.
+    private async Task CheckReminders()
+    {
+        var r = Iptv.DueReminder();
+        if (r == null) return;
+        var text = Iptv.S(r, "text");
+        var key = Iptv.S(r, "k");
+        if (Live is { } lv)
+        {
+            lv.Notice("🔔 " + text, 12000);
+            return;
+        }
+        if (await Ask(Iptv.B(r, "kick") ? "Bóng lăn" : "Sắp phát", text, new[] { "Xem ngay", "Đóng" }) == 0) await PlayLiveKey(key);
+    }
+
     /// Trình phát đã đóng (người xem thoát): về trang trước, cập nhật tập đã xem / xem tiếp.
     public void PlayerClosed()
     {
@@ -467,7 +533,7 @@ public partial class MainWindow : Window
     }
 
     /// Hết giờ xem: người lớn nhập mã PIN phụ huynh để cho xem thêm (rồi mở lại đúng tập, xem tiếp), hoặc thôi.
-    public async Task LimitReached(WatchLimit.Block b, string film, string ep)
+    public async Task LimitReached(WatchLimit.Block b, string film, string ep, Action? resume = null)
     {
         if (WindowState == WindowState.Minimized) WindowState = WindowState.Normal;
         Activate();
@@ -492,7 +558,8 @@ public partial class MainWindow : Window
             if (g < WatchLimit.Grants.Length) WatchLimit.Grant(WatchLimit.Grants[g]);
             else WatchLimit.GrantUntilMorning();
             Toast("Đã cho xem thêm.");
-            Play(film, ep);
+            if (resume != null) resume();
+            else Play(film, ep);
             return;
         }
     }
@@ -662,6 +729,12 @@ public partial class MainWindow : Window
     private void OnPreviewKeyDown(object sender, KeyEventArgs e)
     {
         var key = e.Key == Key.System ? e.SystemKey : e.Key;
+        // Trình phát truyền hình đang mở (hộp thoại thì để hộp thoại nhận phím)
+        if (Live is { } live && DialogLayer.Visibility != Visibility.Visible)
+        {
+            live.HandleKey(e);
+            return;
+        }
         // Trình phát đang mở: phím do trình phát xử lý (cửa sổ phủ thường giữ phím; đây là khi cửa sổ chính được chọn)
         if (Player != null)
         {
@@ -727,6 +800,7 @@ public partial class MainWindow : Window
         _toastTimer.Interval = TimeSpan.FromMilliseconds(ms);
         _toastTimer.Start();
         _player?.Notice(text, ms);
+        _live?.Notice(text, ms);
     }
 
     /// Hộp thoại: trả về chỉ số nút được bấm (-1 = huỷ / Back). Nút đầu tiên được chọn sẵn.
