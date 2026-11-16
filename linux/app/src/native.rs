@@ -449,6 +449,8 @@ impl Native {
 
     pub fn stop(&self) {
         self.mpv.command(&["stop"]);
+        // Lỗi của luồng cũ không còn giá trị (trình phát truyền hình mở lại luồng sau khi dừng)
+        *self.err.borrow_mut() = None;
         self.has_video.set(false);
         self.restarted.set(false);
         self.loaded.set(false);

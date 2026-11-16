@@ -306,6 +306,7 @@ public sealed class NativeVideo : IDisposable
     {
         Command("stop");
         _restarted = false;
+        _err = null; // lỗi của luồng cũ không còn giá trị (trình phát truyền hình mở lại luồng sau khi dừng)
     }
 
     public State Read()

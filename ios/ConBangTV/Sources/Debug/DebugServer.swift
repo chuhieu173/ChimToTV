@@ -335,6 +335,58 @@ enum DebugRoutes {
             return .json(["ok": true, "title": info?.title ?? "", "slot": info?.slot ?? "", "up": info?.up != nil, "down": info?.down != nil,
                           "rows": Prefs.homeRows, "srcOff": Prefs.homeSrcOff.sorted(),
                           "sections": app.sections.map { $0.title ?? $0.id }])
+        case "/tv":
+            // Truyền hình: /tv (mở màn), /tv?add=<địa chỉ>&name=… (thêm + tải), /tv?use=<số>, /tv?play=<khoá kênh>,
+            // /tv?refresh=1 (tải lại), /tv?reparse=1 (quên dấu tệp, đọc lại), /tv?do=close|next|prev|panel|source|guide|toggle
+            if let u = q["add"] {
+                let l = Iptv.addList(u, name: q["name"])
+                Task { try? await Iptv.refresh(force: true) }
+                return .json(["ok": true, "id": l.id])
+            }
+            if let n = q["use"].flatMap(Int.init), n >= 0, n < Iptv.lists().count {
+                TvModel.shared.useList(Iptv.lists()[n].id)
+            }
+            if q["reparse"] == "1" { Iptv.forgetSignature() }
+            if q["refresh"] == "1" || q["reparse"] == "1" { Task { try? await Iptv.refresh(force: true) } }
+            if let n = q["at"].flatMap(Int.init) {
+                // Kênh thứ n (từ 0) của bộ lọc đang chọn trên màn Truyền hình
+                Router.playLive(TvModel.shared.filter, n)
+            } else if let k = q["play"] {
+                Router.playLiveKey(k)
+            } else if let d = q["do"], let l = LiveModel.current {
+                switch d {
+                case "close": l.close()
+                case "next": l.step(1)
+                case "prev": l.step(-1)
+                case "panel": l.togglePanel()
+                case "source": l.nextSource()
+                case "guide": l.openGuide()
+                case "toggle": l.togglePlay()
+                case "controls": l.tapped()
+                default: break
+                }
+            } else if LiveModel.current == nil && q["refresh"] == nil && q["reparse"] == nil && q["use"] == nil && q["at"] == nil {
+                Router.tv()
+            }
+            return .json(["ok": true])
+        case "/tvstatus":
+            if let l = LiveModel.current { return .json(l.debugState()) }
+            let s = Iptv.status()
+            var o: [String: Any] = ["loading": s.loading, "guideLoading": s.guideLoading, "status": s.status ?? "", "version": s.version]
+            if let a = s.active {
+                let active: [String: Any] = ["id": a.id, "name": a.name, "count": a.count, "updated": a.updated, "err": a.err ?? "",
+                                             "epg": a.epg ?? ""]
+                o["active"] = active
+            }
+            o["lists"] = Iptv.lists().map { $0.name }
+            o["loaded"] = s.loaded ?? ""
+            o["guide"] = Iptv.guide()?.prog.count ?? 0
+            let tv = TvModel.shared
+            o["items"] = tv.items.count
+            o["total"] = tv.total
+            o["filter"] = "\(tv.filter)"
+            o["first"] = tv.items.prefix(5).map { "\($0.num) \($0.n) | \($0.now?.t ?? $0.matchLine ?? $0.g)" }
+            return .json(o)
         case "/player":
             return player(q)
         case "/eval":

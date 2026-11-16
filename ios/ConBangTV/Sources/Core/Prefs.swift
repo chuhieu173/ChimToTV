@@ -119,6 +119,8 @@ enum Prefs {
         "home_mix", "home_topics", "seen_eps", "kids", "watch_langs",
         // Các hàng trang chủ (bật / tắt, thứ tự) và hàng tự thêm
         "home_rows", "home_custom", "home_src_off",
+        // Truyền hình (Iptv): kênh yêu thích, kênh vừa xem
+        "iptv_favs", "iptv_recent",
     ]
     private static let profilePrefixes = ["server_type@", "server_label@"]
     /// Người thêm sau bắt đầu với trang phim / server ưu tiên / cách xem của người đang dùng.
@@ -143,6 +145,9 @@ enum Prefs {
         let p = profileId
         return p.isEmpty ? key : "\(key)#\(p)"
     }
+
+    /// Khoá riêng của người xem đang dùng (cho phần lõi khác lưu dữ liệu từng người — Iptv).
+    static func own(_ key: String) -> String { k(key) }
 
     private static func isProfileKey(_ base: String) -> Bool {
         profileKeys.contains(base) || profilePrefixes.contains { base.hasPrefix($0) }

@@ -41,7 +41,7 @@ struct GridSection: Identifiable, Hashable {
 final class AppModel: ObservableObject {
     static let shared = AppModel()
 
-    enum Kind: String { case home, search, history, follows, imdb, category, filter, site, web, clear, settings }
+    enum Kind: String { case home, search, history, follows, imdb, tv, category, filter, site, web, clear, settings }
 
     struct Entry: Identifiable, Hashable {
         let title: String
@@ -56,6 +56,7 @@ final class AppModel: ObservableObject {
             case .history: return "clock.arrow.circlepath"
             case .follows: return "bell"
             case .imdb: return "star"
+            case .tv: return "tv"
             case .category: return "film"
             case .filter: return "line.3.horizontal.decrease.circle"
             case .site: return "arrow.left.arrow.right"
@@ -177,6 +178,31 @@ final class AppModel: ObservableObject {
         select(menu[0])
         WidgetFeed.update()
         runPendingPlay()
+        startReminders()
+    }
+
+    // MARK: - Nhắc giờ phát / bóng lăn (Truyền hình)
+
+    private var reminderTask: Task<Void, Never>?
+
+    /// Mỗi 15 giây khi app đang mở: nhắc tới giờ thì báo trong trình phát truyền hình đang mở, không thì hỏi «Xem ngay».
+    private func startReminders() {
+        reminderTask?.cancel()
+        reminderTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 15_000_000_000)
+                guard self != nil, !Task.isCancelled else { return }
+                guard let r = Iptv.dueReminder() else { continue }
+                let text = r.text ?? r.n
+                if let live = LiveModel.current {
+                    live.showNotice("🔔 \(text)", 12)
+                    continue
+                }
+                TvAlert.show(r.kick ? "Bóng lăn" : "Sắp phát", text, ["Xem ngay", "Đóng"]) { i in
+                    if i == 0 { Router.playLiveKey(r.k) }
+                }
+            }
+        }
     }
 
     // MARK: - Mở từ widget «Xem tiếp»
@@ -299,6 +325,8 @@ final class AppModel: ObservableObject {
             Entry(title: followsTitle(), kind: .follows),
         ]
         items.append(Entry(title: "Điểm IMDb cao", kind: .imdb))
+        // Truyền hình / radio: danh sách kênh M3U người xem tự thêm (UI/TvViews.swift, Core/Iptv.swift)
+        items.append(Entry(title: "Truyền hình · Radio", kind: .tv))
         items += categories.map { Entry(title: $0.title, kind: .category, url: $0.url) }
         // Trang kiểu PhimMoi / trang API (mephim): đủ thể loại / quốc gia của bộ lọc (menu trang chỉ có vài mục)
         if NextSite.isKnown(Prefs.baseUrl) || ApiSite.isKnown(Prefs.baseUrl) {
@@ -356,6 +384,13 @@ final class AppModel: ObservableObject {
             showFollows()
             checkFollows()
         case .imdb: showList("imdb:top") { try await ImdbTop.page(kids: Prefs.kids) }
+        case .tv:
+            // Khung chính vẽ TvContent (UI/TvViews.swift) thay cho lưới phim; ⌘R / chọn lại mục: tải lại danh sách kênh
+            token += 1
+            sections = []
+            nextUrl = nil
+            status = .none
+            if Iptv.activeList() != nil && TvModel.shared.hasList { TvModel.shared.rebuild() }
         case .category: if let u = e.url { showList(u) }
         default: break
         }

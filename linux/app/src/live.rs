@@ -527,10 +527,20 @@ impl Live {
             st.reopens
         };
         cbtv::log::d("tv", &format!("luồng {} {why} — mở lại lần {reopens}", s(&ch, "n")));
-        let t = self.st.borrow().token;
         if reopens > 5 {
+            let t = self.st.borrow().token;
             self.source_failed("Luồng liên tục bị đứt.", false, t);
             return;
+        }
+        // Bỏ luồng hỏng ngay (lỗi cũ không bị nhịp kiểm tra sau hiểu thành «không mở được»), chờ 1 giây rồi mở lại
+        let t = {
+            let mut st = self.st.borrow_mut();
+            st.token += 1;
+            st.opened_at = now_ms();
+            st.token
+        };
+        if let Some(n) = self.native() {
+            n.stop();
         }
         self.show_loading("Đang nối lại…");
         let me = self.clone();

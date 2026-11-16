@@ -391,8 +391,11 @@ public sealed class LiveView : UserControl
             _ = SourceFailed("Luồng liên tục bị đứt.", false, _token);
             return;
         }
-        var t = _token;
+        // Bỏ luồng hỏng ngay (lỗi cũ không bị nhịp kiểm tra sau hiểu thành «không mở được»), chờ 1 giây rồi mở lại
+        var t = ++_token;
         _started = false;
+        _openedAt = Util.NowMs();
+        _video?.Stop();
         ShowLoading("Đang nối lại…");
         _ = Task.Delay(1000).ContinueWith(_ => Dispatcher.BeginInvoke(() =>
         {

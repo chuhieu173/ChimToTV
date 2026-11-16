@@ -45,7 +45,16 @@ enum Router {
             if let p = top as? PlayerController { p.model.close() } else { top.dismiss(animated: true) }
             return
         }
-        if app.sheet != nil { app.sheet = nil } else if app.detailFilm != nil { app.detailFilm = nil }
+        let tv = TvModel.shared
+        if app.sheet != nil {
+            app.sheet = nil
+        } else if app.detailFilm != nil {
+            app.detailFilm = nil
+        } else if tv.guideTarget != nil {
+            tv.guideTarget = nil
+        } else if tv.settingsShown {
+            tv.settingsShown = false
+        }
     }
 }
 
@@ -239,6 +248,15 @@ struct HomeContent: View {
     @FocusState private var searchFocused: Bool
 
     var body: some View {
+        if app.active?.kind == .tv {
+            // Truyền hình · Radio: trang riêng (UI/TvViews.swift), cùng khung chính
+            TvContent(showMenuButton: showMenuButton, openMenu: openMenu)
+        } else {
+            films
+        }
+    }
+
+    private var films: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 14) {
                 if showMenuButton {
