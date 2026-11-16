@@ -158,6 +158,9 @@ final class AppModel: ObservableObject {
     /// Mở app phải chọn người xem: nhà có từ 2 người (và bật "hỏi khi mở app"), hoặc người đang dùng có mã PIN.
     var mustAskProfile: Bool { (Prefs.profiles.count >= 2 && Prefs.askProfile) || Prefs.profile.locked }
     var pickerClosable: Bool { !(pickerGate && Prefs.profile.locked) }
+    /// Đang chặn cửa (miễn trừ trách nhiệm / «Ai đang xem?» / chưa vào app): nhắc giờ phát và lối tắt truyền hình không
+    /// được mở trình phát hay đóng màn chặn — không thì qua mặt được mã PIN của người xem.
+    var gateUp: Bool { needsDisclaimer || askingProfile || !started }
 
     func startIfNeeded() {
         guard !started, !askingProfile, !needsDisclaimer else { return }
@@ -191,7 +194,9 @@ final class AppModel: ObservableObject {
         reminderTask = Task { [weak self] in
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: 15_000_000_000)
-                guard self != nil, !Task.isCancelled else { return }
+                guard let me = self, !Task.isCancelled else { return }
+                // Màn chặn cửa đang hiện: để nhắc lại lần sau (chưa lấy ra khỏi danh sách)
+                if me.gateUp { continue }
                 guard let r = Iptv.dueReminder() else { continue }
                 let text = r.text ?? r.n
                 if let live = LiveModel.current {
@@ -305,8 +310,10 @@ final class AppModel: ObservableObject {
         }
         defer { leftAt = 0 }
         guard leftAt > 0, nowMs() - leftAt >= 30 * 60_000, started, !askingProfile, sheet == nil, mustAskProfile else { return }
-        // Phim đang mở / đang ở cửa sổ hình trong hình: vẫn đang xem — thôi
-        if Router.topController is PlayerController || PlayerModel.detachedModel != nil { return }
+        // Phim / truyền hình / radio đang mở (radio hay nghe lúc khoá màn hình) hoặc đang ở cửa sổ hình trong hình:
+        // vẫn đang xem — thôi
+        if Router.topController is PlayerController || Router.topController is LiveController
+            || LiveModel.current != nil || PlayerModel.detachedModel != nil { return }
         showPicker(gate: true)
     }
 

@@ -13,6 +13,8 @@ extension Router {
     /// Chọn mục «Truyền hình · Radio» của menu.
     static func tv(then: (() -> Void)? = nil) {
         let app = AppModel.shared
+        // Đừng đóng màn miễn trừ / «Ai đang xem?» (chúng cũng là màn được trình bày đè lên)
+        guard !app.gateUp else { return }
         if let top = topController, top.presentingViewController != nil, !(top is LiveController) {
             top.dismiss(animated: true)
         }
@@ -28,6 +30,7 @@ extension Router {
             cur.open(filter, index)
             return
         }
+        guard !AppModel.shared.gateUp else { return }
         PlayerModel.detachedModel?.closeDetached()
         guard let top = topController else { return }
         if let p = top as? PlayerController {
@@ -409,6 +412,8 @@ struct TvContent: View {
     let showMenuButton: Bool
     let openMenu: () -> Void
     @FocusState private var searchFocused: Bool
+    /// iPhone dọc: chỉ hai nút tròn (tải lại nằm trong menu danh sách) để tiêu đề không bị cắt
+    @Environment(\.horizontalSizeClass) private var hClass
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -474,7 +479,7 @@ struct TvContent: View {
                 .accessibilityLabel("Menu")
             }
             VStack(alignment: .leading, spacing: 2) {
-                Text("Truyền hình · Radio").appFont(26, .bold).foregroundColor(Theme.text).lineLimit(1).minimumScaleFactor(0.7)
+                Text("Truyền hình · Radio").appFont(26, .bold).foregroundColor(Theme.text).lineLimit(1).minimumScaleFactor(0.6)
                 if !m.info.isEmpty {
                     HStack(spacing: 6) {
                         if m.busy { ProgressView().scaleEffect(0.7).tint(Theme.dim) }
@@ -496,16 +501,22 @@ struct TvContent: View {
                             }
                         }
                     }
+                    if hClass == .compact {
+                        Button { m.refreshList(force: true) } label: { Label("Tải lại danh sách", systemImage: "arrow.clockwise") }
+                            .disabled(m.busy)
+                    }
                     Button { m.addShown = true } label: { Label("Thêm danh sách…", systemImage: "plus") }
                     Button { m.settingsShown = true } label: { Label("Quản lý danh sách, lịch phát sóng…", systemImage: "slider.horizontal.3") }
                 } label: {
                     HeaderIcon(icon: "list.bullet.rectangle")
                 }
                 .accessibilityLabel("Đổi danh sách kênh")
-                Button { m.refreshList(force: true) } label: { HeaderIcon(icon: "arrow.clockwise") }
-                    .buttonStyle(PressScale())
-                    .disabled(m.busy)
-                    .accessibilityLabel("Tải lại danh sách")
+                if hClass != .compact {
+                    Button { m.refreshList(force: true) } label: { HeaderIcon(icon: "arrow.clockwise") }
+                        .buttonStyle(PressScale())
+                        .disabled(m.busy)
+                        .accessibilityLabel("Tải lại danh sách")
+                }
             }
             Button { m.settingsShown = true } label: { HeaderIcon(icon: "gearshape") }
                 .buttonStyle(PressScale())

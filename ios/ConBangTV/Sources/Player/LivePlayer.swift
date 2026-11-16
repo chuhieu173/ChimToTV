@@ -940,22 +940,26 @@ struct LiveView: View {
         let tl = m.timeLine
         let (now, next) = m.programmes
         let playing = m.started && !m.paused
+        // Radio không có lịch: thẻ đài giữa màn đã có tên + bài đang phát → bỏ dòng thông tin lặp lại
+        let infoRow = !(m.radio && now == nil && m.status == nil)
         return VStack(alignment: .leading, spacing: compact ? 10 : 14) {
-            HStack(alignment: .center, spacing: 14) {
-                if !compact {
-                    LogoTile(url: m.ch?.logo, radio: m.radio, corner: 10).frame(width: 78, height: 50)
-                }
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(now?.t ?? m.icy ?? m.ch?.n ?? "").appFont(compact ? 16 : 19, .semibold).foregroundColor(Theme.text).lineLimit(1)
-                    Text(tl.text).appFont(13).foregroundColor(Theme.dim).lineLimit(1)
-                }
-                Spacer(minLength: 8)
-                if let n = next, !compact {
-                    VStack(alignment: .trailing, spacing: 3) {
-                        Text("TIẾP THEO · \(IptvParse.clock(n.s))").appFont(11, .bold).foregroundColor(Theme.dim)
-                        Text(n.t).appFont(14, .medium).foregroundColor(Theme.text.opacity(0.85)).lineLimit(1)
+            if infoRow {
+                HStack(alignment: .center, spacing: 14) {
+                    if !compact {
+                        LogoTile(url: m.ch?.logo, radio: m.radio, corner: 10).frame(width: 78, height: 50)
                     }
-                    .frame(maxWidth: 280, alignment: .trailing)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(now?.t ?? m.icy ?? m.ch?.n ?? "").appFont(compact ? 16 : 19, .semibold).foregroundColor(Theme.text).lineLimit(1)
+                        Text(tl.text).appFont(13).foregroundColor(Theme.dim).lineLimit(1)
+                    }
+                    Spacer(minLength: 8)
+                    if let n = next, !compact {
+                        VStack(alignment: .trailing, spacing: 3) {
+                            Text("TIẾP THEO · \(IptvParse.clock(n.s))").appFont(11, .bold).foregroundColor(Theme.dim)
+                            Text(n.t).appFont(14, .medium).foregroundColor(Theme.text.opacity(0.85)).lineLimit(1)
+                        }
+                        .frame(maxWidth: 280, alignment: .trailing)
+                    }
                 }
             }
             if tl.frac >= 0 {
@@ -1023,29 +1027,42 @@ struct LiveView: View {
     }
 
     private var radioCard: some View {
-        let side: CGFloat = compact ? 130 : 200
-        let song = m.icy ?? m.programmes.now?.t
-        return VStack(spacing: compact ? 10 : 16) {
-            LogoTile(url: m.ch?.logo, radio: true, corner: compact ? 22 : 32)
-                .frame(width: side, height: side)
-                .shadow(color: .black.opacity(0.5), radius: 24, y: 10)
-            Text(m.ch?.n ?? "").appFont(compact ? 24 : 32, .bold).foregroundColor(Theme.text).multilineTextAlignment(.center)
-            if let s = song, !s.isEmpty {
-                Label(s, systemImage: "music.note")
-                    .appFont(compact ? 16 : 20, .medium)
-                    .foregroundColor(Theme.text.opacity(0.9))
-                    .multilineTextAlignment(.center)
-                    .lineLimit(2)
+        GeometryReader { geo in
+            // iPhone ngang chỉ cao ~400 pt: thẻ nhỏ lại để không chạm thanh nút
+            let short = geo.size.height < 500
+            let side: CGFloat = short ? 92 : (compact ? 130 : 200)
+            let name = m.ch?.n ?? ""
+            VStack(spacing: short ? 8 : (compact ? 10 : 16)) {
+                LogoTile(url: m.ch?.logo, radio: true, corner: short ? 18 : (compact ? 22 : 32))
+                    .frame(width: side, height: side)
+                    .shadow(color: .black.opacity(0.5), radius: 24, y: 10)
+                Text(name).appFont(short ? 20 : (compact ? 24 : 32), .bold).foregroundColor(Theme.text)
+                    .multilineTextAlignment(.center).lineLimit(2)
+                if let s = radioSong {
+                    Label(s, systemImage: "music.note")
+                        .appFont(short ? 15 : (compact ? 16 : 20), .medium)
+                        .foregroundColor(Theme.text.opacity(0.9))
+                        .multilineTextAlignment(.center)
+                        .lineLimit(short ? 1 : 2)
+                }
+                Label(m.radioDesc.map { "Radio · \($0)" } ?? "Radio", systemImage: "radio")
+                    .appFont(13, .semibold)
+                    .foregroundColor(Theme.text)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(Capsule().fill(Color.white.opacity(0.14)))
             }
-            Label(m.radioDesc.map { "Radio · \($0)" } ?? "Radio", systemImage: "radio")
-                .appFont(13, .semibold)
-                .foregroundColor(Theme.text)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .background(Capsule().fill(Color.white.opacity(0.14)))
+            .padding(.horizontal, 40)
+            .frame(width: geo.size.width, height: geo.size.height)
+            .offset(y: m.controls ? (short ? -24 : (compact ? -30 : -50)) : 0)
         }
-        .padding(.horizontal, 40)
-        .offset(y: m.controls ? (compact ? -30 : -50) : 0)
+    }
+
+    /// Bài đang phát (ICY) hoặc chương trình theo lịch — bỏ khi chỉ là tên đài lặp lại
+    private var radioSong: String? {
+        guard let s = m.icy ?? m.programmes.now?.t, !s.isEmpty else { return nil }
+        let name = m.ch?.n ?? ""
+        return s.caseInsensitiveCompare(name) == .orderedSame ? nil : s
     }
 
     // MARK: Đang mở / lỗi
