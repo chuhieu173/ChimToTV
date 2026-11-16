@@ -66,11 +66,20 @@ class LiveActivity : BaseActivity() {
             a.startActivity(i)
         }
 
-        /** Mở kênh theo khoá (kênh vừa xem ở trang chủ, nhắc giờ phát): trong cả danh sách đang chọn. */
-        fun playKey(a: Activity, key: String) {
+        /**
+         * Mở kênh theo khoá (kênh vừa xem ở trang chủ, nhắc giờ phát): trong cả danh sách đang chọn. [listId] = danh sách
+         * của kênh (kênh vừa xem): danh sách đang chọn không có kênh này thì đổi sang danh sách đó.
+         */
+        fun playKey(a: Activity, key: String, listId: String? = null) {
             fun go() {
                 inBackground({ Iptv.store()?.byKey(key) }) { r ->
                     val c = r.getOrNull()
+                    val other = listId?.takeIf { id -> id != Iptv.activeList?.id && Iptv.lists.any { it.id == id } }
+                    if (c == null && other != null) {
+                        Iptv.setActive(other)
+                        playKey(a, key)
+                        return@inBackground
+                    }
                     if (c == null) {
                         android.widget.Toast.makeText(a, "Danh sách kênh đang chọn không có kênh này.", android.widget.Toast.LENGTH_LONG).show()
                         return@inBackground

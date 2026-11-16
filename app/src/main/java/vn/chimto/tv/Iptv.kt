@@ -1123,6 +1123,7 @@ object Iptv {
     fun addRecent(c: Channel) {
         if (Prefs.privateMode) return
         val item = JSONObject().put("k", c.k).put("n", c.n).put("g", c.g)
+        activeList?.let { item.put("l", it.id) } // danh sách của kênh — bấm ở trang chủ thì đổi sang danh sách đó
         c.logo?.let { item.put("logo", it) }
         if (c.radio) item.put("radio", true)
         val r = listOf(item) + recent.filter { it.optString("k") != c.k }.take(11)

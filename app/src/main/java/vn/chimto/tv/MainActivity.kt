@@ -1091,6 +1091,11 @@ class MainActivity : BaseActivity() {
     /** Chọn / bỏ một chủ đề (người xem chưa có lịch sử) rồi tải lại trang chủ, giữ ô chủ đề đang chọn. */
     private fun toggleTopic(c: ChipRow) {
         if (c.id.startsWith("sort:")) return sortList(c.id == "sort:imdb")
+        // Hàng «Kênh vừa xem» (Truyền hình): mở kênh
+        if (c.id.startsWith("iptv:")) {
+            val k = c.id.removePrefix("iptv:")
+            return LiveActivity.playKey(this, k, Iptv.recent.firstOrNull { it.optString("k") == k }?.optString("l"))
+        }
         val set = Prefs.homeTopics.toMutableSet()
         if (!set.add(c.id)) set.remove(c.id)
         Prefs.homeTopics = set
@@ -1279,6 +1284,12 @@ class MainActivity : BaseActivity() {
             rows += HeaderRow("Xem tiếp", row = "continue")
             val cells = items.map { FilmRow(historyFilm(it), resume = true, removable = true) }
             if (strips) rows += StripRow("head-continue", cells) else rows += cells
+        }
+        // Truyền hình: kênh vừa xem (như trang chủ bản Legacy) — chỉ khi có danh sách kênh, không phải hồ sơ trẻ em
+        val chans = if (Prefs.kids || Iptv.activeList == null) emptyList() else Iptv.recent.take(if (strips) 3 else gridAdapter.spanCount)
+        if (chans.isNotEmpty()) {
+            rows += HeaderRow("Kênh vừa xem")
+            rows += chans.map { o -> ChipRow("iptv:" + o.optString("k"), (if (o.optBoolean("radio")) "📻 " else "📺 ") + o.optString("n"), false) }
         }
         return rows
     }
