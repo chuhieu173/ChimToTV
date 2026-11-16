@@ -267,6 +267,8 @@ enum DebugRoutes {
             let label = q["label"] ?? ""
             let (ok, hit) = press(label: label, index: Int(q["i"] ?? "0") ?? 0, partial: q["partial"] == "1")
             return .json(["ok": ok, "label": label, "hit": hit ?? ""])
+        case "/scrollinfo":
+            return .json(scrollInfo())
         case "/scroll":
             // Cuộn khung cuộn lớn nhất đang hiện: dir=top|bottom|up|down. Dải vuốt ngang ở độ cao y (điểm trên màn hình):
             // dir=left|right|start|end&y=…
@@ -836,6 +838,37 @@ enum DebugRoutes {
             return (true, hit)
         }
         return (false, hit)
+    }
+
+    /// Mọi khung cuộn đang hiện: vị trí, cỡ nội dung, lề, có cuộn / chạm được không (tìm lỗi «không cuộn về đầu được»).
+    static func scrollInfo() -> [[String: Any]] {
+        guard let w = keyWindow else { return [] }
+        var out: [[String: Any]] = []
+        func find(_ v: UIView, _ depth: Int) {
+            if v.isHidden || v.alpha < 0.02 { return }
+            if let s = v as? UIScrollView, !(s is UITextView), s.bounds.height > 60 {
+                var o: [String: Any] = [:]
+                o["type"] = String(describing: type(of: s))
+                o["frame"] = [Int(s.frame.minX), Int(s.frame.minY), Int(s.bounds.width), Int(s.bounds.height)]
+                o["offset"] = [Double(s.contentOffset.x), Double(s.contentOffset.y)]
+                o["size"] = [Double(s.contentSize.width), Double(s.contentSize.height)]
+                let i = s.adjustedContentInset
+                o["inset"] = [Double(i.top), Double(i.left), Double(i.bottom), Double(i.right)]
+                o["raw"] = [Double(s.contentInset.top), Double(s.contentInset.bottom)]
+                o["scroll"] = s.isScrollEnabled
+                o["touch"] = s.isUserInteractionEnabled
+                o["pan"] = s.panGestureRecognizer.isEnabled
+                o["tracking"] = s.isTracking
+                o["decel"] = s.isDecelerating
+                o["bounce"] = s.alwaysBounceVertical
+                o["depth"] = depth
+                o["gestures"] = (s.gestureRecognizers ?? []).map { String(describing: type(of: $0)) }
+                out.append(o)
+            }
+            v.subviews.forEach { find($0, depth + 1) }
+        }
+        find(w, 0)
+        return out
     }
 
     private static func scroll(_ dir: String) -> Bool {

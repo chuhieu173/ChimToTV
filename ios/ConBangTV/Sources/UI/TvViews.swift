@@ -138,7 +138,9 @@ final class TvModel: ObservableObject {
     @Published var settingsShown = false
     @Published private(set) var now = Iptv.nowSec()
     /// Ô đang chọn bằng bàn phím (khoá kênh)
-    @Published var keySel: String?
+    /// Theo `IptvChannelView.id` (số thứ tự, duy nhất) — không theo khoá kênh `k`: một kênh có thể nằm ở nhiều nhóm nên
+    /// trong «Tất cả» hai ô trùng `k`
+    @Published var keySel: Int?
     var cols = 3
 
     private var version: UInt64 = .max
@@ -249,7 +251,7 @@ final class TvModel: ObservableObject {
             now = Iptv.nowSec()
             total = page.total
             items = page.items
-            if let k = keySel, !page.items.contains(where: { $0.k == k }) { keySel = nil }
+            if let k = keySel, !page.items.contains(where: { $0.id == k }) { keySel = nil }
         }
     }
 
@@ -312,7 +314,7 @@ final class TvModel: ObservableObject {
     }
 
     func open(_ c: IptvChannelView) {
-        keySel = c.k
+        keySel = c.id
         let f = filter
         if c.match == .later {
             let m = Int(((c.kick - Iptv.nowSec()) / 60).rounded(.up))
@@ -383,7 +385,7 @@ final class TvModel: ObservableObject {
 
     func keyMove(_ d: KeyNav.Dir) {
         guard !items.isEmpty else { return }
-        let keys = items.map { $0.k }
+        let keys = items.map { $0.id }
         guard let cur = keySel, let i = keys.firstIndex(of: cur) else {
             keySel = keys[0]
             return
@@ -399,7 +401,7 @@ final class TvModel: ObservableObject {
     }
 
     func keyOpen() {
-        guard let k = keySel, let c = items.first(where: { $0.k == k }) else { return }
+        guard let k = keySel, let c = items.first(where: { $0.id == k }) else { return }
         open(c)
     }
 }
@@ -425,14 +427,23 @@ struct TvContent: View {
                     let minW = scale.layout(geo.size.width < 500 ? 300 : 290)
                     ScrollViewReader { proxy in
                         ScrollView {
-                            LazyVStack(alignment: .leading, spacing: 14) {
-                                Color.clear.frame(height: 0).id("top")
-                                if !m.recent.isEmpty && m.filter.q.isEmpty { recentStrip(pad) }
-                                groupStrip(pad)
-                                sectionTitle(pad)
-                                cards(minW, pad: pad)
-                                pager(proxy, pad: pad)
+                            // MỘT lưới lười duy nhất: đầu trang (kênh vừa xem, nhóm, tiêu đề) là tiêu đề mục, nút trang là chân
+                            // mục. Trước đây lưới kênh (cao hàng nghìn điểm) là một phần tử con của LazyVStack: mỗi lần dựng lại
+                            // (quay về từ trình phát) SwiftUI ước các phần nhỏ phía trên theo cỡ của lưới → nội dung phình, vuốt
+                            // không về được đầu danh sách (iPhone / iPad, 17/11/2026). Cột thường VStack thì iOS 15 sập.
+                            LazyVGrid(columns: [GridItem(.adaptive(minimum: minW), spacing: 14)], alignment: .leading, spacing: 14) {
+                                Section {
+                                    ForEach(m.items) { c in card(c) }
+                                } header: {
+                                    listHeader(pad)
+                                        .padding(.horizontal, -pad) // dải vuốt ngang tràn hết bề ngang như trước
+                                        .id("top")
+                                } footer: {
+                                    listFooter(proxy, pad: pad)
+                                        .padding(.horizontal, -pad)
+                                }
                             }
+                            .padding(.horizontal, pad)
                             .padding(.vertical, 10)
                         }
                         .onAppear { m.cols = KeyNav.columns(width: Double(geo.size.width - pad * 2), minimum: Double(minW), spacing: 14) }
@@ -585,6 +596,7 @@ struct TvContent: View {
                 .padding(.horizontal, pad)
                 .padding(.vertical, 4)
             }
+            .fixedSize(horizontal: false, vertical: true) // trong tiêu đề lưới: cao đúng theo nội dung
         }
     }
 
@@ -606,6 +618,7 @@ struct TvContent: View {
             .padding(.horizontal, pad)
             .padding(.vertical, 2)
         }
+        .fixedSize(horizontal: false, vertical: true) // trong tiêu đề lưới: cao đúng theo nội dung
     }
 
     private func chip(_ text: String, icon: String?, count: Int, active: Bool, _ action: @escaping () -> Void) -> some View {
@@ -636,28 +649,41 @@ struct TvContent: View {
 
     // MARK: Lưới kênh
 
-    @ViewBuilder
-    private func cards(_ minW: CGFloat, pad: CGFloat) -> some View {
-        if m.items.isEmpty {
-            HStack(spacing: 10) {
-                if m.busy { ProgressView().tint(Theme.dim) }
-                Text(m.emptyText).appFont(16).foregroundColor(Theme.dim)
-            }
-            .padding(.horizontal, pad)
-            .padding(.vertical, 30)
-        } else {
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: minW), spacing: 14)], spacing: 14) {
-                ForEach(m.items) { c in
-                    Button { m.open(c) } label: { TvCard(c: c, now: m.now, selected: m.keySel == c.k) }
-                        .buttonStyle(PressScale())
-                        .contentShape(.hoverEffect, RoundedRectangle(cornerRadius: 14))
-                        .hoverEffect(.lift)
-                        .contextMenu { menu(c) }
-                        .id(c.k)
-                }
-            }
-            .padding(.horizontal, pad)
+    /// Đầu lưới: kênh vừa xem, dải nhóm, tiêu đề mục.
+    private func listHeader(_ pad: CGFloat) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            if !m.recent.isEmpty && m.filter.q.isEmpty { recentStrip(pad) }
+            groupStrip(pad)
+            sectionTitle(pad)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// Chân lưới: chữ báo khi nhóm trống / đang tải, nút trang.
+    private func listFooter(_ proxy: ScrollViewProxy, pad: CGFloat) -> some View {
+        VStack(spacing: 0) {
+            if m.items.isEmpty {
+                HStack(spacing: 10) {
+                    if m.busy { ProgressView().tint(Theme.dim) }
+                    Text(m.emptyText).appFont(16).foregroundColor(Theme.dim)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, pad)
+                .padding(.vertical, 30)
+            }
+            pager(proxy, pad: pad)
+        }
+    }
+
+    private func card(_ c: IptvChannelView) -> some View {
+        Button { m.open(c) } label: { TvCard(c: c, now: m.now, selected: m.keySel == c.id) }
+            .buttonStyle(PressScale())
+            .contentShape(.hoverEffect, RoundedRectangle(cornerRadius: 14))
+            .hoverEffect(.lift)
+            .contextMenu { menu(c) }
+            // Định danh duy nhất: kênh nằm ở nhiều nhóm thì «Tất cả» có hai ô cùng khoá `k` — SwiftUI gặp mã trùng thì tính
+            // sai chiều cao lưới (17/11/2026)
+            .id(c.id)
     }
 
     @ViewBuilder
@@ -1078,13 +1104,14 @@ struct TvGuideView: View {
             let now = Iptv.nowSec()
             VStack(alignment: .leading, spacing: 0) {
                 ForEach(Array(rows.enumerated()), id: \.offset) { i, p in
-                    row(c, p, now: now, last: i == rows.count - 1).id(p.s)
+                    // theo thứ tự dòng: lịch EPG có khi trùng giờ bắt đầu — mã trùng làm SwiftUI tính sai / sập
+                    row(c, p, now: now, last: i == rows.count - 1).id("p\(i)")
                 }
             }
             .id("\(day)-\(version)")
             .onAppear {
-                if let cur = rows.first(where: { $0.s <= now && now < $0.e }) {
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { withAnimation { proxy.scrollTo(cur.s, anchor: .center) } }
+                if let ci = rows.firstIndex(where: { $0.s <= now && now < $0.e }) {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { withAnimation { proxy.scrollTo("p\(ci)", anchor: .center) } }
                 }
             }
         }
