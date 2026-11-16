@@ -1,0 +1,125 @@
+name: Build & Release Android APK
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag release (để trống = v<versionName> trên nhánh hiện tại)'
+        required: false
+        type: string
+  workflow_call:
+    inputs:
+      tag:
+        required: false
+        type: string
+    secrets:
+      ANDROID_KEYSTORE_BASE64:
+        required: true
+      ANDROID_KEYSTORE_PASSWORD:
+        required: true
+      ANDROID_KEY_ALIAS:
+        required: true
+      ANDROID_KEY_PASSWORD:
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  build-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || (startsWith(github.ref, 'refs/tags/') && github.ref_name) || github.ref_name }}
+
+      - name: Setup JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Setup Android Signing Keystore
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          STORE_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASS: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -z "$KEYSTORE_B64" ] || [ -z "$STORE_PASS" ] || [ -z "$KEY_ALIAS" ] || [ -z "$KEY_PASS" ]; then
+            echo "::error::Thiếu GitHub Secrets (ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD). Cần khoá ký cố định để app tự cập nhật OTA không bị lỗi chữ ký."
+            exit 1
+          fi
+          mkdir -p keys
+          echo "$KEYSTORE_B64" | base64 -d > keys/chimto.jks
+          cat > keys/ky.properties <<EOF
+          storeFile=keys/chimto.jks
+          storePassword=$STORE_PASS
+          keyAlias=$KEY_ALIAS
+          keyPassword=$KEY_PASS
+          EOF
+
+      - name: Run Unit Tests
+        run: ./gradlew --no-daemon :app:testDebugUnitTest
+
+      - name: Build Release APKs
+        run: ./gradlew --no-daemon :app:assembleRelease
+
+      - name: Prepare Release Assets & Notes
+        id: prep
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          VERSION=$(grep -E 'versionName\s*=' app/build.gradle.kts | head -n1 | sed -E 's/.*"([^"]+)".*/\1/')
+          if [ -n "$INPUT_TAG" ]; then
+            TAG="$INPUT_TAG"
+          elif [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            TAG="${GITHUB_REF#refs/tags/}"
+          else
+            TAG="v$VERSION"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+          mkdir -p dist
+          cp app/build/outputs/apk/release/app-universal-release.apk "dist/ConBangTV-${VERSION}.apk"
+          cp app/build/outputs/apk/release/app-armeabi-v7a-release.apk "dist/ConBangTV-${VERSION}-armeabi-v7a.apk"
+          cp app/build/outputs/apk/release/app-arm64-v8a-release.apk "dist/ConBangTV-${VERSION}-arm64-v8a.apk"
+          cp "dist/ConBangTV-${VERSION}.apk" "dist/ConBangTV.apk"
+
+          UPSTREAM_NOTES=$(curl -fsSL "https://api.github.com/repos/conbangtv/ChimToTV/releases/tags/${TAG}" \
+            | python3 -c "import sys, json; print(json.load(sys.stdin).get('body', ''))" 2>/dev/null || true)
+          if [ -n "$UPSTREAM_NOTES" ]; then
+            printf '%s\n' "$UPSTREAM_NOTES" > dist/notes.md
+          else
+            cat > dist/notes.md <<EOF
+          ## Có gì mới
+          - Tự động đồng bộ và dựng APK từ bản phát hành ${TAG} (${VERSION}).
+          EOF
+          fi
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.prep.outputs.tag }}
+          VERSION: ${{ steps.prep.outputs.version }}
+        run: |
+          ASSETS=(
+            "dist/ConBangTV-${VERSION}.apk"
+            "dist/ConBangTV-${VERSION}-armeabi-v7a.apk"
+            "dist/ConBangTV-${VERSION}-arm64-v8a.apk"
+            "dist/ConBangTV.apk"
+          )
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "${ASSETS[@]}" --clobber
+            gh release edit "$TAG" --title "Côn Bằng TV ${VERSION}" --notes-file dist/notes.md --latest
+          else
+            gh release create "$TAG" "${ASSETS[@]}" --title "Côn Bằng TV ${VERSION}" --notes-file dist/notes.md --latest
+          fi

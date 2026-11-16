@@ -48,11 +48,26 @@ object Updater {
         val o = JSONObject(r.body)
         val version = o.optString("tag_name").trim().removePrefix("v").removePrefix("V")
         val assets = o.optJSONArray("assets") ?: return null
-        val apk = (0 until assets.length()).map { assets.getJSONObject(it) }
-            .firstOrNull { it.optString("name").endsWith(".apk", true) } ?: return null
+        val apks = (0 until assets.length()).map { assets.getJSONObject(it) }
+            .filter { it.optString("name").endsWith(".apk", true) }
+        val apk = pickApk(apks.map { it.optString("name") }, Build.SUPPORTED_ABIS)
+            ?.let { idx -> apks[idx] } ?: return null
         if (version.isEmpty()) return null
         val api = apk.optString("url").takeIf { it.startsWith("https://api.github.com/") }
         return Release(version, apk.getString("browser_download_url"), o.optString("body"), api)
+    }
+
+    /** Chọn APK khớp ABI ưu tiên nhất của máy; không có bản tách ABI thì lấy bản chung / tệp .apk đầu tiên. */
+    internal fun pickApk(names: List<String>, supportedAbis: Array<String>): Int? {
+        if (names.isEmpty()) return null
+        for (abi in supportedAbis) {
+            val tag = "-${abi.lowercase()}."
+            val idx = names.indexOfFirst { it.lowercase().contains(tag) }
+            if (idx >= 0) return idx
+        }
+        val knownAbis = listOf("-arm64-v8a.", "-armeabi-v7a.", "-x86_64.", "-x86.")
+        val fallback = names.indexOfFirst { name -> knownAbis.none { name.lowercase().contains(it) } }
+        return if (fallback >= 0) fallback else 0
     }
 
     /** So số hiệu dạng 1.2.3 (bỏ hậu tố như "-debug"). */

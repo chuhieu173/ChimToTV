@@ -24,8 +24,11 @@ android {
         (findProperty("vc") as String?)?.let { versionCode = it.toInt() }
         (findProperty("vn") as String?)?.let { versionName = it }
 
-        // Nơi app hỏi bản phát hành mới nhất (GitHub Releases của repo)
-        buildConfigField("String", "UPDATE_URL", "\"https://api.github.com/repos/conbangtv/ChimToTV/releases/latest\"")
+        // Nơi app hỏi bản phát hành mới nhất (GitHub Releases của repo fork; ghi đè bằng -PupdateRepo=owner/repo)
+        val updateRepo = (findProperty("updateRepo") as String?)
+            ?: System.getenv("GITHUB_REPOSITORY")?.takeIf { it.isNotBlank() }
+            ?: "chuhieu173/ChimToTV"
+        buildConfigField("String", "UPDATE_URL", "\"https://api.github.com/repos/$updateRepo/releases/latest\"")
 
         // Mã hồ sơ NextDNS của app (DNS mã hoá, xem Doh.kt): tệp keys/nextdns.txt — không đưa lên git. Không có tệp thì chuỗi
         // DNS mã hoá bắt đầu từ Cloudflare.
@@ -33,8 +36,19 @@ android {
         require(nextDnsId.matches(Regex("[a-z0-9]*"))) { "keys/nextdns.txt: mã NextDNS chỉ gồm chữ thường và số" }
         buildConfigField("String", "NEXTDNS_ID", "\"$nextDnsId\"")
 
-        // GeckoView có thư viện native lớn: gói ARM 32-bit (TV box) + 64-bit (điện thoại chỉ chạy 64-bit) — APK ~155 MB (anh chọn)
-        ndk { abiFilters += listOf("armeabi-v7a", "arm64-v8a") }
+    }
+    splits {
+        abi {
+            isEnable = true
+            reset()
+            include("armeabi-v7a", "arm64-v8a")
+            isUniversalApk = true
+        }
+    }
+    packaging {
+        jniLibs {
+            excludes += listOf("lib/x86/**", "lib/x86_64/**")
+        }
     }
     signingConfigs {
         if (kyFile.exists()) {

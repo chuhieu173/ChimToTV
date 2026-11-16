@@ -1,0 +1,73 @@
+name: Sync Upstream & Release
+
+on:
+  schedule:
+    - cron: '0 */2 * * *'
+  workflow_dispatch:
+    inputs:
+      force_tag:
+        description: 'Ép đồng bộ & phát hành lại tag từ repo gốc (vd: v2.19)'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.check.outputs.tag }}
+    steps:
+      - name: Checkout Fork
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check & Merge Upstream TV Release
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FORCE_TAG: ${{ inputs.force_tag }}
+        run: |
+          UPSTREAM_REPO="conbangtv/ChimToTV"
+          if [ -n "$FORCE_TAG" ]; then
+            TARGET_TAG="$FORCE_TAG"
+          else
+            TARGET_TAG=$(curl -fsSL "https://api.github.com/repos/${UPSTREAM_REPO}/releases/latest" \
+              | python3 -c "import sys, json; print(json.load(sys.stdin).get('tag_name', ''))")
+          fi
+
+          if [ -z "$TARGET_TAG" ]; then
+            echo "Không lấy được tag mới nhất từ ${UPSTREAM_REPO}"
+            exit 1
+          fi
+
+          if [ -z "$FORCE_TAG" ] && gh release view "$TARGET_TAG" >/dev/null 2>&1; then
+            echo "Fork đã có release ${TARGET_TAG} — bỏ qua."
+            exit 0
+          fi
+
+          echo "Phát hiện bản mới từ repo gốc: ${TARGET_TAG}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git remote add upstream "https://github.com/${UPSTREAM_REPO}.git" 2>/dev/null || true
+          git fetch upstream --tags
+
+          if ! git merge-base --is-ancestor "refs/tags/${TARGET_TAG}" HEAD; then
+            git merge "refs/tags/${TARGET_TAG}" --no-edit -m "Đồng bộ bản phát hành ${TARGET_TAG} từ ${UPSTREAM_REPO}"
+            git push origin HEAD:main
+          fi
+
+          git tag -f "$TARGET_TAG" HEAD
+          git push origin "refs/tags/${TARGET_TAG}" --force
+          echo "tag=${TARGET_TAG}" >> "$GITHUB_OUTPUT"
+
+  release:
+    needs: sync
+    if: needs.sync.outputs.tag != ''
+    uses: ./.github/workflows/android-release.yml
+    with:
+      tag: ${{ needs.sync.outputs.tag }}
+    secrets: inherit
