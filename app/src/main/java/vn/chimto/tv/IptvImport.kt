@@ -337,7 +337,7 @@ textarea{height:110px;font-family:monospace;font-size:13px}
 button{margin-top:10px;font:inherit;font-weight:600;background:#2baf85;color:#fff;border:0;border-radius:8px;padding:10px 22px;cursor:pointer}
 #msg{display:none;border-radius:8px;padding:10px 14px;margin-top:16px}.ok{background:#16382c;color:#9de0c3}.err{background:#3d1d1b;color:#f4b4ad}
 .small{font-size:13px;color:#7d8696;margin-top:20px}</style></head><body><main>
-<h1>Gửi danh sách kênh tới tivi</h1><p>Côn Bằng TV không kèm sẵn kênh — chỉ gửi danh sách anh / chị có quyền xem.</p>
+<h1>Gửi danh sách kênh tới tivi</h1><p>Côn Bằng TV không kèm sẵn kênh — chỉ gửi danh sách bạn có quyền xem.</p>
 <label>Tên hiện trên tivi <span style="color:#7d8696">(không bắt buộc)</span><input id="name" maxlength="40"></label>
 <h2>1. Địa chỉ danh sách (M3U / M3U8)</h2><input id="url" placeholder="http://…/danh-sach.m3u" inputmode="url" autocapitalize="off">
 <button onclick="sendUrl()">Thêm địa chỉ</button>

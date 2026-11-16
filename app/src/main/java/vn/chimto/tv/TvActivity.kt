@@ -201,7 +201,7 @@ class TvActivity : BaseActivity() {
         btnAdd.visibility = if (list == null) View.VISIBLE else View.GONE
         if (list == null) {
             groupAdapter.submit(emptyList())
-            showEmpty("Chưa có danh sách kênh.\nApp không kèm sẵn kênh: thêm địa chỉ danh sách M3U / M3U8 mà anh có quyền xem.", false)
+            showEmpty("Chưa có danh sách kênh.\nApp không kèm sẵn kênh: thêm địa chỉ danh sách M3U / M3U8 mà bạn có quyền xem.", false)
             btnAdd.post { if (!isFinishing) btnAdd.focusForRemote() }
             return
         }

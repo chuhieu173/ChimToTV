@@ -138,7 +138,7 @@ public sealed class TvPage : Page
         UpdateInfo(st);
         if (list == null)
         {
-            Body.Children.Add(Ui.Dim("Chưa có danh sách kênh. App không kèm sẵn kênh: thêm địa chỉ danh sách M3U / M3U8 (hoặc tệp .m3u) mà anh có quyền xem.",
+            Body.Children.Add(Ui.Dim("Chưa có danh sách kênh. App không kèm sẵn kênh: thêm địa chỉ danh sách M3U / M3U8 (hoặc tệp .m3u) mà bạn có quyền xem.",
                 16, new Thickness(0, 30, 0, 16)));
             Body.Children.Add(Ui.Row(Ui.Pill("+  Thêm danh sách kênh", () => _ = TvLists.AskAdd(() => _ = Rebuild()))));
             _ = Dispatcher.BeginInvoke(() => FocusFirst(), DispatcherPriority.Loaded);
@@ -417,7 +417,7 @@ public static class TvLists
             Main.CloseDialog(0);
         };
         _ = Main.Dispatcher.BeginInvoke(DispatcherPriority.Input, () => url.Focus());
-        var r = await Main.Ask("Thêm danh sách kênh", "App không kèm sẵn kênh — chỉ thêm danh sách anh có quyền xem.",
+        var r = await Main.Ask("Thêm danh sách kênh", "App không kèm sẵn kênh — chỉ thêm danh sách bạn có quyền xem.",
             new[] { "Thêm", "Chọn tệp .m3u…", "Huỷ" }, box);
         JsonObject? l = null;
         if (r == 0)
@@ -612,7 +612,7 @@ public sealed class TvSettingsPage : Page
             Body.Children.Add(row);
         }
         Body.Children.Add(Ui.Row(Ui.Pill("+  Thêm danh sách (địa chỉ / tệp M3U)", () => _ = TvLists.AskAdd(Build))));
-        Body.Children.Add(Ui.Dim("App không kèm sẵn kênh. Thêm danh sách M3U / M3U8 mà anh có quyền xem; app đọc nhóm, logo, đài radio và địa chỉ lịch phát sóng ghi " +
+        Body.Children.Add(Ui.Dim("App không kèm sẵn kênh. Thêm danh sách M3U / M3U8 mà bạn có quyền xem; app đọc nhóm, logo, đài radio và địa chỉ lịch phát sóng ghi " +
             "trong danh sách. Danh sách theo địa chỉ tự tải lại khi cũ; danh sách từ tệp thì thêm lại khi có tệp mới.", 13.5, new Thickness(0, 4, 0, 0)));
 
         Body.Children.Add(Ui.Text("Lịch phát sóng", 16, weight: FontWeights.SemiBold, margin: new Thickness(0, 18, 0, 8)));

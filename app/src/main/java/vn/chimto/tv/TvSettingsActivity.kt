@@ -65,7 +65,7 @@ class TvSettingsActivity : BaseActivity() {
         }
         row("+ Thêm danh sách (địa chỉ / tệp M3U)", null, "add") { IptvImport.ask(this) { build() } }
         note(
-            "App không kèm sẵn kênh. Thêm danh sách M3U / M3U8 mà anh có quyền xem: dán địa chỉ, gửi từ điện thoại / máy tính " +
+            "App không kèm sẵn kênh. Thêm danh sách M3U / M3U8 mà bạn có quyền xem: dán địa chỉ, gửi từ điện thoại / máy tính " +
                 "qua Wi-Fi, hoặc chọn tệp .m3u; app đọc nhóm, logo, đài radio và địa chỉ lịch phát sóng ghi trong danh sách. " +
                 "Danh sách theo địa chỉ tự tải lại khi cũ; danh sách từ tệp thì thêm lại khi có tệp mới.",
         )

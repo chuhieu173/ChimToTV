@@ -721,7 +721,7 @@ struct TvContent: View {
                 .appFont(64, .light)
                 .foregroundColor(Theme.brand)
             Text("Chưa có danh sách kênh").appFont(24, .bold).foregroundColor(Theme.text)
-            Text("App không kèm sẵn kênh. Thêm địa chỉ danh sách M3U / M3U8 (hoặc tệp .m3u trên máy) mà anh có quyền xem — app đọc nhóm kênh, logo, đài radio và lịch phát sóng ghi trong danh sách.")
+            Text("App không kèm sẵn kênh. Thêm địa chỉ danh sách M3U / M3U8 (hoặc tệp .m3u trên máy) mà bạn có quyền xem — app đọc nhóm kênh, logo, đài radio và lịch phát sóng ghi trong danh sách.")
                 .appFont(16)
                 .foregroundColor(Theme.dim)
                 .multilineTextAlignment(.center)
@@ -935,7 +935,7 @@ struct TvAddView: View {
                 } header: {
                     Text("Địa chỉ danh sách M3U / M3U8")
                 } footer: {
-                    Text("App không kèm sẵn kênh, chỉ thêm danh sách anh có quyền xem. Danh sách theo địa chỉ tự tải lại khi cũ (danh sách thể thao: mỗi 30 phút).")
+                    Text("App không kèm sẵn kênh, chỉ thêm danh sách bạn có quyền xem. Danh sách theo địa chỉ tự tải lại khi cũ (danh sách thể thao: mỗi 30 phút).")
                 }
                 Section {
                     Button { picking = true } label: { Label("Chọn tệp .m3u trên máy…", systemImage: "doc.badge.plus") }
@@ -1171,7 +1171,7 @@ struct TvSettingsView: View {
             } header: {
                 Text("Danh sách kênh")
             } footer: {
-                Text("App không kèm sẵn kênh. Thêm danh sách M3U / M3U8 mà anh có quyền xem; app đọc nhóm, logo, đài radio và địa chỉ lịch phát sóng ghi trong danh sách. Danh sách theo địa chỉ tự tải lại khi cũ; danh sách từ tệp thì thêm lại khi có tệp mới.")
+                Text("App không kèm sẵn kênh. Thêm danh sách M3U / M3U8 mà bạn có quyền xem; app đọc nhóm, logo, đài radio và địa chỉ lịch phát sóng ghi trong danh sách. Danh sách theo địa chỉ tự tải lại khi cũ; danh sách từ tệp thì thêm lại khi có tệp mới.")
             }
             Section {
                 TextField("http://…/epg.xml.gz", text: $epg)

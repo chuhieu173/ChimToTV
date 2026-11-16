@@ -137,7 +137,7 @@ impl TvPage {
         b.add(&head);
         self.update_info(&st);
         if st.get("active").map(|x| x.is_null()).unwrap_or(true) {
-            b.add(&ui::dim("Chưa có danh sách kênh. App không kèm sẵn kênh: thêm địa chỉ danh sách M3U / M3U8 (hoặc tệp .m3u) mà anh có quyền xem."));
+            b.add(&ui::dim("Chưa có danh sách kênh. App không kèm sẵn kênh: thêm địa chỉ danh sách M3U / M3U8 (hoặc tệp .m3u) mà bạn có quyền xem."));
             let me = self.clone();
             b.add(&ui::row(&[ui::pill("+  Thêm danh sách kênh", move || ask_add(Rc::new({
                 let me = me.clone();
@@ -532,7 +532,7 @@ pub fn ask_add(done: Rc<dyn Fn()>) {
         let u2 = url.clone();
         ui::after(30, move || u2.grab_focus());
         let r = a
-            .ask_async("Thêm danh sách kênh", "Địa chỉ danh sách M3U / M3U8 — app không kèm sẵn kênh, chỉ thêm danh sách anh có quyền xem.",
+            .ask_async("Thêm danh sách kênh", "Địa chỉ danh sách M3U / M3U8 — app không kèm sẵn kênh, chỉ thêm danh sách bạn có quyền xem.",
                 &["Thêm", "Chọn tệp .m3u…", "Huỷ"], Some(bx.upcast()), 0)
             .await;
         let nm = name.text().trim().to_string();
@@ -783,7 +783,7 @@ impl TvSettingsPage {
             ask_add(Rc::new(move || m.build()))
         })
         .upcast()]));
-        b.add(&ui::dim("App không kèm sẵn kênh. Thêm danh sách M3U / M3U8 mà anh có quyền xem; app đọc nhóm, logo, đài radio và địa chỉ lịch phát sóng ghi trong danh sách. Danh sách theo địa chỉ tự tải lại khi cũ; danh sách từ tệp thì thêm lại khi có tệp mới."));
+        b.add(&ui::dim("App không kèm sẵn kênh. Thêm danh sách M3U / M3U8 mà bạn có quyền xem; app đọc nhóm, logo, đài radio và địa chỉ lịch phát sóng ghi trong danh sách. Danh sách theo địa chỉ tự tải lại khi cũ; danh sách từ tệp thì thêm lại khi có tệp mới."));
 
         b.add(&ui::label("Lịch phát sóng", &["h2"], false));
         self.epg.set_text(&iptv::epg_override().unwrap_or_default());
