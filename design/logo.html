@@ -318,10 +318,14 @@ function adaptiveSvg(c, px, layer) {
   return `<svg width="${px}" height="${px}" viewBox="0 0 512 512">${defs(c)}${body}</svg>`;
 }
 
-// Icon iOS: vuông đầy, không bo góc (iOS tự bo), không trong suốt. Phương án tròn: đĩa trên nền trong suốt — iOS tô
-// phần trong suốt thành đen (đúng như Legacy trên iOS 6)
+// Icon iOS: vuông đầy, không bo góc (iOS tự bo), không trong suốt. Phương án tròn: iPadOS / iOS tô đen mọi phần trong
+// suốt của icon (ảnh trong gói vẫn có kênh alpha — đã thử 17/11/2026) → đĩa kính đặt trên nền nâu tối của banner tivi
 function iosIconSvg(c, px) {
-  if (c.round) return iconSvg(c, px);
+  if (c.round) {
+    const k = .92, off = (512 - 512 * k) / 2;
+    return `<svg width="${px}" height="${px}" viewBox="0 0 512 512">${defs(c)}${c.bg(512, 512)}
+      <g transform="translate(${off} ${off}) scale(${k})">${c.mark()}</g></svg>`;
+  }
   return `<svg width="${px}" height="${px}" viewBox="0 0 512 512">${defs(c)}${c.bg(512, 512)}${c.icon()}${c.mark()}</svg>`;
 }
 
