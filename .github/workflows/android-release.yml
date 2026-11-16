@@ -67,10 +67,10 @@ jobs:
           EOF
 
       - name: Run Unit Tests
-        run: ./gradlew --no-daemon :app:testDebugUnitTest
+        run: ./gradlew --no-daemon :app:testFullDebugUnitTest :app:testLiteDebugUnitTest
 
       - name: Build Release APKs
-        run: ./gradlew --no-daemon :app:assembleRelease
+        run: ./gradlew --no-daemon :app:assembleFullRelease :app:assembleLiteRelease
 
       - name: Prepare Release Assets & Notes
         id: prep
@@ -89,9 +89,10 @@ jobs:
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
 
           mkdir -p dist
-          cp app/build/outputs/apk/release/app-universal-release.apk "dist/ConBangTV-${VERSION}.apk"
-          cp app/build/outputs/apk/release/app-armeabi-v7a-release.apk "dist/ConBangTV-${VERSION}-armeabi-v7a.apk"
-          cp app/build/outputs/apk/release/app-arm64-v8a-release.apk "dist/ConBangTV-${VERSION}-arm64-v8a.apk"
+          cp app/build/outputs/apk/full/release/app-full-universal-release.apk "dist/ConBangTV-${VERSION}.apk"
+          cp app/build/outputs/apk/full/release/app-full-armeabi-v7a-release.apk "dist/ConBangTV-${VERSION}-armeabi-v7a.apk"
+          cp app/build/outputs/apk/full/release/app-full-arm64-v8a-release.apk "dist/ConBangTV-${VERSION}-arm64-v8a.apk"
+          cp app/build/outputs/apk/lite/release/app-lite-universal-release.apk "dist/ConBangTV-${VERSION}-lite.apk"
           cp "dist/ConBangTV-${VERSION}.apk" "dist/ConBangTV.apk"
 
           UPSTREAM_NOTES=$(curl -fsSL "https://api.github.com/repos/conbangtv/ChimToTV/releases/tags/${TAG}" \
@@ -115,6 +116,7 @@ jobs:
             "dist/ConBangTV-${VERSION}.apk"
             "dist/ConBangTV-${VERSION}-armeabi-v7a.apk"
             "dist/ConBangTV-${VERSION}-arm64-v8a.apk"
+            "dist/ConBangTV-${VERSION}-lite.apk"
             "dist/ConBangTV.apk"
           )
           if gh release view "$TAG" >/dev/null 2>&1; then

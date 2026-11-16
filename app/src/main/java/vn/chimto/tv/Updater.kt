@@ -57,17 +57,27 @@ object Updater {
         return Release(version, apk.getString("browser_download_url"), o.optString("body"), api)
     }
 
-    /** Chọn APK khớp ABI ưu tiên nhất của máy; không có bản tách ABI thì lấy bản chung / tệp .apk đầu tiên. */
-    internal fun pickApk(names: List<String>, supportedAbis: Array<String>): Int? {
+    /** Chọn APK khớp biến thể (lite / full) và ABI ưu tiên nhất của máy; không có thì lấy bản chung / tệp .apk đầu tiên. */
+    internal fun pickApk(
+        names: List<String>,
+        supportedAbis: Array<String>,
+        hasGecko: Boolean = BuildConfig.HAS_GECKO,
+    ): Int? {
         if (names.isEmpty()) return null
+        if (!hasGecko) {
+            val lite = names.indexOfFirst { it.lowercase().contains("-lite.") }
+            if (lite >= 0) return lite
+        }
+        val pool = if (hasGecko) names.indices.filter { !names[it].lowercase().contains("-lite.") } else names.indices.toList()
+        val candidates = pool.ifEmpty { names.indices.toList() }
         for (abi in supportedAbis) {
             val tag = "-${abi.lowercase()}."
-            val idx = names.indexOfFirst { it.lowercase().contains(tag) }
-            if (idx >= 0) return idx
+            val idx = candidates.firstOrNull { names[it].lowercase().contains(tag) }
+            if (idx != null) return idx
         }
         val knownAbis = listOf("-arm64-v8a.", "-armeabi-v7a.", "-x86_64.", "-x86.")
-        val fallback = names.indexOfFirst { name -> knownAbis.none { name.lowercase().contains(it) } }
-        return if (fallback >= 0) fallback else 0
+        val fallback = candidates.firstOrNull { i -> knownAbis.none { names[i].lowercase().contains(it) } }
+        return fallback ?: candidates.first()
     }
 
     /** So số hiệu dạng 1.2.3 (bỏ hậu tố như "-debug"). */

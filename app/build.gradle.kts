@@ -37,6 +37,17 @@ android {
         buildConfigField("String", "NEXTDNS_ID", "\"$nextDnsId\"")
 
     }
+    flavorDimensions += "engine"
+    productFlavors {
+        create("full") {
+            dimension = "engine"
+            buildConfigField("boolean", "HAS_GECKO", "true")
+        }
+        create("lite") {
+            dimension = "engine"
+            buildConfigField("boolean", "HAS_GECKO", "false")
+        }
+    }
     splits {
         abi {
             isEnable = true
@@ -95,8 +106,8 @@ dependencies {
     implementation("org.jsoup:jsoup:1.18.1")
     // ProxyController: cho WebView đi qua proxy SOCKS5 (1.14 là bản cuối còn chạy Android 5; 1.15+ cần Android 6+)
     implementation("androidx.webkit:webkit:1.14.0")
-    // Engine Gecko (Firefox) cho trang bật lớp chống bot của Cloudflare chặn WebView (WebFetch.kt) — chỉ chạy khi gặp trang đó
-    implementation("org.mozilla.geckoview:geckoview:141.0.20250806102122")
+    // Engine Gecko (Firefox) cho trang bật lớp chống bot của Cloudflare chặn WebView (WebFetch.kt) — chỉ đóng gói ở bản full
+    "fullImplementation"("org.mozilla.geckoview:geckoview:141.0.20250806102122")
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.2")
     testImplementation("junit:junit:4.13.2")
     // org.json của Android trong test JVM chỉ là vỏ rỗng — NextSite đọc JSON nên test cần bản thật

@@ -22,7 +22,7 @@ if (-not (Test-Path keys\ky.properties)) {
     Write-Host "Đã tạo khoá ký keys\chimto.jks (giữ lại thư mục keys!)" -ForegroundColor Yellow
 }
 
-.\gradlew.bat --console=plain :app:assembleRelease
+.\gradlew.bat --console=plain :app:assembleFullRelease :app:assembleLiteRelease
 if ($LASTEXITCODE) { throw "Dựng APK thất bại" }
 
 $ver = (Select-String -Path app\build.gradle.kts -Pattern 'versionName = "(.+)"').Matches[0].Groups[1].Value
@@ -30,10 +30,12 @@ New-Item -ItemType Directory -Force dist | Out-Null
 $apk = "dist\ConBangTV-$ver.apk"
 $apkV7 = "dist\ConBangTV-$ver-armeabi-v7a.apk"
 $apk64 = "dist\ConBangTV-$ver-arm64-v8a.apk"
-Copy-Item app\build\outputs\apk\release\app-universal-release.apk $apk -Force
-Copy-Item app\build\outputs\apk\release\app-armeabi-v7a-release.apk $apkV7 -Force
-Copy-Item app\build\outputs\apk\release\app-arm64-v8a-release.apk $apk64 -Force
-Write-Host "OK -> $apk, $apkV7, $apk64" -ForegroundColor Green
+$apkLite = "dist\ConBangTV-$ver-lite.apk"
+Copy-Item app\build\outputs\apk\full\release\app-full-universal-release.apk $apk -Force
+Copy-Item app\build\outputs\apk\full\release\app-full-armeabi-v7a-release.apk $apkV7 -Force
+Copy-Item app\build\outputs\apk\full\release\app-full-arm64-v8a-release.apk $apk64 -Force
+Copy-Item app\build\outputs\apk\lite\release\app-lite-universal-release.apk $apkLite -Force
+Write-Host "OK -> $apk, $apkV7, $apk64, $apkLite" -ForegroundColor Green
 
 if ($Install) {
     $dev = if ($Install -match ":") { $Install } else { "${Install}:5555" }
