@@ -248,8 +248,8 @@ class IptvStore(val file: File) {
     fun hasKey(k: String) = db.rawQuery("SELECT 1 FROM ch WHERE kh = ${strHash(k)} AND k = ? LIMIT 1", arrayOf(k)).use { it.moveToFirst() }
 
     companion object {
-        /** Đổi cách đọc M3U / lược đồ → đệm cũ đọc lại (2: cột băm kh / th thay chỉ mục chữ). */
-        const val VERSION = 2
+        /** Đổi cách đọc M3U / lược đồ → đệm cũ đọc lại (2: cột băm kh / th thay chỉ mục chữ; 3: bỏ mã nước «|UK| » đầu tên). */
+        const val VERSION = 3
 
         /** Mã băm 64 bit của chuỗi (khoá kênh, tvg-id) — cột kh / th có chỉ mục số. */
         fun strHash(s: String): Long = LongLongMap.hash(s, 0)

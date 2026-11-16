@@ -313,9 +313,17 @@ object IptvParse {
         return SPACES.replace(s, " ").trim()
     }
 
-    /** Tên hiển thị của kênh thường: bỏ phần trong ngoặc («Can Tho TV 2 (1080p) [Geo-blocked]» → «Can Tho TV 2»). */
-    fun displayName(name: String): String =
-        if ('(' !in name && '[' !in name) name.trim() else PARENS.replace(name, "").trim().ifEmpty { name }
+    private val COUNTRY_TAG = Regex("""^\|?[A-Z0-9]{2,5}\|\s*""")
+
+    /**
+     * Tên hiển thị của kênh thường: bỏ mã nước đầu tên của danh sách kiểu Xtream («|UK| SPORT 1 HD», «DE| ZDF» — tên ô kênh
+     * khỏi cụt; Legacy 0.5.5) và phần trong ngoặc («Can Tho TV 2 (1080p) [Geo-blocked]» → «Can Tho TV 2»).
+     */
+    fun displayName(name: String): String {
+        var n = name
+        if ('|' in n) n = COUNTRY_TAG.replace(n, "").ifEmpty { n }
+        return if ('(' !in n && '[' !in n) n.trim() else PARENS.replace(n, "").trim().ifEmpty { n }
+    }
 
     fun matchState(kick: Double, dur: Int, now: Double): Match = when {
         kick <= 0 -> Match.NONE

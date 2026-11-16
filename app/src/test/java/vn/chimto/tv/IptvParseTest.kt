@@ -62,6 +62,9 @@ class IptvParseTest {
         assertEquals("albsupersport1", IptvParse.norm("|ALB| SUPER SPORT 1 4K"))
         assertEquals("новоерадио", IptvParse.norm("Новое Радио"))
         assertEquals("Can Tho TV 2", IptvParse.displayName("Can Tho TV 2 (1080p) [Geo-blocked]"))
+        assertEquals("SUPER SPORT 1 HD", IptvParse.displayName("|ALB| SUPER SPORT 1 HD"))
+        assertEquals("ZDF", IptvParse.displayName("DE| ZDF"))
+        assertEquals("A|B kênh", IptvParse.displayName("A|B kênh"))
     }
 
     @Test
