@@ -19,6 +19,7 @@ pub mod profiles_page;
 pub mod proxy;
 pub mod settings;
 pub mod sites;
+pub mod tv;
 pub mod sync_page;
 
 pub struct PageBase {

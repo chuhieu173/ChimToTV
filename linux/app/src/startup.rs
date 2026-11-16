@@ -10,6 +10,8 @@ use std::cell::Cell;
 
 /// Gọi một lần sau khi cửa sổ chính hiện.
 pub fn after_show() {
+    // Truyền hình: nhắc giờ phát / bóng lăn khi app đang mở
+    crate::app::app().start_reminders();
     // Đồng bộ trong nhà: tin báo từ luồng nền → luồng giao diện
     let (tx, mut rx) = futures::channel::mpsc::unbounded::<sync_service::SyncEvent>();
     sync_service::add_listener(move |e| {

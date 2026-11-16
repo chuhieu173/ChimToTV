@@ -397,8 +397,45 @@ impl Native {
 
     // ---- Điều khiển ----
 
+    /// Truyền hình (live.rs): phát thẳng luồng của kênh (HLS, HTTP-FLV, TS liền, đài MP3 / AAC…) kèm Referer / User-Agent riêng
+    /// của nguồn (danh sách M3U ghi #EXTVLCOPT / «url|Referer=»).
+    pub fn load_live(&self, url: &str, referer: Option<&str>, ua: Option<&str>) {
+        self.mpv.set_str("user-agent", &ua.map(String::from).unwrap_or_else(cbtv::http::user_agent));
+        self.mpv.set_str("http-header-fields", &referer.map(|r| format!("Referer: {}", r.replace(',', "\\,"))).unwrap_or_default());
+        // Luồng đứt giữa chừng: ffmpeg tự nối lại trước khi báo hết
+        self.mpv.set_str("stream-lavf-o", "reconnect=1,reconnect_streamed=1,reconnect_delay_max=4");
+        *self.err.borrow_mut() = None;
+        *self.pending_sub.borrow_mut() = None;
+        self.log_lines.set(0);
+        self.restarted.set(false);
+        self.loaded.set(false);
+        self.mpv.set_str("start", "none");
+        self.mpv.set_flag("pause", false);
+        self.mpv.command(&["loadfile", url, "replace"]);
+    }
+
+    /// Thông tin luồng (Truyền hình): (có hình, tên bài ICY, mã tiếng, kbps, rộng, cao, định dạng).
+    pub fn live_info(&self) -> (bool, Option<String>, Option<String>, i64, i64, i64, Option<String>) {
+        let w = self.mpv.get_i64("width").unwrap_or(0);
+        let vc = self.mpv.get_str("video-codec").filter(|x| !x.is_empty());
+        let br = self.mpv.get_double("audio-bitrate").unwrap_or(0.0);
+        (
+            w > 0 || vc.is_some(),
+            self.mpv.get_str("metadata/by-key/icy-title").filter(|x| !x.trim().is_empty()),
+            self.mpv.get_str("audio-codec-name"),
+            (br / 1000.0) as i64,
+            w,
+            self.mpv.get_i64("height").unwrap_or(0),
+            self.mpv.get_str("file-format"),
+        )
+    }
+
     /// Phát địa chỉ (của cổng phát nội bộ) từ giây `start`, kèm phụ đề rời nếu có.
     pub fn load(&self, url: &str, start: f64, sub: Option<String>) {
+        // Trình phát truyền hình có thể đã đặt tiêu đề riêng của kênh: về mặc định
+        self.mpv.set_str("user-agent", &cbtv::http::user_agent());
+        self.mpv.set_str("http-header-fields", "");
+        self.mpv.set_str("stream-lavf-o", "");
         *self.err.borrow_mut() = None;
         *self.pending_sub.borrow_mut() = sub;
         self.log_lines.set(0);

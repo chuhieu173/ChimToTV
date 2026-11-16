@@ -32,6 +32,8 @@ pub fn entries(a: &App) -> Vec<MenuEntry> {
         Rc::new(|| app().show_root(pages::lists::follows())),
     );
     add("imdb", "⭐  Điểm IMDb cao".into(), Rc::new(|| app().show_root(crate::hooks::imdb_top_page())));
+    // Truyền hình / radio: danh sách kênh M3U người xem tự thêm (pages/tv.rs, lõi cbtv::iptv)
+    add("tv", "📺  Truyền hình · Radio".into(), Rc::new(|| app().show_root(pages::tv::new())));
     for c in a.categories.borrow().iter() {
         let (t, u) = (c.title.clone(), c.url.clone());
         let key = format!("cat:{u}");

@@ -157,6 +157,24 @@ fn handle(r: Req) {
                 None => send("trình phát chưa mở".into()),
             }
         }
+        // Truyền hình: /tv (mở màn), /tv?add=<địa chỉ>&name=… (thêm + tải), /tv?use=<số>, /tv?play=<khoá kênh>
+        "/tv" => {
+            if let Some(u) = r.q.get("add") {
+                cbtv::iptv::add_list(u, r.q.get("name").map(|s| s.as_str()));
+                crate::ui::spawn(async { cbtv::iptv::refresh(true).await }, |_| {});
+            }
+            if let Some(l) = r.q.get("use").and_then(|n| n.parse::<usize>().ok()).and_then(|n| cbtv::iptv::lists().get(n).cloned()) {
+                cbtv::iptv::set_active(Some(&l.id));
+                crate::ui::spawn(async { cbtv::iptv::refresh(false).await }, |_| {});
+            }
+            if let Some(k) = r.q.get("play") {
+                app().play_live_key(k.clone());
+            } else if crate::live::current().is_none() {
+                app().show_root(crate::pages::tv::new());
+            }
+            send("ok".into());
+        }
+        "/tvstatus" => send(crate::live::current().map(|l| l.debug_status()).unwrap_or_else(|| cbtv::iptv::status().to_string())),
         "/play" => {
             app().play(r.q.get("film").map(|s| s.as_str()).unwrap_or(""), r.q.get("ep").map(|s| s.as_str()).unwrap_or(""), r.q.contains_key("resume"));
             send("ok".into());

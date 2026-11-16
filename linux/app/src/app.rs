@@ -531,6 +531,67 @@ impl App {
         self.rebuild_menu();
     }
 
+    /// Truyền hình: mở kênh ở vị trí `index` của bộ lọc (lưới / lịch). Phim đang phát (kể cả cửa sổ nhỏ) thì tắt.
+    pub fn play_live(&self, filter: cbtv::iptv::Filter, index: usize) {
+        if let Some(cur) = self.current() {
+            *cur.base().last_focus.borrow_mut() = self.window.focused_widget();
+        }
+        let film = self.player.borrow().clone();
+        if let Some(p) = film.filter(|p| p.is_open()) {
+            p.close(false);
+        }
+        let l = crate::live::get();
+        if self.stack.child_by_name("live").is_none() {
+            self.stack.add_named(&l.widget(), "live");
+        }
+        l.widget().show_all();
+        self.stack.set_visible_child_name("live");
+        self.window.present();
+        l.open(filter, index);
+    }
+
+    /// Mở kênh theo khoá (nhắc giờ phát) trong cả danh sách đang chọn.
+    pub fn play_live_key(&self, key: String) {
+        ui::spawn(async move { cbtv::iptv::index_of(&cbtv::iptv::Filter::default(), Some(&key), None).await }, |i| {
+            if i < 0 {
+                app().toast("Danh sách kênh đang chọn không có kênh này.");
+            } else {
+                app().play_live(cbtv::iptv::Filter::default(), i as usize);
+            }
+        });
+    }
+
+    /// Trình phát truyền hình đã đóng: về trang trước.
+    pub fn live_closed(&self) {
+        self.stack.set_visible_child_name("shell");
+        self.window.set_title("Côn Bằng TV");
+        if let Some(p) = self.current() {
+            p.clone().returned();
+            restore_focus(p);
+        }
+    }
+
+    /// Nhắc giờ phát / bóng lăn (Truyền hình): mỗi 15 giây khi app đang mở.
+    pub fn start_reminders(&self) {
+        glib::timeout_add_local(std::time::Duration::from_secs(15), || {
+            let Some(r) = cbtv::iptv::due_reminder() else { return glib::ControlFlow::Continue };
+            let text = r["text"].as_str().unwrap_or("").to_string();
+            let key = r["k"].as_str().unwrap_or("").to_string();
+            let kick = r["kick"].as_bool().unwrap_or(false);
+            if let Some(l) = crate::live::current() {
+                l.notice(&format!("🔔 {text}"), 12_000);
+                return glib::ControlFlow::Continue;
+            }
+            ui::local(async move {
+                let a = app();
+                if a.ask_async(if kick { "Bóng lăn" } else { "Sắp phát" }, &text, &["Xem ngay", "Đóng"], None, 0).await == 0 {
+                    a.play_live_key(key);
+                }
+            });
+            glib::ControlFlow::Continue
+        });
+    }
+
     /// Trình phát đã đóng: về trang trước, cập nhật tập đã xem / xem tiếp.
     pub fn player_closed(&self) {
         crate::startup::sync_soon(1);
@@ -579,6 +640,10 @@ impl App {
                 return glib::Propagation::Stop;
             }
             return glib::Propagation::Proceed;
+        }
+        // Trình phát truyền hình đang mở
+        if let Some(l) = crate::live::current() {
+            return if l.handle_key(ev) { glib::Propagation::Stop } else { glib::Propagation::Proceed };
         }
         if let Some(p) = self.playing() {
             if p.handle_key(ev) {
@@ -658,6 +723,9 @@ impl App {
         *self.toast_timer.borrow_mut() = Some(id);
         if let Some(p) = self.playing() {
             p.notice(text, ms);
+        }
+        if let Some(l) = crate::live::current() {
+            l.notice(text, ms);
         }
     }
 

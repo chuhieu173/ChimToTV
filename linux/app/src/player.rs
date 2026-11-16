@@ -2720,7 +2720,7 @@ fn rate_text(r: f64) -> String {
 /// User-Agent của trình phát: WebKitGTK mặc định ghi «Version/60.5 Safari» lạ — đặt như Safari trên Mac (cùng nhân WebKit),
 /// trang phát chọn đường MSE / hls.js như trên trình duyệt thường.
 /// Có GPU vẽ được không: có nút render DRM (/dev/dri/renderD*) và không bị ép vẽ bằng phần mềm (LIBGL_ALWAYS_SOFTWARE).
-fn has_gpu() -> bool {
+pub(crate) fn has_gpu() -> bool {
     if std::env::var("LIBGL_ALWAYS_SOFTWARE").map(|v| v == "1" || v == "true").unwrap_or(false) {
         return false;
     }
