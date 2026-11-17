@@ -148,6 +148,7 @@ struct SettingsView: View {
 
     var body: some View {
         NavigationView {
+            ScrollViewReader { proxy in
             Form {
                 profileSection
                 homeSection
@@ -161,7 +162,7 @@ struct SettingsView: View {
                     Text("Xem dở trên TV thì mở iPad xem tiếp đúng chỗ, và ngược lại — ghép máy bằng mã 4 số.")
                 }
                 displaySection
-                siteSection
+                siteSection(proxy)
                 Section {
                     ForEach(sites, id: \.self) { s in
                         Button {
@@ -309,6 +310,7 @@ struct SettingsView: View {
                 .environmentObject(app)
                 .preferredColorScheme(.dark)
             }
+            }
         }
         .navigationViewStyle(.stack)
         .overlay {
@@ -367,10 +369,11 @@ struct SettingsView: View {
         }
     }
 
-    private var siteSection: some View {
+    private func siteSection(_ proxy: ScrollViewProxy) -> some View {
         Section {
-            // Nhiều dòng: dán được nhiều trang, mỗi dòng một trang (Lưu = thêm cả loạt vào danh sách)
-            SitePasteEditor(text: $url)
+            // Nhiều dòng: dán được nhiều trang, mỗi dòng một trang (Lưu = thêm cả loạt vào danh sách). Chọn ô → cuộn ô + hàng nút
+            // lên trên bàn phím (TextEditor trong Form không tự cuộn)
+            SitePasteEditor(text: $url) { revealSitePaste(proxy, afterKeyboard: $0) }
             // Màn hẹp (iPhone): cuộn ngang thay vì gãy chữ trong nút
             ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 12) {

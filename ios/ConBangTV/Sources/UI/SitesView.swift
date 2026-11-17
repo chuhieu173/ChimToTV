@@ -20,6 +20,7 @@ struct SitesView: View {
 
     var body: some View {
         NavigationView {
+            ScrollViewReader { proxy in
             List {
                 Section {
                     ForEach(sites, id: \.self) { s in
@@ -54,7 +55,7 @@ struct SitesView: View {
                         }
                     }
                     // Nhiều dòng: dán một lần nhiều trang, mỗi dòng một trang
-                    SitePasteEditor(text: $newSite)
+                    SitePasteEditor(text: $newSite) { revealSitePaste(proxy, afterKeyboard: $0) }
                     Button("Thêm") { addTyped() }.disabled(newSite.trimmed.isEmpty)
                     if !addError.isEmpty { Text(addError).foregroundColor(.red) }
                 } header: { Text("Thêm trang") } footer: {
@@ -74,6 +75,7 @@ struct SitesView: View {
                         }
                     }
                 }
+            }
             }
         }
         .navigationViewStyle(.stack)
@@ -147,9 +149,20 @@ struct SitesView: View {
 }
 
 /// Ô nhập trang phim nhiều dòng (dán được nhiều trang, mỗi dòng một trang) — dùng ở «Chọn trang phim» và Cài đặt.
+/// TextEditor trong List / Form không tự cuộn lên trên bàn phím như TextField (iPhone dọc: ô ở cuối danh sách bị bàn phím che,
+/// gõ không thấy chữ) → `reveal` gọi khi ô được chọn và khi ô thêm / bớt dòng, để màn chứa cuộn ô lên (ScrollViewReader).
 struct SitePasteEditor: View {
     @Binding var text: String
-    var placeholder = "Tên miền, vd ten-trang.example — dán được nhiều trang, mỗi dòng một trang"
+    var placeholder: String
+    var reveal: ((_ afterKeyboard: Bool) -> Void)?
+    @FocusState private var focused: Bool
+
+    init(text: Binding<String>, placeholder: String = "Tên miền, vd ten-trang.example — dán được nhiều trang, mỗi dòng một trang",
+         reveal: ((_ afterKeyboard: Bool) -> Void)? = nil) {
+        _text = text
+        self.placeholder = placeholder
+        self.reveal = reveal
+    }
 
     var body: some View {
         ZStack(alignment: .topLeading) {
@@ -165,8 +178,30 @@ struct SitePasteEditor: View {
                 .textInputAutocapitalization(.never)
                 .disableAutocorrection(true)
                 .frame(minHeight: 64, maxHeight: 160)
+                .focused($focused)
         }
+        .id(Self.scrollId)
+        // Chọn ô: chờ bàn phím hiện xong (List mới có lề dưới bằng bàn phím) rồi cuộn; thêm / bớt dòng: cuộn ngay
+        .onChange(of: focused) { f in if f { reveal?(true) } }
+        .onChange(of: lineCount) { _ in if focused { reveal?(false) } }
     }
+
+    /// Mã dòng của ô (ScrollViewReader cuộn tới) — mỗi màn chỉ có một ô này.
+    static let scrollId = "site-paste-editor"
+
+    private var lineCount: Int { text.reduce(1) { $1 == "\n" ? $0 + 1 : $0 } }
+}
+
+/// Cuộn khung chứa ô nhập nhiều dòng để ô nằm sát dưới thanh tiêu đề — nút Thêm / Lưu ngay dưới ô, cả hai trên bàn phím.
+/// Neo mép trên chứ không neo nút vào mép bàn phím: Form của Cài đặt (có thanh tiêu đề tự vẽ) tính sai vùng nhìn thấy khi
+/// neo .bottom (iPhone 6s Plus iOS 15: nút dừng cao hơn mép bàn phím ~200 pt, dòng đầu của ô chui dưới thanh tiêu đề).
+func revealSitePaste(_ proxy: ScrollViewProxy, afterKeyboard: Bool) {
+    // Mac: bàn phím thật, không có bàn phím trên màn hình che ô → không cuộn (bấm vào ô thì danh sách đứng yên như trước)
+    #if !targetEnvironment(macCatalyst)
+    DispatchQueue.main.asyncAfter(deadline: .now() + (afterKeyboard ? 0.4 : 0.05)) {
+        withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo(SitePasteEditor.scrollId, anchor: .top) }
+    }
+    #endif
 }
 
 /// Câu báo khi dán nhiều trang phim một lần.
