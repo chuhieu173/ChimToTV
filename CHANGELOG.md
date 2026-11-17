@@ -9,6 +9,113 @@ Bản Windows (Windows 10 / 11, một tệp `.exe`) ghi riêng với tiêu đề
 Bản Mac (macOS 12+, từ 13/11/2026, cùng mã nguồn và số bản với bản iPad) ghi riêng với tiêu đề "Mac …", tag `mac-v…`.
 Bản Linux (Ubuntu 22.04+ / Linux Mint 21+ / Debian 12+, từ 13/11/2026, tệp `.deb`) ghi riêng với tiêu đề "Linux …", tag `linux-v…`.
 
+## iPad / iPhone 1.20 và Mac 1.20 — 17/11/2026 (Truyền hình · Radio, logo mới)
+
+- **Mục mới «Truyền hình · Radio»** (port từ bản Legacy, giao diện theo kiểu app hiện đại — anh dặn không theo kiểu iOS 6): một mục
+  trong menu, vẽ ngay trong khung chính. Đầu trang có ô tìm (tên / số kênh), hàng «Kênh vừa xem» vuốt ngang, dải chip nhóm kênh;
+  thẻ kênh có logo, số kênh, nhãn ĐANG ĐÁ / SẮP ĐÁ / RADIO / PHIM, chương trình đang phát + tiến độ + chương trình kế; giữ tay /
+  chuột phải mở menu nhanh (yêu thích, lịch, nhắc bóng lăn). Lõi Swift `Core/IptvParse.swift` + `Core/Iptv.swift` (bản Swift của
+  `linux/core/src/iptv.rs`: M3U, XMLTV cả `.gz`, giờ trận, gộp nguồn, kênh lỗi, yêu thích / vừa xem theo người xem, nhắc giờ).
+- **Trình phát truyền hình** (`Player/LivePlayer.swift`, AVPlayer) cùng kiểu trình phát phim: nút tròn, nhãn TRỰC TIẾP, bảng kênh trượt
+  từ phải, vuốt dọc đổi kênh; nguồn lỗi tự sang nguồn sau, luồng FLV (AVPlayer không phát được) đánh dấu lỗi và chuyển nguồn; tạm
+  dừng → CHẬM, «Về trực tiếp»; radio hiện thẻ đài trên nền logo làm mờ, tên bài (ICY), «MP3 · 56 kbps».
+  Bàn phím (iPad / Mac): ↑ ↓ / PgUp PgDn đổi kênh, số, Space, G lịch, F yêu thích, Esc.
+- Lịch phát sóng dạng dòng thời gian (hôm qua / hôm nay / ngày mai), chạm chương trình sắp tới để được nhắc; nhắc giờ phát / bóng lăn
+  hiện hộp «Xem ngay».
+- Sửa sau khi thử trên iPhone 6s Plus / iPad thật: tiêu đề bị cắt trên iPhone dọc (màn hẹp chỉ còn 2 nút tròn, «Tải lại» vào menu
+  danh sách); thẻ radio trên iPhone ngang chạm thanh nút; **lối tắt truyền hình đóng được màn miễn trừ / «Ai đang xem?» và «Xem ngay»
+  mở kênh đè lên màn chọn người xem (qua mặt mã PIN)** — nay chờ qua màn chặn; quay lại app sau ≥ 30 phút lúc đang nghe radio không
+  hỏi lại người xem.
+- **Sửa lỗi anh báo: thoát trình phát ra lưới kênh thì không vuốt về được đầu danh sách** (iPad + iPhone). Đo bằng cổng gỡ lỗi
+  `/scrollinfo`: sau mỗi lần thoát, chiều cao nội dung phình (25 921 → 48 370 điểm), cuộn về đầu dừng ở 16 155. Hai nguyên nhân: ô
+  kênh định danh bằng khoá kênh mà một kênh có thể nằm ở nhiều nhóm (trùng mã trong «Tất cả»), và lưới kênh là một phần tử con của
+  LazyVStack (dựng lại thì SwiftUI ước sai cỡ các phần phía trên). Nay cả trang là một LazyVGrid (đầu trang = tiêu đề mục, nút trang
+  = chân mục), ô định danh bằng số thứ tự. Thử đổi sang VStack thường thì iOS 15 sập (IDViewList) — đã bỏ.
+- **Logo / icon mới** (đĩa kính tròn, vòng vàng, ấn 鵬 nổi khối — như icon bản Legacy): iPadOS tô đen phần trong suốt của icon trên
+  màn hình chính (ảnh trong gói vẫn có kênh trong suốt — đã kiểm), nên icon iPad / iPhone đặt đĩa kính trên nền nâu tối (anh chọn);
+  Mac giữ dáng tròn trong suốt; logo thanh bên trong suốt.
+- iPad / iPhone: bản 1.20 (build 26) · tag `ios-v1.20` · `ConBangTV-iPad-1.20.ipa` 6 630 021 byte · SHA-256
+  `99727e1af65b6806639185757c433ec299258e612fe998fface39df262b80cc1`
+- Mac: bản 1.20 (build 26) · tag `mac-v1.20` · `ConBangTV-Mac-1.20.zip` 10 523 201 byte (Intel + Apple Silicon, ký ad-hoc) · SHA-256
+  `2e37acf927b99008161c710a830dbb08d67688085c33a148e6b60916e7dc2207`
+- commit `ab171e7` (tính năng: `661d2b2`, `26a41da`, `ab171e7`; logo `ccfa577`, `2b0bb00`; chữ `f0e16fd`; số bản `94b14e2`; không bản
+  nào là "latest" — Latest là `v2.20`).
+- Thử:
+  - Bản thử trên iPhone 6s Plus (iOS 15.8.3) và iPad Pro 11″ M1 (iPadOS 15.4.1): danh sách 467 kênh + lịch 144 kênh nạp ~2 s; VTV1 /
+    VTV2 720p, VTV3 1080p; radio BBC (MP3 · 56 kbps) và VOV1 (AAC · 256 kbps, tên chương trình); bảng kênh, lịch dọc / ngang, danh
+    sách thể thao (nhãn ĐANG ĐÁ; luồng trận lúc đó bị máy chủ trả 403 — app báo «Trận đang đá nhưng kênh chưa phát hình», tự thử
+    lại); danh sách Xtream 59 834 kênh trên iPhone ~12 s, app ~120 MB. Màn miễn trừ / «Ai đang xem?» chặn được lối tắt truyền hình.
+  - Lỗi cuộn: bản sửa trên iPhone — xem rồi thoát 3 lần, chiều cao giữ ~19 300–20 600 điểm, cuộn xuống cuối / về đầu nhiều lần đều
+    tới đúng; bản Mac thử cũng vậy (danh sách Xtream).
+  - CI `ios.yml` (release=true, run 43983144202): test lõi, IPA, bản Mac đạt. Info.plist đúng (`vn.chimto.tv`, 1.20, build 26),
+    không có cổng gỡ lỗi; bản Mac hai kiến trúc. IPA chính cài lên iPhone (`vn.chimto.tv` 1.19 → 1.20), app mở, không có báo cáo sập.
+- Đăng lúc 07:07:53 (iPad) và 07:08:30 (Mac) bằng `release.ps1 ipad` / `release.ps1 mac`; link cố định `conbangtv_ios` /
+  `conbangtv_macos` chép đè sang 1.20, khớp SHA-256.
+  - **Tự cập nhật thật Mac 1.19 → 1.20** (bản trong `/Applications` của Mac mini): xoá mốc kiểm cập nhật, mở app → «Có bản mới 1.20 —
+    Đang dùng 1.19» kèm «Có gì mới» → «Cài đặt ngay» 07:09:37 → mở lại ở 1.20 lúc 07:09:42.
+
+## Windows 1.18 — 17/11/2026 (Truyền hình · Radio, logo mới)
+
+- **Mục mới «Truyền hình · Radio»** như bản tivi: lõi Rust chung `linux/core/src/iptv.rs` (đọc M3U trong bộ nhớ, 353 nghìn kênh
+  ~1,6 s; XMLTV; giờ trận; kênh lỗi; mạng của app lỗi mà không bật proxy thì thử mạng của máy) qua FFI `iptv.*`; trang
+  `UI/TvPages.cs` (lưới kênh, nhóm, tìm tên / số, yêu thích, vừa xem, lịch phát sóng, cài đặt danh sách, thêm tệp .m3u), trình phát
+  `Player/LiveView.cs` bằng mpv (Referer / User-Agent theo luồng, ICY cho radio). Phím: PgUp / PgDn đổi kênh, gõ số nhảy kênh.
+- Luồng đứt giữa chừng thì nối lại, không báo lỗi thoáng qua / nhảy nguồn nhầm (`661d2b2`).
+- Nhắc giờ phát chờ tới khi không có hộp thoại nào: hộp mới đóng hộp đang mở, trước đó nhắc giờ đóng được màn miễn trừ / «Ai đang
+  xem?» (qua mặt mã PIN). Quay lại app sau ≥ 30 phút lúc đang xem truyền hình không hỏi lại người xem. Thẻ radio bỏ dòng ♪ chỉ lặp
+  tên đài.
+- **Logo mới:** `app.ico` (9 cỡ, xuất bằng `node design/render.mjs desktop d`) và logo thanh bên — đĩa kính tròn nền trong suốt.
+- bản 1.18.0 · tag `win-v1.18` · `ConBangTV-Windows-1.18.exe` 120 332 421 byte · SHA-256
+  `7b31ad5290661faab932e947c217c71a1d3dd8e06609a140c71b074341f7fe0e` · commit `94b14e2` (tính năng: `ebb892e`, `661d2b2`, `9aa2d22`,
+  `f0e16fd`; logo `ccfa577`)
+- Thử: `windowsuild.ps1` — test lõi Rust đạt (187 ở `conbang-core`), .NET 32 đạt. Bản thử (thư mục dữ liệu riêng): thêm danh sách
+  467 kênh, VTV1 1280×720 (giải mã d3d11va, không rớt khung), radio BBC «MP3 · 56 kbps» không còn dòng lặp tên.
+- Đăng lúc 06:14:32 bằng `release.ps1 windows`; link cố định `conbangtv_windows` = 1.18. **Tự cập nhật thật 1.17 → 1.18** (bản sao chạy
+  riêng): hộp «Có bản mới» → «Cập nhật ngay» (UI Automation) 06:26:16 → cài 06:26:33 → «Mở bản 1.18 (--updated)» 06:26:35.
+
+## Linux 1.4 — 17/11/2026 (Truyền hình · Radio, logo mới)
+
+- **Mục mới «Truyền hình · Radio»** như bản Windows (lõi `cbtv::iptv`): `pages/tv.rs`, trình phát `live.rs` (mpv dưới lớp GTK
+  Overlay, ICY cho radio). Phím: PgUp / PgDn đổi kênh, gõ số nhảy kênh.
+- Luồng đứt giữa chừng thì nối lại không báo lỗi thoáng qua; nhắc giờ phát không vượt màn miễn trừ / «Ai đang xem?» (hộp mới huỷ hộp
+  đang mở — trước đó có thể coi như bấm «Thoát»); quay lại sau ≥ 30 phút lúc đang xem truyền hình không hỏi lại người xem; thẻ radio bỏ
+  dòng ♪ chỉ lặp tên đài.
+- **Logo mới:** icon gói `.deb` (`linux/packaging/icons`) và logo trong app (`design/logo-512.png`) — đĩa kính tròn nền trong suốt.
+- bản 1.4.0 · tag `linux-v1.4` · `ConBangTV-Linux-1.4.deb` 6 149 828 byte · SHA-256
+  `871796eed330deb8fa8932309e1606f2e480838271bea16071b1202cc6c6cf55` · commit `94b14e2` (tính năng: `5472dd1`, `661d2b2`, `9aa2d22`,
+  `f0e16fd`; logo `ccfa577`) · dựng trong container Ubuntu 22.04 (glibc ≤ 2.34)
+- Thử: bản thử trên máy ảo Ubuntu 26.04 — VTV1 1280×720, radio BBC MP3 56 kbps, không còn dòng lặp tên; `dpkg-deb -f` đúng gói
+  `conbangtv` 1.4.0 amd64.
+- Đăng lúc 06:15:03 bằng `release.ps1 linux`; link cố định `conbangtv_linux` = 1.4. **Tự cập nhật thật 1.3 → 1.4** trên máy ảo: hộp
+  «Có bản mới: Côn Bằng TV 1.4» → «Cập nhật ngay» → `pkexec apt-get install` → mở lại `--updated`, gói 1.4.0 lúc 06:25:31.
+
+## 2.20 — 17/11/2026 (Truyền hình · Radio, logo mới)
+
+- **Mục mới «Truyền hình · Radio»** (port từ bản Legacy — `CBIPTV.m`, `CBLivePlayerViewController.m`…): xem kênh truyền hình / nghe
+  radio từ **danh sách M3U / M3U8 người xem tự thêm** — app không kèm sẵn kênh. Thêm bằng địa chỉ, gửi tệp / dán nội dung từ điện
+  thoại / máy tính cùng Wi-Fi (trang tải lên ở cổng 8795, mã QR tự vẽ `Qr.kt`) hoặc chọn tệp .m3u. `Iptv.kt` đọc danh sách vào SQLite
+  (mỗi lần nhập một tệp, chèn theo lô; danh sách không đổi thì bỏ qua đọc lại), `IptvParse.kt` (thuần, có test JVM).
+- Đọc nhóm, logo, số kênh, `#EXTVLCOPT` Referer / User-Agent, `địa-chỉ|Referer=…`; gộp kênh trùng tên trong nhóm thành nhiều nguồn;
+  nhận đài radio, kênh thiếu nhi (hồ sơ trẻ em chỉ thấy kênh thiếu nhi), phim; bỏ mã nước đầu tên («|UK| SPORT 1» → «SPORT 1»).
+- **Lịch phát sóng (XMLTV)**, màn lịch `TvGuideActivity`, **nhắc giờ phát** (hộp trong app + thông báo) và **nhắc lúc bóng lăn** cho kênh
+  trận đấu (giờ trận đọc từ tên kênh, nhãn ĐANG ĐÁ / SẮP ĐÁ). Nhắc giờ không hiện đè lên màn «Ai đang xem?» / miễn trừ trách nhiệm.
+- Yêu thích, «Kênh vừa xem» (cả một hàng ở trang chủ — bấm là mở kênh; kênh của danh sách khác thì đổi sang danh sách đó), tìm tên /
+  số kênh.
+- **Trình phát truyền hình** (`LiveActivity`, Media3 ExoPlayer 1.5.1 — trình phát WebView chỉ phát được HLS): ▲ ▼ / CH+ CH− đổi kênh,
+  phím số nhảy kênh, bảng kênh; nguồn lỗi tự chuyển nguồn sau, cả kênh lỗi thì tải lại danh sách một lần; trận chưa phát hình thì thử
+  lại 20 giây một lần; tạm dừng → CHẬM, «Về trực tiếp»; radio hiện logo đài + tên bài (ICY). Thẻ radio bỏ dòng ♪ chỉ lặp tên đài.
+- **Logo / biểu tượng mới:** đĩa kính tròn, vòng vàng và ấn 鵬 nổi khối (phương án D trong `design/logo.html`, như icon bản Legacy);
+  icon Android 8+ nền trong suốt (lớp nền = màu trong suốt); banner tivi đổi dấu hình.
+- bản 2.20 · versionCode 44 · tag `v2.20` (Latest) · commit `94b14e2` (tính năng: `757f95f`, `b7c189a`, `fff278d`, `9aa2d22`, `f0e16fd`;
+  logo `ccfa577`) · `ConBangTV-2.20.apk` = `ConBangTV.apk` = `ChimToTV.apk` 151 557 659 byte · SHA-256
+  `7643470fa101831a60d512bd585a7cbd1f34411ad438a550267cb4f30bd92251` · chứng chỉ `949ef2b5…177b`
+- Thử: test đơn vị đạt. Bản thử trên TX3: danh sách 467 kênh (làm mới, lịch 144 kênh), VTV1 1280×720 (vẽ 107 khung, rớt 0), bấm số 438 →
+  radio BBC (MP3); Xtream 63 nghìn kênh ~42 s (hôm trước). Icon tròn trên điện thoại S10e (Android 14), banner mới trên launcher TX3. Bản
+  chính chạy thử trên TX3 (màn chính, mục Truyền hình mở được) rồi hạ về 2.19.
+- Đăng lúc 06:13:22 bằng `release.ps1 tv` (Latest = `v2.20`, ba tệp cùng SHA-256, hai link cố định tải về đúng 2.20). **Tự cập nhật thật
+  2.19 → 2.20 trên TX3**: Cài đặt → «Kiểm tra cập nhật» → «Có bản mới 2.20 (đang dùng 2.19)» (mục «Có gì mới» 421 ký tự, hiện đủ) →
+  «Cài đặt ngay» → màn cài của hệ thống → **2.20 lúc 06:22:43**.
+
 ## iPad / iPhone 1.19 và Mac 1.19 — 15/11/2026 (dexter.pw, phụ đề chọn được)
 
 - **Trang mới dexter.pw — «Phim Âu Mỹ 4K (dexter.pw)»** (chọn trong «Đổi trang phim»): khoảng 6 400 phim lẻ (nhiều phim 4K) và hơn
