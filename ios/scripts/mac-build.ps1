@@ -84,7 +84,7 @@ echo "xcodegen: đã dựng ConBangTV.xcodeproj"
 if ! xcode-select -p | grep -q '^/Applications/Xcode'; then
   echo "Mac chưa có Xcode — xem ~/TestLab/_setup/cai-xcode.log"; exit 3
 fi
-xcodebuild -version | head -1
+xcodebuild -version | sed -n 1p  # không dùng head: head đóng ống sớm → SIGPIPE (mã 141) giết cả script vì pipefail
 beautify() { xcbeautify --quiet --disable-colored-output; }
 if [ "$TEST" = 1 ]; then
   echo "== Test lõi (macOS)"
@@ -130,6 +130,8 @@ if [ "$RELEASE" = 1 ]; then
 fi
 ln -sfn "$B/dd.noindex" build
 bash scripts/package.sh
+# Dòng cuối là chú thích: PowerShell thêm CRLF vào cuối chuỗi đổ sang ssh.exe → «\r» rơi vào dòng này (không thì lệnh cuối thành
+# «package.sh\r» — không tìm thấy, mã 127)
 '@
     $script.Replace("`r`n", "`n") | & ssh.exe @opts "$macUser@$macHost" "bash -s"
     $rc = $LASTEXITCODE

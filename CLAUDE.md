@@ -42,10 +42,8 @@ sang `ConBangTV…apk` từ 13/11/2026 (anh bảo), nhưng release TV vẫn kèm
 2. **Dựng trên Mac mini trong nhà** (anh chọn 17/11/2026 — không dựng bản chính trên GitHub Actions nữa; `ios.yml` giữ làm dự phòng):
    thư mục làm việc đúng commit phát hành, rồi `.\ios\scripts\mac-build.ps1 -Release` (test lõi + IPA thử + IPA chính, ~4 phút) →
    **`dist\mac\ConBangTV-iPad-<bản>.ipa`** (mã gói `vn.chimto.tv`, số build lấy từ `project.yml`, mã NextDNS từ `keys\nextdns.txt`).
-   Script chạy được nằm ở nhánh trong máy `chi-trong-may` (anh dặn không đẩy nhánh này): mượn tạm
-   `git show chi-trong-may:ios/scripts/mac-build.ps1 | Set-Content -Encoding utf8 ios\scripts\mac-build.ps1`, dựng xong
-   `git checkout -- ios/scripts/mac-build.ps1`. Mac mini có Xcode 15.4 / Swift 5.10. Kiểm Info.plist (mã gói, tên, bản, build), không
-   có cổng gỡ lỗi (tệp chạy không có chuỗi `/tvstatus`), cài thử lên iPad / iPhone thật.
+   Mac mini có Xcode 15.4 / Swift 5.10. Kiểm Info.plist (mã gói, tên, bản, build), không có cổng gỡ lỗi (tệp chạy không có chuỗi
+   `/tvstatus`), cài thử lên iPad / iPhone thật.
 3. `.\release.ps1 ipad -Notes <tệp ghi chú> -File dist\mac\ConBangTV-iPad-<bản>.ipa` — script **luôn đặt `--latest=false`**: app TV đọc
    `releases/latest` + tệp `.apk`, link Downloader cũng đi theo Latest. Ghi chú cũng phải có `## Có gì mới`. Script tự chép tệp
    vào link cố định (xem dưới).
@@ -56,7 +54,7 @@ sang `ConBangTV…apk` từ 13/11/2026 (anh bảo), nhưng release TV vẫn kèm
 
 1. Cùng số bản với iPad (`MARKETING_VERSION` trong `ios/project.yml`). Mã phải dựng được bằng Xcode 15.4 / Swift 5.10 của Mac mini
    (vẫn nên dựng được cả bằng Xcode của GitHub — `ios.yml` là dự phòng).
-2. **Dựng trên Mac mini** (anh chọn 17/11/2026, mượn script như bản iPad ở trên): `.\ios\scripts\mac-build.ps1 -Mac -Release -NoTest`
+2. **Dựng trên Mac mini** (anh chọn 17/11/2026): `.\ios\scripts\mac-build.ps1 -Mac -Release -NoTest`
    (~8 phút) → **`dist\mac\ConBangTV-Mac-<bản>.zip`** (Intel + Apple Silicon, ký ad-hoc, mã gói `vn.chimto.tv`, không có cổng gỡ lỗi;
    script in ra kiến trúc và mã gói). Kiểm Info.plist, `lipo -archs`, `codesign --verify`; chạy thử trên Mac.
 3. `.\release.ps1 mac -Notes <tệp ghi chú> -File dist\mac\ConBangTV-Mac-<bản>.zip` — tag `mac-v<bản>`, script **luôn đặt `--latest=false`**,
