@@ -270,6 +270,16 @@ tên miền trong **Cài đặt** → **Lưu** → **Kiểm tra kết nối**. T
 danh sách (iPad: mục "Thêm trang"; vuốt trái một trang để xoá). Trang nào không có `player.php` thì app tự mở trang tập
 và phóng trình phát ra toàn màn hình.
 
+**Thêm nhiều trang một lần** (TV 2.22 / iPad · iPhone · Mac 1.22 / Windows 1.20 / Linux 1.6): ô thêm trang nhận nhiều dòng — dán
+danh sách tên miền, mỗi dòng (hoặc mỗi chữ cách nhau) một trang. TV: **Cài đặt** → **Danh sách trang phim** → **＋ Thêm nhiều
+trang…** (hoặc **Đổi trang phim** → **＋ Thêm trang khác…**, Enter = xuống dòng); iPad / iPhone / Mac: **Chọn trang phim** → ô
+«Thêm trang» hoặc **Cài đặt** → **Địa chỉ trang phim** → **Lưu**; Windows / Linux: **Đổi trang phim** → ô «Thêm trang» (Ctrl+Enter
+= Thêm). App bỏ dòng trống, dòng `#`, chữ không có dấu chấm và số bản kiểu `1.5`; bỏ ký tự bao quanh (`" ' < > , ; ( ) [ ]`, dấu
+chấm cuối câu); rút mỗi trang về gốc `scheme://tên-miền[:cổng]`; trang đã có (không tính `www.`, http / https, dấu `/` cuối, đường
+dẫn — có tính cổng) tự bỏ qua. Dán nhiều trang thì chỉ thêm vào cuối danh sách (đồng bộ trong nhà ghi nhận), **không đổi trang đang
+dùng**, báo «Đã thêm N trang: a, b, c (bỏ qua K đã có)»; một trang thì như trước. Cùng một luật ở năm bản: `SitePaste.kt` (TV),
+`Prefs.parseSites` (Swift), `prefs::split_sites` / `add_sites` (lõi Rust, bản Linux) và `Prefs.SplitSites` / `AddSites` (Windows).
+
 phimmois.fun là trang tổng hợp: ngoài hoạt hình 3D (khối "Hoạt hình Trung Quốc mới cập nhật" đầu trang chủ) còn phim
 bộ / phim lẻ Hàn, Trung, Âu Mỹ, Nhật, Thái. Menu có Hoạt hình, Phim bộ mới, Phim lẻ mới, 5 mục theo nước, 10 thể
 loại trên menu của trang, và **Thể loại…** / **Quốc gia…** (từ 1.9.1) để chọn trong đủ danh sách của bộ lọc. Server: **KK Phim** (nhanh nhất), **NguonC**

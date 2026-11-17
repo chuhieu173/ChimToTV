@@ -9,6 +9,38 @@ Bản Windows (Windows 10 / 11, một tệp `.exe`) ghi riêng với tiêu đề
 Bản Mac (macOS 12+, từ 13/11/2026, cùng mã nguồn và số bản với bản iPad) ghi riêng với tiêu đề "Mac …", tag `mac-v…`.
 Bản Linux (Ubuntu 22.04+ / Linux Mint 21+ / Debian 12+, từ 13/11/2026, tệp `.deb`) ghi riêng với tiêu đề "Linux …", tag `linux-v…`.
 
+## iPad / iPhone 1.22 và Mac 1.22 — 17/11/2026 (dán một lần nhiều trang phim)
+
+- **Thêm trang phim: dán một lần nhiều tên miền** (anh yêu cầu, «tương tự như nhập list danh sách kênh truyền hình») — ở **Chọn trang phim** → ô «Thêm trang» và **Cài đặt** → **Địa chỉ trang phim** (cả hai thành ô nhiều dòng). Mỗi dòng / mỗi chữ một trang; bỏ dòng trống, dòng `#`, chữ không có dấu chấm, số bản kiểu `1.5`; bỏ ký tự bao quanh và dấu chấm cuối câu; rút về gốc trang; trang đã có (không tính `www.`, http / https, `/` cuối, đường dẫn) tự bỏ qua. Nhiều trang mới → chỉ thêm vào danh sách (đo tốc độ luôn), trang đang dùng giữ nguyên, báo «Đã thêm N trang: a, b, c (bỏ qua K đã có)»; một trang thì như trước (thêm rồi chuyển sang trang đó). «Kiểm tra kết nối» khi đang dán nhiều trang thì nhắc kiểm từng trang.
+- `Prefs.parseSites` / `splitSites` / `addSites` cùng luật với bản TV, Windows, Linux (`Core/Prefs.swift`); test `CoreTests/SitePasteTests.swift`.
+- iPad / iPhone: bản 1.22 (build 28) · tag `ios-v1.22` · `ConBangTV-iPad-1.22.ipa` 5 951 171 byte · SHA-256 `56211fa67b6b8469639ed4af789d61df8ecaa84a869cca4d2281171ec42bfe71`; Mac: bản 1.22 (build 28) · tag `mac-v1.22` · `ConBangTV-Mac-1.22.zip` 9 037 622 byte (Intel + Apple Silicon, ký ad-hoc, `codesign --verify` đạt) · SHA-256 `dadc6597009d5a4f8b4186c43ff2f0594bf67d94ae8403c426703b4fda84308a` · commit `0af3e7f` (tính năng: `c967170`) · dựng trên Mac mini
+- Thử: test lõi Swift 178 đạt (Mac mini). Bản Mac thử: một trang → thêm và chuyển trang; dán 3 dòng → «Đã thêm 2 trang … (bỏ qua 1 đã có)», trang đang dùng giữ nguyên; dán toàn trang đã có → «Các trang này đã có trong danh sách.», chữ còn trong ô; chữ không có tên miền → câu báo đúng. IPA chính cài lên iPhone 1.20 → 1.22, mở được. Chưa gõ tay trên iPad / iPhone thật.
+- Đăng lúc 10:41:55 (iPad) và 10:46:05 (Mac) bằng `release.ps1 ipad|mac -File dist\mac\…`; link cố định chép đè, khớp SHA-256. **Tự cập nhật thật Mac 1.21 → 1.22** (Mac mini): «Có bản mới 1.22 — Đang dùng 1.21» → «Cài đặt ngay» → mở lại 1.22 (build 28) lúc 10:51:22.
+
+## Windows 1.20 — 17/11/2026 (dán một lần nhiều trang phim)
+
+- **Thêm trang phim: dán một lần nhiều tên miền** — **Đổi trang phim** → ô «Thêm trang» thành ô nhiều dòng (Enter xuống dòng, **Ctrl+Enter = Thêm**; ▲ ▼ đi giữa các dòng, ở dòng đầu / cuối thì sang mục khác). Cùng luật tách / bỏ trùng với các bản khác (số bản kiểu `1.5` bỏ qua, `bad..host` báo không hợp lệ, tính cổng). Nhiều trang → chỉ thêm vào danh sách và đo từng trang, trang đang dùng giữ nguyên; một trang như trước.
+- `Prefs.SiteKey` / `SplitSites` / `AddSites` + `AddSitesResult` (câu báo giống lõi Rust); test `ConBangTV.Tests/SitesTests.cs`.
+- bản 1.20.0 · tag `win-v1.20` · `ConBangTV-Windows-1.20.exe` 120 339 145 byte · SHA-256 `cf4c6ea6ad83aafe73b4eb96131cce89c38dccfdb1eac9508fb97f330dbda780` · commit `0af3e7f` (tính năng: `73f1483`)
+- Thử: `windows\build.ps1` — test lõi Rust đạt (cả test tích hợp mới `core/tests/sites.rs`), .NET 38 đạt. Bản thử (thư mục dữ liệu riêng): dán 3 dòng → «Đã thêm 2 trang … (bỏ qua 1 đã có).», trang đang dùng giữ nguyên; trang đã có / tên sai báo đúng, chữ giữ trong ô; ▲ ▼ trong ô đúng.
+- Đăng lúc 10:41:10 bằng `release.ps1 windows`; link cố định `conbangtv_windows` = 1.20. **Tự cập nhật thật 1.19 → 1.20** (bản sao chạy riêng, bỏ ghép đồng bộ): «Có bản mới: Côn Bằng TV 1.20» → «Cập nhật ngay» (UI Automation) → «Cài bản 1.20» 10:50:02 → «Mở bản 1.20 (--updated)» 10:50:04.
+
+## Linux 1.6 — 17/11/2026 (dán một lần nhiều trang phim)
+
+- **Thêm trang phim: dán một lần nhiều tên miền** — **Đổi trang phim** → ô «Thêm trang» thành TextView nhiều dòng (**Ctrl+Enter = Thêm**; Backspace trong ô không còn là «quay lại»; ▲ ▼ đi giữa các dòng). Cùng luật với các bản khác; nhiều trang → chỉ thêm vào danh sách, trang đang dùng giữ nguyên; một trang như trước.
+- Lõi Rust `prefs::split_sites` / `add_sites` / `site_key` (dùng chung với bản Windows); test `core/tests/sites.rs` + test trong `prefs.rs`.
+- bản 1.6.0 · tag `linux-v1.6` · `ConBangTV-Linux-1.6.deb` 6 213 472 byte · SHA-256 `9b74a343c365af7855e0114e393713adb0a00effc7657305b145a777dbf2bb1c` · commit `0af3e7f` (tính năng: `73f1483`) · dựng trong container Ubuntu 22.04 (glibc ≤ 2.34), tệp chạy không có cổng gỡ lỗi
+- Thử: test lõi đạt (192 + tích hợp). Bản thử trên máy ảo: dán thật qua clipboard + Ctrl+Enter → «Đã thêm 2 trang … (bỏ qua 1 đã có).», trang đang dùng giữ nguyên; trang đã có, tên sai, một trang mới đều đúng; ▲ ▼ / Backspace trong ô (cả hộp thêm danh sách kênh) đúng.
+- Đăng lúc 10:41:34 bằng `release.ps1 linux`; link cố định `conbangtv_linux` = 1.6. **Tự cập nhật thật 1.5 → 1.6** trên máy ảo: «Có bản mới: Côn Bằng TV 1.6» → «Cập nhật ngay» → gói 1.6.0 lúc 10:48:23, mở lại `--updated`.
+
+## 2.22 — 17/11/2026 (dán một lần nhiều trang phim)
+
+- **Thêm trang phim: dán một lần nhiều tên miền** (anh yêu cầu) — **Cài đặt** → **Danh sách trang phim** → nút mới **＋ Thêm nhiều trang…**, và **Đổi trang phim** → **＋ Thêm trang khác…** (hộp thành ô nhiều dòng, Enter = xuống dòng). Mỗi dòng / mỗi chữ một trang; bỏ dòng trống, dòng `#`, chữ không có dấu chấm, số bản kiểu `1.5`; bỏ ký tự bao quanh và dấu chấm cuối câu; rút về gốc trang (`kkphim.com` → trang KKPhim mẫu như trước); trang đã có (không tính `www.`, http / https, `/` cuối, đường dẫn) tự bỏ qua. Nhiều trang → chỉ thêm vào cuối danh sách (đồng bộ trong nhà ghi nhận), trang đang dùng giữ nguyên, báo «Đã thêm N trang: a, b, c (bỏ qua K đã có).»; không có trang mới → báo ngay trong ô, chữ giữ lại để sửa. Một trang như trước (ở «Đổi trang phim» là thêm rồi chuyển sang).
+- `SitePaste.kt` (tách / chuẩn hoá / bỏ trùng, thuần để test JVM) + `Prefs.addSites`; test `SitePasteTest` (5).
+- bản 2.22 · versionCode 46 · tag `v2.22` (Latest) · commit `0af3e7f` (tính năng: `1266275`) · `ConBangTV-2.22.apk` = `ConBangTV.apk` = `ChimToTV.apk` 151 566 660 byte · SHA-256 `52d4dde6a5885df181830249d2d645532fa65fabf0e5950bb5ab8f233664ddcc` · chứng chỉ `949ef2b5…177b`
+- Thử: test đơn vị đạt. Bản thử trên TX3: dán nhiều trang ở Cài đặt và ở «Đổi trang phim», trang đã có / chữ sai báo đúng. Bản chính chạy thử trên TX3 (dán 3 dòng toàn trang đã có + số bản «1.5» → «Các trang này đã có trong danh sách.») rồi hạ về 2.21.
+- Đăng lúc 10:40:12 bằng `release.ps1 tv` (Latest = `v2.22`, ba tệp cùng SHA-256, hai link cố định đúng 2.22). **Tự cập nhật thật 2.21 → 2.22 trên TX3**: «Kiểm tra cập nhật» → «Có bản mới 2.22 (đang dùng 2.21)» (hiện đủ «Có gì mới») → «Cài đặt ngay» → màn cài của hệ thống → **2.22 lúc 10:47:22**.
+
 ## iPad / iPhone 1.21 và Mac 1.21 — 17/11/2026 (hàng Truyền hình trên trang chủ, dán nhiều danh sách)
 
 - **4 hàng Truyền hình trên trang chủ** — «Kênh vừa xem», «Kênh yêu thích», «Trận đang / sắp đá», «Radio» (anh chọn): dải thẻ kênh (logo, số kênh, ★, chương trình đang phát + tiến độ, nhãn ĐANG ĐÁ / SẮP ĐÁ + giờ bóng lăn), bấm là phát (kênh của danh sách khác thì đổi danh sách trước; hàng yêu thích phát trong nhóm yêu thích), «Xem thêm» mở Truyền hình (yêu thích chọn sẵn). Là hàng trang chủ thật (`tv-recent` / `tv-favs` / `tv-live` / `tv-radio`): mặc định bật ngay sau «Xem tiếp» (người dùng cũ tự có), bật / tắt / đổi thứ tự trong Cài đặt → Trang chủ → «Các hàng trên trang chủ…» (ghi «(Truyền hình)») và sửa nhanh trên hàng; hàng rỗng tự ẩn; hồ sơ trẻ em không có hàng trận / radio; dữ liệu dựng tại chỗ, đọc ở nền.
