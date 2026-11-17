@@ -386,6 +386,73 @@ enum Prefs {
         if !sites.contains(url) { sites = sites + [url] }
     }
 
+    /// Khoá so trùng trang: tên máy chủ chữ thường (kèm cổng nếu có), bỏ «www.» đầu — không phân biệt http / https, dấu / cuối,
+    /// đường dẫn; thiếu scheme thì coi như https://.
+    static func siteKey(_ url: String) -> String {
+        let s = url.trimmed
+        let l = s.lowercased()
+        let full = l.hasPrefix("http://") || l.hasPrefix("https://") ? s : "https://" + s
+        var h: String
+        if let c = URLComponents(string: full), let host = c.host, !host.isEmpty {
+            h = host.lowercased() + (c.port.map { ":\($0)" } ?? "")
+        } else {
+            h = l.trimmingSuffix("/")
+        }
+        if h.hasPrefix("www.") { h.removeFirst(4) }
+        return h
+    }
+
+    /// Gốc trang scheme://host[:port] (tên máy chủ chữ thường) của một địa chỉ đã chuẩn hoá (bỏ đường dẫn / query / #);
+    /// không đọc được hoặc tên sai («bad..host») thì nil.
+    static func siteRoot(_ url: String) -> String? {
+        guard let c = URLComponents(string: url), let scheme = c.scheme, let host = c.host?.lowercased(),
+              !host.isEmpty, !host.split(separator: ".", omittingEmptySubsequences: false).contains(where: \.isEmpty)
+        else { return nil }
+        return "\(scheme.lowercased())://\(host)" + (c.port.map { ":\($0)" } ?? "")
+    }
+
+    /// Tách nhiều trang phim dán một lần — mỗi dòng (hoặc mỗi chữ cách nhau) một trang. Bỏ dòng trống, dòng `#`, chữ không có
+    /// dấu chấm, số bản kiểu «1.5» / «2.21»; bỏ ký tự bao quanh " ' < > , ; ( ) [ ] (và dấu chấm cuối câu); chuẩn hoá bằng
+    /// `normalizeUrl` rồi rút về gốc trang; bỏ trùng theo `siteKey`. `invalid`: số chữ giống tên miền mà không dùng được.
+    /// Cùng cách với lõi Rust `prefs::split_sites` (Windows / Linux) và `SitePaste.split` (TV).
+    static func parseSites(_ text: String) -> (sites: [String], invalid: Int) {
+        var out: [String] = []
+        var keys = Set<String>()
+        var invalid = 0
+        let wrap: Set<Character> = ["\"", "'", "<", ">", ",", ";", "(", ")", "[", "]"]
+        for raw in text.components(separatedBy: .newlines) {
+            let line = raw.trimmingCharacters(in: .whitespaces)
+            if line.isEmpty || line.hasPrefix("#") { continue }
+            for tok in line.components(separatedBy: .whitespaces) where !tok.isEmpty {
+                var t = Substring(tok)
+                while let f = t.first, wrap.contains(f) { t.removeFirst() }
+                while let l = t.last, wrap.contains(l) || l == "." { t.removeLast() }
+                guard t.contains("."), !t.hasPrefix(".") else { continue }
+                // Số bản kiểu «1.5», «2.21», «1.2.3» — không phải trang (địa chỉ IP đủ 4 phần vẫn nhận)
+                if t.allSatisfy({ ("0"..."9").contains($0) || $0 == "." }), t.filter({ $0 == "." }).count < 3 { continue }
+                guard let n = normalizeUrl(String(t)), let r = siteRoot(n) else {
+                    invalid += 1
+                    continue
+                }
+                if keys.insert(siteKey(r)).inserted { out.append(r) }
+            }
+        }
+        return (out, invalid)
+    }
+
+    /// Các trang dán một lần (gốc trang, đã bỏ trùng, theo thứ tự dán).
+    static func splitSites(_ text: String) -> [String] { parseSites(text).sites }
+
+    /// Thêm nhiều trang cùng lúc (không đổi trang đang dùng): trang đã có trong danh sách (cùng `siteKey`) thì bỏ qua.
+    @discardableResult
+    static func addSites(_ text: String) -> (added: [String], existing: Int, invalid: Int) {
+        let (list, invalid) = parseSites(text)
+        let have = Set(sites.map(siteKey))
+        let added = list.filter { !have.contains(siteKey($0)) }
+        if !added.isEmpty { sites = sites + added } // setter ghi dấu thêm cho đồng bộ trong nhà
+        return (added, list.count - added.count, invalid)
+    }
+
     /// Bỏ trang khỏi danh sách (còn ít nhất một trang); đang dùng trang đó thì sang trang đầu danh sách.
     @discardableResult
     static func removeSite(_ url: String) -> Bool {
