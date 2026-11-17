@@ -479,19 +479,31 @@ class MainActivity : BaseActivity() {
 
     /** Thêm trang vào danh sách rồi chuyển sang trang đó. */
     private fun useNewSite(url: String) {
-        Prefs.addSite(url)
-        Prefs.baseUrl = url
+        // Đã có trang cùng tên máy chủ (gõ thêm www. / http://): dùng luôn mục cũ, không thêm trùng
+        val had = Prefs.sites.firstOrNull { SitePaste.key(it) == SitePaste.key(url) }
+        val site = had ?: url
+        Prefs.addSite(site)
+        Prefs.baseUrl = site
         reloadSite()
-        toast("Đã thêm ${Site.hostOf(url)} vào danh sách trang phim.")
+        toast(
+            if (had != null) "Đã chuyển sang ${Site.hostOf(site)} (đã có trong danh sách trang phim)."
+            else "Đã thêm ${Site.hostOf(site)} vào danh sách trang phim.",
+        )
     }
 
-    /** Gõ tên miền trang mới (vd phimmois.fun) — trang kiểu yanhh3d / HaLim / PhimMoi. */
+    /**
+     * Gõ / dán tên miền trang mới (trang kiểu yanhh3d / HaLim / PhimMoi…): một trang → thêm rồi chuyển sang trang đó như trước;
+     * dán nhiều trang (mỗi dòng một trang) → chỉ thêm vào danh sách, không đổi trang đang dùng.
+     */
     private fun addSiteDialog() {
         val input = EditText(this).apply {
-            hint = "Tên miền, vd phimmois.fun"
-            setSingleLine()
-            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_URI
-            imeOptions = EditorInfo.IME_ACTION_DONE or EditorInfo.IME_FLAG_NO_EXTRACT_UI
+            hint = SitePaste.HINT
+            isSingleLine = false
+            minLines = 2
+            maxLines = 6
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE or
+                android.text.InputType.TYPE_TEXT_VARIATION_URI or android.text.InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
+            imeOptions = EditorInfo.IME_FLAG_NO_EXTRACT_UI
             leaveWithUpDown()
         }
         val box = android.widget.FrameLayout(this).apply {
@@ -506,22 +518,31 @@ class MainActivity : BaseActivity() {
             .create()
         d.window?.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE)
         fun submit() {
-            val url = Prefs.normalizeUrl(input.text.toString())
-            if (url == null) {
-                input.error = "Tên miền không hợp lệ (vd phimmois.fun)"
-                return
+            val text = input.text.toString()
+            val split = Prefs.splitSites(text)
+            when {
+                split.sites.isEmpty() -> input.showError(SitePaste.noneText(0))
+                // Một trang: như trước — thêm (nếu chưa có) rồi chuyển sang trang đó
+                split.sites.size == 1 -> {
+                    hideKeyboard(input)
+                    d.dismiss()
+                    useNewSite(split.sites[0])
+                }
+                else -> {
+                    val r = Prefs.addSites(text)
+                    if (r.added.isEmpty()) {
+                        input.showError(SitePaste.noneText(r.existing))
+                        return
+                    }
+                    hideKeyboard(input)
+                    d.dismiss()
+                    toast(SitePaste.addedText(r).removeSuffix(".") + " — chọn trong «Đổi trang phim».")
+                }
             }
-            hideKeyboard(input)
-            d.dismiss()
-            useNewSite(url)
         }
         d.setOnShowListener {
             d.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener { submit() }
             input.requestFocus()
-        }
-        input.setOnEditorActionListener { _, _, _ ->
-            submit()
-            true
         }
         d.show()
     }

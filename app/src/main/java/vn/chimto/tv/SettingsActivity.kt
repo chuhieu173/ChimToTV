@@ -649,6 +649,60 @@ class SettingsActivity : BaseActivity() {
             }
             recent.addView(b)
         }
+        // Dán một lần nhiều trang (như thêm danh sách kênh Truyền hình)
+        val add = inflater.inflate(R.layout.item_button, recent, false) as TextView
+        add.text = "＋ Thêm nhiều trang…"
+        add.setOnClickListener { addSitesDialog() }
+        recent.addView(add)
+    }
+
+    /**
+     * Hộp dán nhiều trang phim (mỗi dòng / mỗi chữ một tên miền): thêm vào danh sách, không đổi trang đang dùng; trang đã có thì
+     * bỏ qua. Không có trang mới thì báo ngay trong hộp để sửa.
+     */
+    private fun addSitesDialog() {
+        val input = EditText(this).apply {
+            hint = SitePaste.HINT
+            isSingleLine = false
+            minLines = 2
+            maxLines = 6
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE or
+                android.text.InputType.TYPE_TEXT_VARIATION_URI or android.text.InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
+            imeOptions = EditorInfo.IME_FLAG_NO_EXTRACT_UI
+            leaveWithUpDown()
+        }
+        val box = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(24), dp(8), dp(24), 0)
+            addView(input)
+        }
+        val d = android.app.AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+            .setTitle("Thêm trang phim")
+            .setView(box)
+            .setPositiveButton("Thêm", null)
+            .setNegativeButton("Huỷ", null)
+            .show()
+        d.getButton(android.app.AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+            val r = Prefs.addSites(input.text.toString())
+            if (r.added.isEmpty()) {
+                input.showError(SitePaste.noneText(r.existing))
+                return@setOnClickListener
+            }
+            d.dismiss()
+            showSites()
+            // Con trỏ về nút trang vừa thêm đầu tiên
+            recent.getChildAt(Prefs.sites.indexOf(r.added.first()))?.requestFocus()
+            toast(
+                if (r.added.size == 1) {
+                    "Đã thêm ${Site.hostOf(r.added.first())} vào danh sách trang phim" +
+                        (if (r.existing > 0) " (bỏ qua ${r.existing} đã có)" else "") + "."
+                } else {
+                    SitePaste.addedText(r)
+                },
+            )
+        }
+        input.requestFocus()
+        input.openKeyboard()
     }
 
     private fun removeCurrent() {

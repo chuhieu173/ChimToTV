@@ -384,6 +384,27 @@ object Prefs {
         if (url !in sites) sites = sites + url
     }
 
+    /** Tách nhiều trang dán một lần (xem [SitePaste.split]). */
+    fun splitSites(text: String): SitePaste.Split = SitePaste.split(text)
+
+    /**
+     * Thêm một lần nhiều trang (mỗi dòng / mỗi chữ một tên miền): trang đã có (cùng tên máy chủ, không tính www. / http / https)
+     * thì bỏ qua; thêm qua [sites] (đồng bộ trong nhà ghi dấu thêm); KHÔNG đổi trang đang dùng.
+     */
+    fun addSites(text: String): SitePaste.Added {
+        val split = SitePaste.split(text)
+        val cur = sites
+        val keys = cur.map(SitePaste::key).toSet()
+        var existing = 0
+        val added = split.sites.filter { s ->
+            val fresh = SitePaste.key(s) !in keys
+            if (!fresh) existing++
+            fresh
+        }
+        if (added.isNotEmpty()) sites = cur + added
+        return SitePaste.Added(added, existing, split.invalid)
+    }
+
     /** Trang mẫu không còn trong danh sách (người xem đã xoá) — để thêm lại nhanh. */
     val missingPresets: List<String> get() = sites.let { list -> PRESET_SITES.filter { it !in list } }
 
