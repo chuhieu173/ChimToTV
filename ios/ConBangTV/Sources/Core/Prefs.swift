@@ -112,7 +112,7 @@ enum Prefs {
         "history", "positions_v2", "follows", "last_follow_check", "private_mode",
         // Đồng bộ trong nhà: lúc xoá phim khỏi lịch sử / bỏ theo dõi
         "hist_del", "follow_del",
-        "base_url", "seek_step", "auto_next", "video_fill",
+        "base_url", "seek_step", "auto_next", "video_fill", "video_quality", "sub_lang",
         // Giới hạn giờ xem (WatchLimit)
         "limit_min", "bedtime", "watch_day", "watch_sec", "watch_extra", "unblock_until",
         // Trang chủ tổng hợp (HomeFeed): kiểu trang chủ, chủ đề đã chọn, tập mới nhất đã thấy, hồ sơ trẻ em, ngôn ngữ bản hay xem

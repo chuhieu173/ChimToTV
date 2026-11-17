@@ -424,7 +424,8 @@ struct TvContent: View {
                 searchBar
                 GeometryReader { geo in
                     let pad: CGFloat = geo.size.width < 500 ? 14 : 20
-                    let minW = scale.layout(geo.size.width < 500 ? 300 : 290)
+                    // Cỡ chữ «Rất lớn» / «Cực lớn» trên iPhone hẹp: bề rộng tối thiểu của thẻ lớn hơn màn hình thì lưới tràn sang phải
+                    let minW = min(scale.layout(geo.size.width < 500 ? 300 : 290), max(120, geo.size.width - pad * 2))
                     ScrollViewReader { proxy in
                         ScrollView {
                             // MỘT lưới lười duy nhất: đầu trang (kênh vừa xem, nhóm, tiêu đề) là tiêu đề mục, nút trang là chân

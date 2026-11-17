@@ -14,6 +14,13 @@ enum Router {
 
     static func play(filmUrl: String, epUrl: String, continueMode: Bool = false) {
         guard let top = topController, !(top is PlayerController) else { return }
+        // Đang xem truyền hình / nghe radio (vd chạm widget «Xem tiếp»): đóng trình phát đó trước, không thì hai luồng tiếng
+        // chạy cùng lúc và đóng phim lại quay về kênh vẫn đang phát
+        if let live = LiveModel.current {
+            live.close()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) { play(filmUrl: filmUrl, epUrl: epUrl, continueMode: continueMode) }
+            return
+        }
         // Phim đang ở cửa sổ hình trong hình: mở phim khác thì đóng phim đó (lưu chỗ xem)
         PlayerModel.detachedModel?.closeDetached()
         present(PlayerModel(filmUrl: filmUrl, epUrl: epUrl, continueMode: continueMode), on: top)

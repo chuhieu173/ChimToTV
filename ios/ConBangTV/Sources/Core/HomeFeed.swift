@@ -927,7 +927,8 @@ enum HomeFeed {
     }
 
     /// 108.0 → "108", 10.5 → "10.5".
-    static func num(_ d: Double) -> String { d == d.rounded() ? String(Int64(d)) : String(d) }
+    /// Số quá lớn (nhãn tập sai kiểu «Tập 99999999999999999999») thì Int64(d) làm app văng — giữ dạng Double.
+    static func num(_ d: Double) -> String { d == d.rounded() && abs(d) < 1e15 ? String(Int64(d)) : String(d) }
 
     // MARK: - Trang chủ lần trước (mở app là hiện ngay)
 

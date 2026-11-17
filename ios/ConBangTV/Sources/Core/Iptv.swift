@@ -591,6 +591,9 @@ enum Iptv {
         let t0 = nowMs()
         let path = rawFile(l)
         var sig: String?
+        // Tệp sẽ đọc: danh sách theo địa chỉ thì đọc bản vừa tải (.part) trước — chỉ thay tệp cũ khi bản mới có kênh (cổng đăng
+        // nhập Wi‑Fi / trang «hết hạn» trả HTML 200 thì giữ nguyên danh sách đang dùng được)
+        var src = path
         if let url = l.url {
             setStatus("Đang tải danh sách kênh…")
             let part = dir.appendingPathComponent("\(l.id).part")
@@ -604,25 +607,35 @@ enum Iptv {
                 Log.d("IPTV", "danh sách «\(l.name)» không đổi từ lần trước (\(nowMs() - t0) ms)")
                 return
             }
-            try? FileManager.default.removeItem(at: path)
-            do {
-                try FileManager.default.moveItem(at: part, to: path)
-            } catch {
-                throw AppError("Không ghi được danh sách: \(error.localizedDescription)")
+            // Danh sách vừa bị xoá trong lúc tải: bỏ tệp tải về (không để lại tệp mồ côi)
+            guard lists().contains(where: { $0.id == l.id }) else {
+                try? FileManager.default.removeItem(at: part)
+                return
             }
+            src = part
             sig = s
         }
         setStatus("Đang đọc danh sách kênh…")
         let id = l.id
-        guard let parsed = await Task.detached(priority: .userInitiated, operation: { parseFile(path, id: id) }).value else {
-            throw AppError("Không đọc được danh sách.")
-        }
-        if parsed.channels.isEmpty {
+        let file = src
+        let parsed = await Task.detached(priority: .userInitiated, operation: { parseFile(file, id: id) }).value
+        guard let parsed = parsed, !parsed.channels.isEmpty else {
+            if src != path { try? FileManager.default.removeItem(at: src) }
+            guard let parsed = parsed else { throw AppError("Không đọc được danh sách.") }
             throw AppError(parsed.sawExtinf ? "Danh sách không có kênh nào." : "Tệp tải về không phải danh sách M3U.")
+        }
+        if src != path {
+            try? FileManager.default.removeItem(at: path)
+            do {
+                try FileManager.default.moveItem(at: src, to: path)
+            } catch {
+                throw AppError("Không ghi được danh sách: \(error.localizedDescription)")
+            }
         }
         Log.d("IPTV", "danh sách «\(l.name)» — \(parsed.entries) mục → \(parsed.channels.count) kênh, lịch \(parsed.epg ?? "không có") " +
             "(\(nowMs() - t0) ms)")
-        locked { $0.loaded = parsed }
+        // Trong lúc tải người dùng đã chọn danh sách khác: không đè danh sách đang dùng (lần sau đọc lại từ tệp)
+        if activeList()?.id == l.id { locked { $0.loaded = parsed } }
         updateList(l.id) {
             $0.count = parsed.channels.count
             $0.updated = nowMs()
@@ -811,10 +824,13 @@ enum Iptv {
     private static func filtered(_ l: IptvLoaded, _ f: IptvFilter) -> [Int32] {
         let kids = Prefs.kids
         let hide = hideBad
-        let key = "\(l.listId)|\(f.group ?? -1)|\(f.favs)|\(f.q)|\(kids)|\(hide)"
+        // Kênh yêu thích là của từng người xem (đổi người xem / đồng bộ không tăng version): khoá có cả người xem và
+        // danh sách yêu thích, không thì hàng «Kênh yêu thích» của người mới hiện kênh của người trước
+        let favList = f.favs ? favoriteKeys() : []
+        let key = "\(l.listId)|\(f.group ?? -1)|\(f.favs)|\(f.q)|\(kids)|\(hide)|\(Prefs.profileId)|\(favList.joined(separator: "\u{1}"))"
         let version = locked { $0.version }
         if let c = locked({ $0.filter }), c.key == key, c.version == version { return c.ids }
-        let favs: Set<String> = f.favs ? Set(favoriteKeys()) : []
+        let favs = Set(favList)
         let bad = hide ? badMap() : [:]
         let q = f.q.trimmingCharacters(in: .whitespaces)
         let nq = IptvParse.norm(q)

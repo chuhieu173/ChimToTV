@@ -202,6 +202,7 @@ final class LiveModel: NSObject, ObservableObject, LimitHost {
     private func openSource() {
         token += 1
         let t = token
+        guard limitBlock == nil else { return } // màn «Hết giờ xem» đang hiện: không mở luồng nào
         started = false
         icy = nil
         radioDesc = nil
@@ -417,10 +418,15 @@ final class LiveModel: NSObject, ObservableObject, LimitHost {
     private func refreshChannel(age: Int64, _ done: @escaping (Bool) -> Void) {
         let f = filter
         guard let key = ch?.k else { return done(false) }
+        let t = token
         Task {
             try? await Iptv.refreshIfOlder(than: age)
+            // Trong lúc tải lại danh sách (vài giây) người xem đã sang kênh khác / đóng trình phát: bỏ kết quả, không thì kênh
+            // cũ đè lên kênh đang xem và bị phát lại
+            guard t == token, !closed else { return }
             let i = await Iptv.indexOf(f, key: key)
-            guard i >= 0, let fresh = await Iptv.at(f, i), !closed else { return done(false) }
+            guard t == token, !closed else { return }
+            guard i >= 0, let fresh = await Iptv.at(f, i), t == token, !closed else { return done(false) }
             let before = urls.map { $0.url }
             index = i
             ch = fresh
@@ -726,6 +732,11 @@ final class LiveModel: NSObject, ObservableObject, LimitHost {
         guard limitBlock == nil else { return true }
         if let b = WatchLimit.block() {
             Log.d("tv", "hết giờ xem (\(b))")
+            // Huỷ mọi việc đang chờ (mở lại sau 1 giây, thử lại trận sau 20 giây, tải lại danh sách): không thì luồng tự phát
+            // lại sau màn «Hết giờ xem»
+            token += 1
+            for t in timers.values { t.cancel() }
+            timers.removeAll()
             stopPlayer()
             started = false
             limitBlock = b

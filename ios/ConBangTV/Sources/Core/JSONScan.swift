@@ -7,6 +7,10 @@ import Foundation
 struct JSONScan {
     private let u: [UInt16]
     private var i: Int
+    /// Độ lồng [ / { hiện tại: trang lạ có `[[[[…` hàng trăm nghìn tầng thì đệ quy tràn ngăn xếp, app văng — quá maxDepth thì
+    /// coi như JSON hỏng. Cây React thật chỉ vài chục tầng.
+    private var depth = 0
+    private static let maxDepth = 512
 
     private struct Bad: Error {}
 
@@ -31,8 +35,12 @@ struct JSONScan {
         skipWhitespace()
         guard i < u.count else { throw Bad() }
         switch u[i] {
-        case 0x7B: return try parseObject()
-        case 0x5B: return try parseArray()
+        case 0x7B, 0x5B:
+            guard depth < Self.maxDepth else { throw Bad() }
+            depth += 1
+            defer { depth -= 1 }
+            if u[i] == 0x7B { return try parseObject() }
+            return try parseArray()
         case 0x22: return try parseString()
         case 0x74: try literal("true"); return true
         case 0x66: try literal("false"); return false
@@ -150,7 +158,7 @@ enum J {
     static func int(_ o: [String: Any]?, _ key: String, _ def: Int = 0) -> Int {
         switch o?[key] {
         case let n as Int: return n
-        case let d as Double: return Int(d)
+        case let d as Double: return d.isFinite && abs(d) < 1e15 ? Int(d) : def // Int(1e20) / Int(.nan) làm app văng
         case let s as String: return Int(s) ?? def
         default: return def
         }

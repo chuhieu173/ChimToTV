@@ -290,7 +290,15 @@ final class AppModel: ObservableObject {
         Prefs.deleteProfile(p.id)
         if wasCurrent {
             // Sang người không khoá; ai cũng có mã PIN thì hỏi "Ai đang xem?" (không tự vào hồ sơ có khoá)
-            if let open = Prefs.profiles.first(where: { !$0.locked }) { Prefs.switchProfile(open.id) } else { pendingGate = true }
+            if let open = Prefs.profiles.first(where: { !$0.locked }) {
+                Prefs.switchProfile(open.id)
+            } else if askingProfile {
+                // Xoá từ «Sửa người xem…» của màn "Ai đang xem?" (mở từ menu, được đóng): người còn lại đều có mã PIN →
+                // màn đó thành màn chặn cửa luôn, không thì bấm ✕ là vào hồ sơ có khoá mà không cần mã
+                pickerGate = true
+            } else {
+                pendingGate = true
+            }
             profileVersion += 1
         }
         refreshProfiles()
