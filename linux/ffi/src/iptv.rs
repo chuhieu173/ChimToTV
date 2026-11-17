@@ -34,6 +34,7 @@ pub fn sync(m: &str, a: &Value) -> Option<Res> {
         "iptv.lists" => Ok(json!({ "lists": iptv::lists(), "active": iptv::active_list().map(|l| l.id) })),
         "iptv.status" => Ok(iptv::status()),
         "iptv.add" => Ok(json!(iptv::add_list(&s(a, "url"), opt_s(a, "name").as_deref()))),
+        "iptv.addMany" => Ok(json!(iptv::add_lists(&s(a, "text"), opt_s(a, "name").as_deref()))),
         "iptv.addFile" => iptv::add_file(&s(a, "path"), opt_s(a, "name").as_deref()).map(|l| json!(l)).map_err(err),
         "iptv.setActive" => {
             iptv::set_active(opt_s(a, "id").as_deref());

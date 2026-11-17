@@ -403,16 +403,21 @@ public static class TvLists
 
     public static async Task AskAdd(Action done)
     {
-        var url = new TextBox { MinWidth = 420 };
+        // Nhiều dòng: dán một lần nhiều địa chỉ, mỗi dòng một danh sách (Ctrl+Enter = Thêm)
+        var url = new TextBox
+        {
+            MinWidth = 420, MaxWidth = 560, MinHeight = 76, MaxHeight = 160, AcceptsReturn = true, TextWrapping = TextWrapping.NoWrap,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+        };
         var name = new TextBox { MinWidth = 420, MaxLength = 40 };
         var box = new StackPanel();
-        box.Children.Add(Ui.Dim("Địa chỉ danh sách M3U / M3U8 (http…)", 14, new Thickness(0, 0, 0, 4)));
+        box.Children.Add(Ui.Dim("Địa chỉ M3U / M3U8 (http…) — dán được nhiều, mỗi dòng một danh sách", 14, new Thickness(0, 0, 0, 4)));
         box.Children.Add(url);
         box.Children.Add(Ui.Dim("Tên hiện trong app (không bắt buộc)", 14, new Thickness(0, 12, 0, 4)));
         box.Children.Add(name);
-        url.KeyDown += (_, e) =>
+        url.PreviewKeyDown += (_, e) =>
         {
-            if (e.Key != Key.Enter) return;
+            if (e.Key != Key.Enter || (Keyboard.Modifiers & ModifierKeys.Control) == 0) return;
             e.Handled = true;
             Main.CloseDialog(0);
         };
@@ -420,15 +425,25 @@ public static class TvLists
         var r = await Main.Ask("Thêm danh sách kênh", "App không kèm sẵn kênh — chỉ thêm danh sách bạn có quyền xem.",
             new[] { "Thêm", "Chọn tệp .m3u…", "Huỷ" }, box);
         JsonObject? l = null;
+        var many = 0;
         if (r == 0)
         {
-            var u = url.Text.Trim();
-            if (u.Length < 8 || !u.Contains('.'))
+            var res = Iptv.AddMany(url.Text, name.Text.Trim());
+            var added = res["added"]?.AsArray() ?? new JsonArray();
+            var existing = res["existing"]?.GetValue<int>() ?? 0;
+            if (added.Count == 0)
             {
-                Main.Toast("Chưa có địa chỉ danh sách.");
+                Main.Toast(existing > 0 ? (existing == 1 ? "Danh sách này đã có trong app." : "Các danh sách này đã có trong app.")
+                    : "Chưa có địa chỉ danh sách.");
                 return;
             }
-            l = Iptv.Add(u, name.Text.Trim());
+            l = (JsonObject)added[0]!;
+            many = added.Count;
+            if (many > 1 || existing > 0)
+            {
+                Main.Toast($"Đã thêm {many} danh sách{(existing > 0 ? $" (bỏ qua {existing} đã có)" : "")} — đang tải «{Iptv.S(l, "name")}»; " +
+                           "danh sách khác tải khi chọn trong «Đổi danh sách».");
+            }
         }
         else if (r == 1)
         {
@@ -445,7 +460,7 @@ public static class TvLists
             }
         }
         if (l == null) return;
-        Main.Toast($"Đã thêm danh sách «{Iptv.S(l, "name")}» — đang tải kênh…");
+        if (many <= 1) Main.Toast($"Đã thêm danh sách «{Iptv.S(l, "name")}» — đang tải kênh…");
         done();
         try
         {

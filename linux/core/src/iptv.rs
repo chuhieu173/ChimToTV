@@ -1068,10 +1068,7 @@ pub fn set_active(id: Option<&str>) {
 }
 
 pub fn add_list(input: &str, name: Option<&str>) -> IptvList {
-    let mut url = input.trim().to_string();
-    if !url.starts_with("http://") && !url.starts_with("https://") {
-        url = format!("http://{url}");
-    }
+    let url = list_url(input);
     let name = name.map(str::trim).filter(|x| !x.is_empty()).map(String::from).unwrap_or_else(|| name_from_url(&url));
     let l = IptvList { id: format!("l{}", now_ms()), name, url: Some(url), ..Default::default() };
     let mut all = lists();
@@ -1079,6 +1076,107 @@ pub fn add_list(input: &str, name: Option<&str>) -> IptvList {
     save_lists(&all);
     set_active(Some(&l.id));
     l
+}
+
+/// Địa chỉ danh sách: thiếu `http(s)://` thì thêm `http://` (như bản Legacy / bản tivi).
+fn list_url(input: &str) -> String {
+    let url = input.trim();
+    let lower = url.to_ascii_lowercase();
+    if lower.starts_with("http://") || lower.starts_with("https://") {
+        url.to_string()
+    } else {
+        format!("http://{url}")
+    }
+}
+
+/// Khoá so trùng địa chỉ danh sách: bỏ `http(s)://` và dấu `/` cuối, tên miền chữ thường (đường dẫn giữ nguyên — link rút gọn
+/// phân biệt chữ hoa / thường).
+pub fn list_url_key(url: &str) -> String {
+    let u = url.trim();
+    let lower = u.to_ascii_lowercase();
+    let rest = if lower.starts_with("https://") {
+        &u[8..]
+    } else if lower.starts_with("http://") {
+        &u[7..]
+    } else {
+        u
+    };
+    let (host, path) = rest.split_once('/').map(|(h, p)| (h, format!("/{p}"))).unwrap_or((rest, String::new()));
+    format!("{}{}", host.to_ascii_lowercase(), path.trim_end_matches('/'))
+}
+
+/// Tách nhiều địa chỉ danh sách dán một lần — mỗi dòng (hoặc mỗi chữ cách nhau) một địa chỉ. Bỏ dòng trống, dòng chú thích `#`,
+/// chữ không giống địa chỉ (không có dấu chấm); thiếu `http(s)://` thì thêm; bỏ trùng, giữ thứ tự.
+pub fn split_urls(text: &str) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    for line in text.lines() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        for tok in line.split_whitespace() {
+            let t = tok.trim_matches(|c: char| matches!(c, '"' | '\'' | '<' | '>' | ',' | ';' | '(' | ')'));
+            if t.len() < 4 || !t.contains('.') || t.starts_with('.') || t.ends_with('.') {
+                continue;
+            }
+            let u = list_url(t);
+            let k = list_url_key(&u);
+            if !out.iter().any(|o| list_url_key(o) == k) {
+                out.push(u);
+            }
+        }
+    }
+    out
+}
+
+/// Kết quả thêm nhiều danh sách một lần.
+#[derive(Debug, Clone, Default, Serialize)]
+pub struct AddMany {
+    /// Danh sách vừa thêm (theo thứ tự dán)
+    pub added: Vec<IptvList>,
+    /// Số địa chỉ đã có sẵn trong app (bỏ qua)
+    pub existing: usize,
+}
+
+/// Thêm nhiều danh sách cùng lúc (địa chỉ tách bằng `split_urls`). Địa chỉ đã có thì bỏ qua. Danh sách đầu tiên vừa thêm thành
+/// danh sách đang dùng (các danh sách khác tải khi được chọn). Tên: một danh sách thì dùng `name`; nhiều thì «name 1», «name 2»…;
+/// không có tên thì đặt theo địa chỉ.
+pub fn add_lists(text: &str, name: Option<&str>) -> AddMany {
+    let mut all = lists();
+    let mut res = AddMany::default();
+    let fresh: Vec<String> = split_urls(text)
+        .into_iter()
+        .filter(|u| {
+            let k = list_url_key(u);
+            let dup = all.iter().any(|l| l.url.as_deref().is_some_and(|x| list_url_key(x) == k));
+            if dup {
+                res.existing += 1;
+            }
+            !dup
+        })
+        .collect();
+    let name = name.map(str::trim).filter(|x| !x.is_empty());
+    let mut stamp = now_ms();
+    for (i, url) in fresh.iter().enumerate() {
+        let nm = match name {
+            Some(n) if fresh.len() == 1 => n.to_string(),
+            Some(n) => format!("{n} {}", i + 1),
+            None => name_from_url(url),
+        };
+        // mã riêng cho từng danh sách (cùng một mili-giây)
+        while all.iter().any(|l| l.id == format!("l{stamp}")) {
+            stamp += 1;
+        }
+        let l = IptvList { id: format!("l{stamp}"), name: nm, url: Some(url.clone()), ..Default::default() };
+        stamp += 1;
+        all.push(l.clone());
+        res.added.push(l);
+    }
+    if let Some(first) = res.added.first() {
+        save_lists(&all);
+        set_active(Some(&first.id));
+    }
+    res
 }
 
 /// Thêm danh sách từ tệp M3U trên máy: chép vào `iptv/files/`.
@@ -1778,6 +1876,29 @@ pub fn due_reminder() -> Option<Value> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn splits_pasted_urls() {
+        let u = split_urls(
+            "https://a.example/list1\n  http://b.example/x.m3u  \n\n# ghi chú\nshort.example/aaa111\nshort.example/bbb222 short.example/bbb222\n\
+             «Danh sách 1»: <https://c.example/y.m3u8>, chữ thường\r\nHTTPS://D.example/Z\n",
+        );
+        assert_eq!(
+            u,
+            vec![
+                "https://a.example/list1",
+                "http://b.example/x.m3u",
+                "http://short.example/aaa111",
+                "http://short.example/bbb222",
+                "https://c.example/y.m3u8",
+                "HTTPS://D.example/Z",
+            ]
+        );
+        assert!(split_urls("  \n# chỉ chú thích\nkhông có địa chỉ").is_empty());
+        // http / https, tên miền hoa / thường, dấu / cuối: cùng một danh sách; đường dẫn khác hoa / thường: khác danh sách
+        assert_eq!(split_urls("http://A.example/x/\nhttps://a.example/x\na.example/X").len(), 2);
+        assert_eq!(list_url_key("HTTPS://Short.Gy/AbC/"), "short.gy/AbC");
+    }
 
     fn read(text: &str) -> (Option<String>, Vec<Entry>) {
         let mut r = Reader::default();

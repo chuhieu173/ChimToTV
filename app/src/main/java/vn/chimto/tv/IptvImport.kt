@@ -48,8 +48,22 @@ object IptvImport {
             .show()
     }
 
-    private fun added(a: Activity, l: IptvList, done: (IptvList) -> Unit) {
-        Toast.makeText(a, "Đã thêm danh sách «${l.name}» — đang tải kênh…", Toast.LENGTH_LONG).show()
+    /** Câu báo sau khi thêm nhiều danh sách; null = chưa thêm được danh sách nào. */
+    fun addedText(r: Iptv.AddMany): String? {
+        val first = r.added.firstOrNull() ?: return null
+        val skip = if (r.existing > 0) " (bỏ qua ${r.existing} đã có)" else ""
+        return if (r.added.size == 1) "Đã thêm danh sách «${first.name}»$skip — đang tải kênh…"
+        else "Đã thêm ${r.added.size} danh sách$skip — đang tải «${first.name}»; danh sách khác tải khi chọn trong «Đổi danh sách»."
+    }
+
+    fun noneText(r: Iptv.AddMany): String = when (r.existing) {
+        0 -> "Chưa có địa chỉ danh sách."
+        1 -> "Danh sách này đã có trong app."
+        else -> "Các danh sách này đã có trong app."
+    }
+
+    private fun added(a: Activity, l: IptvList, done: (IptvList) -> Unit, text: String? = null) {
+        Toast.makeText(a, text ?: "Đã thêm danh sách «${l.name}» — đang tải kênh…", Toast.LENGTH_LONG).show()
         Iptv.refresh(true) { err -> if (err != null && !a.isFinishing) Toast.makeText(a, err, Toast.LENGTH_LONG).show() }
         done(l)
     }
@@ -59,10 +73,14 @@ object IptvImport {
             orientation = LinearLayout.VERTICAL
             setPadding(a.dp(22), a.dp(8), a.dp(22), 0)
         }
+        // Nhiều dòng: dán một lần nhiều địa chỉ, mỗi dòng một danh sách
         val url = EditText(a).apply {
-            hint = "http://…/danh-sach.m3u"
-            isSingleLine = true
-            inputType = android.text.InputType.TYPE_TEXT_VARIATION_URI
+            hint = "http://…/danh-sach.m3u\n(dán được nhiều địa chỉ, mỗi dòng một danh sách)"
+            isSingleLine = false
+            minLines = 2
+            maxLines = 6
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE or
+                android.text.InputType.TYPE_TEXT_VARIATION_URI or android.text.InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
             leaveWithUpDown()
         }
         val name = EditText(a).apply {
@@ -79,13 +97,14 @@ object IptvImport {
             .setNegativeButton("Huỷ", null)
             .show()
         d.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
-            val u = url.text.toString().trim()
-            if (u.length < 8 || '.' !in u) {
-                Toast.makeText(a, "Chưa có địa chỉ danh sách.", Toast.LENGTH_SHORT).show()
+            val r = Iptv.addLists(url.text.toString(), name.text.toString())
+            val first = r.added.firstOrNull()
+            if (first == null) {
+                Toast.makeText(a, noneText(r), Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
             d.dismiss()
-            added(a, Iptv.addList(u, name.text.toString()), done)
+            added(a, first, done, addedText(r))
         }
         url.requestFocus()
         url.openKeyboard()
@@ -246,10 +265,12 @@ object IptvImport {
                     if (length > 8192) return json(out, false, "Địa chỉ quá dài.")
                     val body = String(readN(input, length.toInt()), Charsets.UTF_8)
                     val o = runCatching { JSONObject(body) }.getOrNull()
-                    val u = o?.optString("url")?.trim().orEmpty()
-                    if (u.length < 8 || '.' !in u) return json(out, false, "Chưa có địa chỉ danh sách.")
-                    val l = runOnMain { Iptv.addList(u, o?.optString("name")) }
-                    json(out, true, "Đã thêm «${l.name}» — tivi đang tải danh sách.")
+                    val u = o?.optString("url").orEmpty()
+                    val r = runOnMain { Iptv.addLists(u, o?.optString("name")) }
+                    val l = r.added.firstOrNull() ?: return json(out, false, noneText(r))
+                    val skip = if (r.existing > 0) " (bỏ qua ${r.existing} đã có)" else ""
+                    json(out, true, if (r.added.size == 1) "Đã thêm «${l.name}»$skip — tivi đang tải danh sách."
+                        else "Đã thêm ${r.added.size} danh sách$skip — tivi đang tải «${l.name}».")
                     onAdded(Result.success(l))
                 }
                 method == "POST" && path == "/file" -> {
@@ -339,7 +360,7 @@ button{margin-top:10px;font:inherit;font-weight:600;background:#2baf85;color:#ff
 .small{font-size:13px;color:#7d8696;margin-top:20px}</style></head><body><main>
 <h1>Gửi danh sách kênh tới tivi</h1><p>Côn Bằng TV không kèm sẵn kênh — chỉ gửi danh sách bạn có quyền xem.</p>
 <label>Tên hiện trên tivi <span style="color:#7d8696">(không bắt buộc)</span><input id="name" maxlength="40"></label>
-<h2>1. Địa chỉ danh sách (M3U / M3U8)</h2><input id="url" placeholder="http://…/danh-sach.m3u" inputmode="url" autocapitalize="off">
+<h2>1. Địa chỉ danh sách (M3U / M3U8) — dán được nhiều, mỗi dòng một danh sách</h2><textarea id="url" rows="4" style="height:96px" placeholder="http://…/danh-sach.m3u" inputmode="url" autocapitalize="off" spellcheck="false"></textarea>
 <button onclick="sendUrl()">Thêm địa chỉ</button>
 <h2>2. Tệp .m3u trên máy này</h2><input type="file" id="file" accept=".m3u,.m3u8,.txt"><button onclick="sendFile()">Gửi tệp</button>
 <h2>3. Hoặc dán nội dung danh sách</h2><textarea id="text" placeholder="#EXTM3U&#10;#EXTINF:-1 group-title=&quot;Tin tức&quot;,Tên kênh&#10;http://…/kenh.m3u8"></textarea>

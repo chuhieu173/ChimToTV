@@ -518,16 +518,28 @@ impl Page for TvPage {
 pub fn ask_add(done: Rc<dyn Fn()>) {
     ui::local(async move {
         let a = app();
-        let url = ui::entry();
-        url.set_width_chars(46);
-        url.set_placeholder_text(Some("http://…/danh-sach.m3u"));
+        // Nhiều dòng: dán một lần nhiều địa chỉ, mỗi dòng một danh sách
+        // Giữ riêng bộ đệm chữ: đóng hộp thoại là ô bị huỷ (bộ đệm của ô cũng bị gỡ) — đọc chữ sau đó phải qua bản giữ này
+        let url_buf = gtk::TextBuffer::new(None::<&gtk::TextTagTable>);
+        let url = gtk::TextView::with_buffer(&url_buf);
+        url.set_wrap_mode(gtk::WrapMode::None);
+        url.set_accepts_tab(false);
+        url.set_left_margin(8);
+        url.set_top_margin(6);
+        url.set_bottom_margin(6);
+        let url_box = gtk::ScrolledWindow::new(None::<&gtk::Adjustment>, None::<&gtk::Adjustment>);
+        url_box.set_policy(gtk::PolicyType::Automatic, gtk::PolicyType::Automatic);
+        url_box.set_size_request(px(440.0), px(96.0));
+        url_box.add(&url);
+        url_box.style_context().add_class("frame");
+        let url_hint = ui::dim("http://…/danh-sach.m3u — dán được nhiều địa chỉ, mỗi dòng một danh sách");
         let name = ui::entry();
         name.set_width_chars(46);
         name.set_max_length(40);
         name.set_placeholder_text(Some("Tên hiện trong app (không bắt buộc)"));
-        url.connect_activate(|_| app().close_dialog(0));
         let bx = ui::vbox(10.0);
-        bx.pack_start(&url, false, false, 0);
+        bx.pack_start(&url_hint, false, false, 0);
+        bx.pack_start(&url_box, false, false, 0);
         bx.pack_start(&name, false, false, 0);
         let u2 = url.clone();
         ui::after(30, move || u2.grab_focus());
@@ -537,14 +549,28 @@ pub fn ask_add(done: Rc<dyn Fn()>) {
             .await;
         let nm = name.text().trim().to_string();
         let nm = (!nm.is_empty()).then_some(nm);
+        let mut many = 0;
         let added = match r {
             0 => {
-                let u = url.text().trim().to_string();
-                if u.len() < 8 || !u.contains('.') {
-                    a.toast("Chưa có địa chỉ danh sách.");
+                let text = url_buf.text(&url_buf.start_iter(), &url_buf.end_iter(), false).map(|t| t.to_string()).unwrap_or_default();
+                let res = iptv::add_lists(&text, nm.as_deref());
+                let Some(first) = res.added.first().cloned() else {
+                    a.toast(match res.existing {
+                        0 => "Chưa có địa chỉ danh sách.",
+                        1 => "Danh sách này đã có trong app.",
+                        _ => "Các danh sách này đã có trong app.",
+                    });
                     return;
+                };
+                many = res.added.len();
+                if many > 1 || res.existing > 0 {
+                    let skip = if res.existing > 0 { format!(" (bỏ qua {} đã có)", res.existing) } else { String::new() };
+                    a.toast(&format!(
+                        "Đã thêm {many} danh sách{skip} — đang tải «{}»; danh sách khác tải khi chọn trong «Đổi danh sách».",
+                        first.name
+                    ));
                 }
-                iptv::add_list(&u, nm.as_deref())
+                first
             }
             1 => {
                 let dlg = gtk::FileChooserNative::new(Some("Chọn tệp danh sách kênh"), Some(&a.window), gtk::FileChooserAction::Open, Some("Mở"), Some("Huỷ"));
@@ -568,7 +594,9 @@ pub fn ask_add(done: Rc<dyn Fn()>) {
             }
             _ => return,
         };
-        a.toast(&format!("Đã thêm danh sách «{}» — đang tải kênh…", added.name));
+        if many <= 1 {
+            a.toast(&format!("Đã thêm danh sách «{}» — đang tải kênh…", added.name));
+        }
         done();
         let done2 = done.clone();
         ui::spawn(async { iptv::refresh(true).await }, move |r| {

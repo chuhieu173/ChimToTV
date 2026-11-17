@@ -355,8 +355,8 @@ final class TvModel: ObservableObject {
     }
 
     /// Thêm danh sách theo địa chỉ / từ tệp rồi tải.
-    func added(_ l: IptvList) {
-        toast("Đã thêm danh sách «\(l.name)» — đang tải kênh…")
+    func added(_ l: IptvList, text: String? = nil) {
+        toast(text ?? "Đã thêm danh sách «\(l.name)» — đang tải kênh…")
         favsChosen = false
         filter = IptvFilter()
         search = ""
@@ -951,12 +951,21 @@ struct TvAddView: View {
         NavigationView {
             Form {
                 Section {
-                    TextField("http://…/danh-sach.m3u", text: $url)
-                        .keyboardType(.URL)
-                        .textInputAutocapitalization(.never)
-                        .disableAutocorrection(true)
-                        .submitLabel(.done)
-                        .onSubmit(addUrl)
+                    // Nhiều dòng: dán một lần nhiều địa chỉ, mỗi dòng một danh sách
+                    ZStack(alignment: .topLeading) {
+                        if url.isEmpty {
+                            Text("http://…/danh-sach.m3u\n(dán được nhiều địa chỉ, mỗi dòng một danh sách)")
+                                .foregroundColor(Color(uiColor: .placeholderText))
+                                .padding(.top, 8)
+                                .padding(.leading, 4)
+                                .allowsHitTesting(false)
+                        }
+                        TextEditor(text: $url)
+                            .keyboardType(.URL)
+                            .textInputAutocapitalization(.never)
+                            .disableAutocorrection(true)
+                            .frame(minHeight: 88, maxHeight: 180)
+                    }
                     TextField("Tên hiện trong app (không bắt buộc)", text: $name)
                 } header: {
                     Text("Địa chỉ danh sách M3U / M3U8")
@@ -974,7 +983,7 @@ struct TvAddView: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Huỷ") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Thêm", action: addUrl).disabled(url.trimmingCharacters(in: .whitespaces).count < 8)
+                    Button("Thêm", action: addUrl).disabled(url.trimmingCharacters(in: .whitespacesAndNewlines).count < 4)
                 }
             }
             .fileImporter(isPresented: $picking, allowedContentTypes: [.data, .text]) { r in
@@ -996,14 +1005,17 @@ struct TvAddView: View {
     }
 
     private func addUrl() {
-        let u = url.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard u.count >= 8, u.contains(".") else {
-            error = "Chưa có địa chỉ danh sách."
+        let r = Iptv.addLists(url, name: name)
+        guard let first = r.added.first else {
+            error = r.existing == 0 ? "Chưa có địa chỉ danh sách." : r.existing == 1 ? "Danh sách này đã có trong app."
+                : "Các danh sách này đã có trong app."
             return
         }
-        let l = Iptv.addList(u, name: name)
+        let skip = r.existing > 0 ? " (bỏ qua \(r.existing) đã có)" : ""
+        let text = r.added.count == 1 ? "Đã thêm danh sách «\(first.name)»\(skip) — đang tải kênh…"
+            : "Đã thêm \(r.added.count) danh sách\(skip) — đang tải «\(first.name)»; danh sách khác tải khi chọn trong menu danh sách."
         dismiss()
-        m.added(l)
+        m.added(first, text: text)
     }
 }
 

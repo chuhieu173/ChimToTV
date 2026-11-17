@@ -583,6 +583,48 @@ enum IptvParse {
         return n.isEmpty ? "Danh sách từ tệp" : String(n.prefix(40))
     }
 
+    /// Địa chỉ danh sách: thiếu `http(s)://` thì thêm `http://`.
+    static func listUrl(_ input: String) -> String {
+        let u = input.trimmingCharacters(in: .whitespacesAndNewlines)
+        let l = u.lowercased()
+        return l.hasPrefix("http://") || l.hasPrefix("https://") ? u : "http://\(u)"
+    }
+
+    /// Khoá so trùng địa chỉ danh sách: bỏ `http(s)://` và dấu `/` cuối, tên miền chữ thường (đường dẫn giữ nguyên — link rút gọn
+    /// phân biệt chữ hoa / thường).
+    static func listUrlKey(_ url: String) -> String {
+        let u = url.trimmingCharacters(in: .whitespacesAndNewlines)
+        let l = u.lowercased()
+        let rest = l.hasPrefix("https://") ? String(u.dropFirst(8)) : l.hasPrefix("http://") ? String(u.dropFirst(7)) : u
+        var host = rest
+        var path = ""
+        if let i = rest.firstIndex(of: "/") {
+            host = String(rest[..<i])
+            path = String(rest[i...])
+        }
+        while path.hasSuffix("/") { path.removeLast() }
+        return host.lowercased() + path
+    }
+
+    /// Tách nhiều địa chỉ danh sách dán một lần — mỗi dòng (hoặc mỗi chữ cách nhau) một địa chỉ. Bỏ dòng trống, dòng chú thích `#`,
+    /// chữ không giống địa chỉ (không có dấu chấm); thiếu `http(s)://` thì thêm; bỏ trùng (`listUrlKey`), giữ thứ tự.
+    static func splitUrls(_ text: String) -> [String] {
+        var out: [String] = []
+        var keys = Set<String>()
+        let strip = CharacterSet(charactersIn: "\"'<>,;()")
+        for raw in text.components(separatedBy: .newlines) {
+            let line = raw.trimmingCharacters(in: .whitespaces)
+            if line.isEmpty || line.hasPrefix("#") { continue }
+            for tok in line.components(separatedBy: .whitespaces) where !tok.isEmpty {
+                let t = tok.trimmingCharacters(in: strip)
+                if t.count < 4 || !t.contains(".") || t.hasPrefix(".") || t.hasSuffix(".") { continue }
+                let u = listUrl(t)
+                if keys.insert(listUrlKey(u)).inserted { out.append(u) }
+            }
+        }
+        return out
+    }
+
     /// Tên danh sách lấy từ địa chỉ: tên tệp (bỏ đuôi), không có thì tên máy chủ.
     static func nameFromUrl(_ u: String) -> String {
         let c = URLComponents(string: u)

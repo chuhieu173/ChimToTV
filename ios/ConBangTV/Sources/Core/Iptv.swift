@@ -350,13 +350,42 @@ enum Iptv {
 
     @discardableResult
     static func addList(_ input: String, name: String? = nil) -> IptvList {
-        var url = input.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !url.hasPrefix("http://") && !url.hasPrefix("https://") { url = "http://\(url)" }
+        let url = IptvParse.listUrl(input)
         let nm = name?.trimmingCharacters(in: .whitespaces) ?? ""
         let l = IptvList(id: "l\(nowMs())", name: nm.isEmpty ? IptvParse.nameFromUrl(url) : nm, url: url)
         saveLists(lists() + [l])
         setActive(l.id)
         return l
+    }
+
+    /// Thêm nhiều danh sách cùng lúc (địa chỉ tách bằng `IptvParse.splitUrls` — dán mỗi dòng một danh sách). Địa chỉ đã có thì bỏ
+    /// qua (`existing`). Danh sách đầu tiên vừa thêm thành danh sách đang dùng (các danh sách khác tải khi được chọn). Tên: một
+    /// danh sách thì dùng `name`; nhiều thì «name 1», «name 2»…; không có tên thì đặt theo địa chỉ.
+    static func addLists(_ text: String, name: String? = nil) -> (added: [IptvList], existing: Int) {
+        var all = lists()
+        var existing = 0
+        let fresh = IptvParse.splitUrls(text).filter { u in
+            let k = IptvParse.listUrlKey(u)
+            let dup = all.contains { $0.url.map(IptvParse.listUrlKey) == k }
+            if dup { existing += 1 }
+            return !dup
+        }
+        let nm = name?.trimmingCharacters(in: .whitespaces) ?? ""
+        var stamp = nowMs()
+        var added: [IptvList] = []
+        for (i, url) in fresh.enumerated() {
+            while all.contains(where: { $0.id == "l\(stamp)" }) { stamp += 1 } // mã riêng cho từng danh sách (cùng một mili-giây)
+            let n = nm.isEmpty ? IptvParse.nameFromUrl(url) : fresh.count == 1 ? nm : "\(nm) \(i + 1)"
+            let l = IptvList(id: "l\(stamp)", name: n, url: url)
+            stamp += 1
+            all.append(l)
+            added.append(l)
+        }
+        if let first = added.first {
+            saveLists(all)
+            setActive(first.id)
+        }
+        return (added, existing)
     }
 
     /// Thêm danh sách từ tệp M3U trên máy (chọn trong Tệp / Finder): chép vào iptv/files/.

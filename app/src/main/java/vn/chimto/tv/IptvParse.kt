@@ -425,6 +425,51 @@ object IptvParse {
         return if (n.isEmpty()) "Danh sách từ tệp" else n.take(40)
     }
 
+    /** Địa chỉ danh sách: thiếu `http(s)://` thì thêm `http://`. */
+    fun listUrl(input: String): String {
+        val u = input.trim()
+        val l = u.lowercase()
+        return if (l.startsWith("http://") || l.startsWith("https://")) u else "http://$u"
+    }
+
+    /**
+     * Khoá so trùng địa chỉ danh sách: bỏ `http(s)://` và dấu `/` cuối, tên miền chữ thường (đường dẫn giữ nguyên — link rút gọn
+     * phân biệt chữ hoa / thường).
+     */
+    fun listUrlKey(url: String): String {
+        val u = url.trim()
+        val l = u.lowercase()
+        val rest = when {
+            l.startsWith("https://") -> u.substring(8)
+            l.startsWith("http://") -> u.substring(7)
+            else -> u
+        }
+        val slash = rest.indexOf('/')
+        val host = if (slash < 0) rest else rest.substring(0, slash)
+        val path = if (slash < 0) "" else rest.substring(slash)
+        return host.lowercase() + path.trimEnd('/')
+    }
+
+    /**
+     * Tách nhiều địa chỉ danh sách dán một lần — mỗi dòng (hoặc mỗi chữ cách nhau) một địa chỉ. Bỏ dòng trống, dòng chú thích `#`,
+     * chữ không giống địa chỉ (không có dấu chấm); thiếu `http(s)://` thì thêm; bỏ trùng (`listUrlKey`), giữ thứ tự.
+     */
+    fun splitUrls(text: String): List<String> {
+        val out = mutableListOf<String>()
+        val keys = HashSet<String>()
+        for (raw in text.lines()) {
+            val line = raw.trim()
+            if (line.isEmpty() || line.startsWith("#")) continue
+            for (tok in line.split(Regex("""\s+"""))) {
+                val t = tok.trim('"', '\'', '<', '>', ',', ';', '(', ')')
+                if (t.length < 4 || '.' !in t || t.startsWith(".") || t.endsWith(".")) continue
+                val u = listUrl(t)
+                if (keys.add(listUrlKey(u))) out += u
+            }
+        }
+        return out
+    }
+
     /** Tên danh sách lấy từ địa chỉ: tên tệp (bỏ đuôi), không có thì tên máy chủ. */
     fun nameFromUrl(url: String): String {
         val u = runCatching { URI(url) }.getOrNull()

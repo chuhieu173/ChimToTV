@@ -154,6 +154,23 @@ class IptvParseTest {
         assertEquals("aac", LiveSniff.classify(aac, "", "http://x", emptyMap(), 2).codec)
     }
 
+    /** Dán nhiều địa chỉ danh sách một lần: mỗi dòng / mỗi chữ một địa chỉ, thêm http://, bỏ trùng (http / https, dấu / cuối). */
+    @Test
+    fun splitsPastedUrls() {
+        val u = IptvParse.splitUrls(
+            "https://a.example/list1\n  http://b.example/x.m3u  \n\n# ghi chú\nshort.example/aaa111\nshort.example/bbb222 short.example/bbb222\n" +
+                "«Danh sách 1»: <https://c.example/y.m3u8>, chữ thường\r\nHTTPS://D.example/Z\nhttps://short.example/aaa111/\n",
+        )
+        assertEquals(
+            listOf("https://a.example/list1", "http://b.example/x.m3u", "http://short.example/aaa111", "http://short.example/bbb222",
+                "https://c.example/y.m3u8", "HTTPS://D.example/Z"),
+            u,
+        )
+        assertTrue(IptvParse.splitUrls("  \n# chỉ chú thích\nkhông có địa chỉ").isEmpty())
+        assertEquals(2, IptvParse.splitUrls("http://A.example/x/\nhttps://a.example/x\na.example/X").size)
+        assertEquals("short.gy/AbC", IptvParse.listUrlKey("HTTPS://Short.Gy/AbC/"))
+    }
+
     /** Mã QR của hộp «Gửi danh sách kênh tới máy này»: zxing đọc ra đúng địa chỉ (đủ các cỡ địa chỉ trong mạng nhà). */
     @Test
     fun qrCodesDecode() {

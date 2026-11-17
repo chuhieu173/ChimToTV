@@ -22,6 +22,9 @@ public static class Iptv
 
     public static JsonObject Add(string url, string? name) => (JsonObject)Native.SyncNode("iptv.add", new { url, name })!;
 
+    /// Dán nhiều địa chỉ một lần (mỗi dòng một danh sách): { added: [danh sách…], existing: số địa chỉ đã có }.
+    public static JsonObject AddMany(string text, string? name) => (JsonObject)Native.SyncNode("iptv.addMany", new { text, name })!;
+
     public static JsonObject AddFile(string path, string? name) => (JsonObject)Native.SyncNode("iptv.addFile", new { path, name })!;
 
     public static void SetActive(string? id) => Native.SyncVoid("iptv.setActive", new { id });

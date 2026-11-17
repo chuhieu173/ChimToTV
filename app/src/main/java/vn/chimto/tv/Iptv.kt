@@ -684,12 +684,46 @@ object Iptv {
     }
 
     fun addList(input: String, name: String? = null): IptvList {
-        var url = input.trim()
-        if (!url.startsWith("http://") && !url.startsWith("https://")) url = "http://$url"
+        val url = IptvParse.listUrl(input)
         val l = IptvList("l${System.currentTimeMillis()}", name?.trim()?.takeIf { it.isNotEmpty() } ?: IptvParse.nameFromUrl(url), url, null, null)
         saveLists(lists + l)
         setActive(l.id)
         return l
+    }
+
+    /** Kết quả thêm nhiều danh sách một lần: danh sách vừa thêm (theo thứ tự dán), số địa chỉ đã có sẵn (bỏ qua). */
+    class AddMany(val added: List<IptvList>, val existing: Int)
+
+    /**
+     * Thêm nhiều danh sách cùng lúc (địa chỉ tách bằng `IptvParse.splitUrls` — dán mỗi dòng một danh sách). Địa chỉ đã có thì bỏ
+     * qua. Danh sách đầu tiên vừa thêm thành danh sách đang dùng (các danh sách khác tải khi được chọn). Tên: một danh sách thì dùng
+     * [name]; nhiều thì «name 1», «name 2»…; không có tên thì đặt theo địa chỉ.
+     */
+    fun addLists(text: String, name: String? = null): AddMany {
+        val all = lists.toMutableList()
+        var existing = 0
+        val fresh = IptvParse.splitUrls(text).filter { u ->
+            val k = IptvParse.listUrlKey(u)
+            val dup = all.any { l -> l.url?.let { IptvParse.listUrlKey(it) } == k }
+            if (dup) existing++
+            !dup
+        }
+        val nm = name?.trim()?.takeIf { it.isNotEmpty() }
+        var stamp = System.currentTimeMillis()
+        val added = fresh.mapIndexed { i, url ->
+            while (all.any { it.id == "l$stamp" }) stamp++ // mã riêng cho từng danh sách (cùng một mili-giây)
+            val n = when {
+                nm == null -> IptvParse.nameFromUrl(url)
+                fresh.size == 1 -> nm
+                else -> "$nm ${i + 1}"
+            }
+            IptvList("l$stamp", n, url, null, null).also { stamp++; all += it }
+        }
+        if (added.isNotEmpty()) {
+            saveLists(all)
+            setActive(added.first().id)
+        }
+        return AddMany(added, existing)
     }
 
     /** Thêm danh sách từ nội dung tệp M3U (điện thoại / máy tính gửi qua Wi-Fi, tệp trên máy): chép vào filesDir/iptv. */
