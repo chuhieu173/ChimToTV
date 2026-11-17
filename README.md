@@ -19,19 +19,19 @@ M3U bạn tự thêm, xem [Truyền hình · Radio](#truyền-hình--radio-từ-
 [Cài trên Android TV bằng Downloader](#cài-trên-android-tv-bằng-downloader).
 
 **Bản iPad / iPhone** (iOS / iPadOS 15+, cài bằng TrollStore): [tải bản mới nhất](https://github.com/conbangtv/ChimToTV/releases/download/conbangtv_ios/ConBangTV-iPad.ipa)
-(link cố định) · [release `ios-v1.20`](https://github.com/conbangtv/ChimToTV/releases/tag/ios-v1.20)
+(link cố định) · [release `ios-v1.21`](https://github.com/conbangtv/ChimToTV/releases/tag/ios-v1.21)
 — xem mục [Bản iPad](#bản-ipad). TV và iPad / iPhone đồng bộ được với nhau — xem [Đồng bộ trong nhà](#đồng-bộ-trong-nhà-từ-22).
 
 **Bản Windows** (Windows 10 / 11, một tệp `.exe` chạy ngay): [tải bản mới nhất](https://github.com/conbangtv/ChimToTV/releases/download/conbangtv_windows/ConBangTV-Windows.exe)
-(link cố định) · [release `win-v1.18`](https://github.com/conbangtv/ChimToTV/releases/tag/win-v1.18)
+(link cố định) · [release `win-v1.19`](https://github.com/conbangtv/ChimToTV/releases/tag/win-v1.19)
 — xem mục [Bản Windows](#bản-windows). Đồng bộ được với TV và iPad / iPhone.
 
 **Bản Mac** (macOS 12+, máy Intel và chip Apple): [tải bản mới nhất](https://github.com/conbangtv/ChimToTV/releases/download/conbangtv_macos/ConBangTV-Mac.zip)
-(link cố định) · [release `mac-v1.20`](https://github.com/conbangtv/ChimToTV/releases/tag/mac-v1.20)
+(link cố định) · [release `mac-v1.21`](https://github.com/conbangtv/ChimToTV/releases/tag/mac-v1.21)
 — xem mục [Bản Mac](#bản-mac) (lần đầu mở: Cài đặt hệ thống → Quyền riêng tư & Bảo mật → Vẫn mở).
 
 **Bản Linux** (Ubuntu 22.04+ / Linux Mint 21+ / Debian 12+, máy 64-bit, tệp `.deb`): [tải bản mới nhất](https://github.com/conbangtv/ChimToTV/releases/download/conbangtv_linux/ConBangTV-Linux.deb)
-(link cố định) · [release `linux-v1.4`](https://github.com/conbangtv/ChimToTV/releases/tag/linux-v1.4)
+(link cố định) · [release `linux-v1.5`](https://github.com/conbangtv/ChimToTV/releases/tag/linux-v1.5)
 — xem mục [Bản Linux](#bản-linux). Đồng bộ được với TV, iPad / iPhone, Windows và Mac.
 
 **Mã nguồn mở:** giấy phép GPL-3.0 — xem [Giấy phép](#giấy-phép).
@@ -159,7 +159,7 @@ không gọi IMDb. Phim dưới 100 lượt chấm coi như chưa có điểm.
 Mục **Truyền hình · Radio** trong menu: xem kênh truyền hình và nghe radio từ **danh sách M3U / M3U8 mà bạn có quyền xem** — app
 **không kèm sẵn kênh nào**. Cách dùng và dữ liệu giống bản Legacy (iOS 6); giao diện theo kiểu của từng bản.
 
-- **Thêm danh sách:** dán địa chỉ (http / https), hoặc thêm tệp `.m3u` — tivi: «Thêm danh sách kênh» → «Gửi từ điện thoại / máy
+- **Thêm danh sách:** dán địa chỉ (http / https) — **dán được nhiều địa chỉ một lần, mỗi dòng một danh sách** (từ 2.21 / 1.21 / 1.19 / 1.5; địa chỉ đã có tự bỏ qua) — hoặc thêm tệp `.m3u` — tivi: «Thêm danh sách kênh» → «Gửi từ điện thoại / máy
   tính (cùng Wi-Fi)», quét mã QR rồi gửi tệp hoặc dán nội dung (trang tải lên ở cổng 8795 của tivi); iPad / máy tính: chọn tệp. Có
   thể thêm nhiều danh sách và đổi qua lại; danh sách theo địa chỉ tự tải lại khi cũ (danh sách thể thao tải lại thường hơn).
 - App đọc nhóm (`group-title`, `#EXTGRP`), logo, số kênh (`tvg-chno`), Referer / User-Agent riêng của luồng (`#EXTVLCOPT`,
@@ -175,6 +175,7 @@ Mục **Truyền hình · Radio** trong menu: xem kênh truyền hình và nghe 
 - **Trình phát:** nguồn lỗi tự chuyển sang nguồn sau (cả kênh lỗi thì tải lại danh sách một lần); tạm dừng thì xem lùi được (nhãn
   «CHẬM», nút «Về trực tiếp»); radio hiện logo đài, tên bài đang phát (ICY) và định dạng / bitrate. Tivi phát bằng Media3 ExoPlayer,
   Windows / Linux bằng mpv, iPad / iPhone / Mac bằng AVPlayer (không phát được luồng FLV → tự chuyển nguồn khác).
+- **Trên trang chủ** (từ 2.21 / iPad · iPhone · Mac 1.21 / Windows 1.19 / Linux 1.5): 4 hàng «Kênh vừa xem», «Kênh yêu thích», «Trận đang / sắp đá», «Radio» — dải thẻ kênh, bấm là phát; mặc định ngay sau «Xem tiếp», bật / tắt / đổi thứ tự trong Cài đặt → Trang chủ → «Các hàng trên trang chủ…» hoặc sửa nhanh trên hàng (tivi: Menu / giữ OK; iPad: giữ tay; máy tính: chuột phải); hàng rỗng tự ẩn; hồ sơ trẻ em không có hàng trận / radio.
 - **Danh sách lớn** (Xtream vài chục nghìn kênh): tivi lưu vào SQLite, máy tính / iPad đọc trong bộ nhớ (đo trên iPhone 6s Plus:
   59 834 kênh đọc trong ~12 giây kể cả tải về, app dùng ~120 MB).
 - **Phím:** tivi ▲ ▼ hoặc CH+ / CH− đổi kênh, phím số nhảy tới kênh, OK hiện nút (☰ Kênh, Tạm dừng, ☆…); Windows / Linux PgUp /
