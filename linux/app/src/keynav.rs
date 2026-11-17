@@ -37,7 +37,22 @@ fn is_target(w: &gtk::Widget) -> bool {
         && w.is_visible()
         && w.is_mapped()
         && w.allocated_width() > 1
-        && (w.is::<gtk::Button>() || w.is::<gtk::Entry>() || w.is::<gtk::DrawingArea>() || w.is::<gtk::Switch>())
+        && (w.is::<gtk::Button>()
+            || w.is::<gtk::Entry>()
+            || w.is::<gtk::TextView>()
+            || w.is::<gtk::DrawingArea>()
+            || w.is::<gtk::Switch>())
+}
+
+/// Ô chữ nhiều dòng giữ phím mũi tên cho mình: ◄ ► luôn, ▲ ▼ khi con trỏ chưa ở dòng đầu / dòng cuối (ở mép thì đi ra mục khác).
+pub fn text_view_keeps(v: &gtk::TextView, dir: Dir) -> bool {
+    let Some(buf) = v.buffer() else { return false };
+    let line = buf.iter_at_offset(buf.cursor_position()).line();
+    match dir {
+        Dir::Left | Dir::Right => true,
+        Dir::Up => line > 0,
+        Dir::Down => line < buf.line_count() - 1,
+    }
 }
 
 /// Các mục chọn được trong root.

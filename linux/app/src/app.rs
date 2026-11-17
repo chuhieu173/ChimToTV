@@ -634,14 +634,20 @@ impl App {
         let ctrl = st.contains(gdk::ModifierType::CONTROL_MASK);
         let focused = self.window.focused_widget();
         let entry = focused.as_ref().and_then(|f| f.clone().downcast::<gtk::Entry>().ok());
+        // Ô chữ nhiều dòng (dán nhiều trang / nhiều danh sách)
+        let text_view = focused.as_ref().and_then(|f| f.clone().downcast::<gtk::TextView>().ok()).filter(|v| v.is_editable());
+        let typing = entry.is_some() || text_view.is_some();
 
         if self.dialog_open() {
-            if key == k::Escape || key == k::Back || (key == k::BackSpace && entry.is_none()) {
+            if key == k::Escape || key == k::Back || (key == k::BackSpace && !typing) {
                 self.close_dialog(-1);
                 return glib::Propagation::Stop;
             }
             if let Some(dir) = keynav::dir_of(&key) {
                 if entry.is_some() && matches!(dir, Dir::Left | Dir::Right) {
+                    return glib::Propagation::Proceed;
+                }
+                if text_view.as_ref().is_some_and(|v| keynav::text_view_keeps(v, dir)) {
                     return glib::Propagation::Proceed;
                 }
                 let root: gtk::Widget = self.dialog_box.clone().upcast();
@@ -675,7 +681,7 @@ impl App {
             self.toggle_fullscreen();
             return glib::Propagation::Stop;
         }
-        if key == k::Escape || key == k::Back || (key == k::BackSpace && entry.is_none()) {
+        if key == k::Escape || key == k::Back || (key == k::BackSpace && !typing) {
             self.back();
             return glib::Propagation::Stop;
         }
@@ -688,6 +694,9 @@ impl App {
             return glib::Propagation::Stop;
         }
         let Some(dir) = keynav::dir_of(&key) else { return glib::Propagation::Proceed };
+        if text_view.as_ref().is_some_and(|v| keynav::text_view_keeps(v, dir)) {
+            return glib::Propagation::Proceed;
+        }
         if let Some(e) = &entry {
             if matches!(dir, Dir::Left | Dir::Right) {
                 let pos = e.position();

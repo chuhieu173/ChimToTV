@@ -792,6 +792,12 @@ public partial class MainWindow : Window
             var atEdge = dir == KeyNav.Dir.Left ? tb.CaretIndex == 0 && tb.SelectionLength == 0 : tb.CaretIndex >= tb.Text.Length;
             if (!atEdge) return;
         }
+        // Ô chữ nhiều dòng (dán nhiều trang / nhiều danh sách): ▲ ▼ đi giữa các dòng, ở dòng đầu / cuối thì sang mục khác
+        if (focused is TextBox { AcceptsReturn: true } ml && dir is KeyNav.Dir.Up or KeyNav.Dir.Down)
+        {
+            var line = ml.GetLineIndexFromCharacterIndex(ml.CaretIndex);
+            if (line >= 0 && (dir == KeyNav.Dir.Up ? line > 0 : line < ml.LineCount - 1)) return;
+        }
         e.Handled = true;
         Visual root = DialogLayer.Visibility == Visibility.Visible ? DialogBox : Shell;
         if (focused == null || !KeyNav.IsInside(focused, root))

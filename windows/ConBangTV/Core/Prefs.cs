@@ -594,6 +594,99 @@ public static class Prefs
         return s;
     }
 
+    // ---- Thêm nhiều trang một lần (dán nhiều dòng) — cùng cách với lõi Rust prefs::add_sites (bản Linux) ----
+
+    /// Gợi ý cạnh ô thêm trang nhiều dòng.
+    public const string AddSitesHint = "Tên miền, vd ten-trang.example — dán được nhiều trang, mỗi dòng một trang";
+
+    /// Khoá so trùng trang: tên máy chữ thường (kèm cổng nếu có), bỏ «www.» đầu — «http://www.A.example/x» và «a.example» là một
+    /// trang; http / https, dấu / cuối, đường dẫn không tính.
+    public static string SiteKey(string url)
+    {
+        var s = url.Trim();
+        var full = s.StartsWith("http://", StringComparison.OrdinalIgnoreCase) || s.StartsWith("https://", StringComparison.OrdinalIgnoreCase)
+            ? s : "https://" + s;
+        var host = Uri.TryCreate(full, UriKind.Absolute, out var u) && !string.IsNullOrEmpty(u.Host)
+            ? u.Host.ToLowerInvariant() + (u.IsDefaultPort ? "" : $":{u.Port}")
+            : s.ToLowerInvariant().TrimEnd('/');
+        return host.StartsWith("www.") ? host[4..] : host;
+    }
+
+    /// Gốc trang: «https://phim.example/xem/1?x=2» → «https://phim.example» (giữ cổng nếu có); «bad..host» → null.
+    private static string? SiteRoot(string url)
+    {
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var u) || string.IsNullOrEmpty(u.Host)) return null;
+        var host = u.Host.ToLowerInvariant();
+        if (host.Split('.').Any(l => l.Length == 0)) return null;
+        return $"{u.Scheme.ToLowerInvariant()}://{host}" + (u.IsDefaultPort ? "" : $":{u.Port}");
+    }
+
+    private static readonly char[] SiteWrap = { '"', '\'', '<', '>', ',', ';', '(', ')', '[', ']' };
+    private static readonly char[] SiteWrapEnd = SiteWrap.Append('.').ToArray();
+
+    /// Một chữ trong đoạn dán: null = không giống tên miền (bỏ qua, không báo); "" = giống tên miền nhưng sai; còn lại = gốc trang.
+    private static string? SiteToken(string raw)
+    {
+        var t = raw.TrimStart(SiteWrap).TrimEnd(SiteWrapEnd);
+        if (t.Length == 0 || !t.Contains('.') || t.StartsWith('.')) return null;
+        // Số bản kiểu «1.5», «2.21», «1.2.3» — không phải trang (địa chỉ IP đủ 4 phần vẫn nhận)
+        if (t.All(c => c is >= '0' and <= '9' or '.') && t.Count(c => c == '.') < 3) return null;
+        var n = NormalizeUrl(t);
+        return n == null ? "" : SiteRoot(n) ?? "";
+    }
+
+    /// Tách đoạn dán nhiều trang: tách theo dòng và khoảng trắng, bỏ dòng trống / dòng chú thích «#», bỏ chữ không có dấu chấm;
+    /// mỗi trang chuẩn hoá như NormalizeUrl rồi rút về gốc; trùng (theo SiteKey) chỉ giữ lần đầu. Trả (các trang, số tên sai).
+    private static (List<string> Sites, int Invalid) ParseSites(string text)
+    {
+        var outList = new List<string>();
+        var keys = new HashSet<string>();
+        var invalid = 0;
+        foreach (var raw in text.Split('\n'))
+        {
+            var line = raw.Trim();
+            if (line.Length == 0 || line.StartsWith('#')) continue;
+            foreach (var tok in line.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries))
+            {
+                switch (SiteToken(tok))
+                {
+                    case null: break;
+                    case "": invalid++; break;
+                    case var root:
+                        if (keys.Add(SiteKey(root))) outList.Add(root);
+                        break;
+                }
+            }
+        }
+        return (outList, invalid);
+    }
+
+    /// Các trang trong đoạn dán (đã chuẩn hoá về gốc, bỏ trùng, giữ thứ tự dán).
+    public static List<string> SplitSites(string text) => ParseSites(text).Sites;
+
+    /// Số chữ giống tên miền nhưng sai trong đoạn dán.
+    public static int InvalidSites(string text) => ParseSites(text).Invalid;
+
+    /// Thêm một lần nhiều trang (dán nhiều dòng) vào cuối danh sách; không đổi trang đang dùng.
+    public static AddSitesResult AddSites(string text)
+    {
+        var (roots, invalid) = ParseSites(text);
+        lock (Lock)
+        {
+            var list = Sites;
+            var have = list.Select(SiteKey).ToHashSet();
+            var added = new List<string>();
+            var existing = 0;
+            foreach (var r in roots)
+            {
+                if (have.Contains(SiteKey(r))) existing++;
+                else added.Add(r);
+            }
+            if (added.Count > 0) Sites = list.Concat(added).ToList();
+            return new AddSitesResult(added, existing, invalid);
+        }
+    }
+
     // ---- Giao diện (riêng bản Windows) ----
 
     /// Cỡ chữ / cỡ giao diện: 1.0 (máy tính), 1.25 / 1.5 (tivi ngồi xa).
@@ -1049,4 +1142,30 @@ public static class Prefs
         get => !Has("sync_auto") || Get<bool>("sync_auto");
         set => Set("sync_auto", value);
     }
+}
+
+/// Kết quả thêm nhiều trang một lần: trang mới đã thêm (theo thứ tự dán), số trang đã có sẵn, số chữ giống tên miền nhưng sai.
+public sealed record AddSitesResult(List<string> Added, int Existing, int Invalid)
+{
+    /// Câu báo khi đã thêm: một trang «Đã thêm a.example vào danh sách trang phim.», nhiều trang «Đã thêm 3 trang: a, b, c
+    /// (bỏ qua 1 đã có).» — dài thì rút gọn.
+    public string AddedText()
+    {
+        var names = Added.Select(u => Site.HostOf(u) ?? u).ToList();
+        var skip = new List<string>();
+        if (Existing > 0) skip.Add($"bỏ qua {Existing} đã có");
+        if (Invalid > 0) skip.Add($"{Invalid} tên miền không hợp lệ");
+        var tail = skip.Count == 0 ? "" : $" ({string.Join("; ", skip)})";
+        if (names.Count == 1) return $"Đã thêm {names[0]} vào danh sách trang phim{tail}.";
+        var shown = names.Count > 4 ? string.Join(", ", names.Take(3)) + $"… (+{names.Count - 3})" : string.Join(", ", names);
+        return $"Đã thêm {names.Count} trang: {shown}{tail}.";
+    }
+
+    /// Câu báo khi không có trang mới nào (ô vẫn giữ chữ để sửa).
+    public string NoneText() => Existing switch
+    {
+        0 => "Chưa có tên miền hợp lệ (vd ten-trang.example).",
+        1 => "Trang này đã có trong danh sách.",
+        _ => "Các trang này đã có trong danh sách.",
+    };
 }

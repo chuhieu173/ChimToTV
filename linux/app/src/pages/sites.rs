@@ -14,20 +14,39 @@ use std::rc::Rc;
 pub struct SitesPage {
     base: PageBase,
     checks: RefCell<HashMap<String, String>>,
-    add: gtk::Entry,
+    /// Ô thêm trang nhiều dòng (dán một lần nhiều trang, mỗi dòng một trang); giữ riêng bộ đệm chữ như ô dán danh sách kênh
+    /// (tv.rs ask_add). Ô nằm trong khung cuộn `add_box` — khung này được giữ qua các lần dựng lại trang.
+    add_buf: gtk::TextBuffer,
+    add_box: gtk::ScrolledWindow,
 }
 
 pub fn new() -> Rc<dyn Page> {
-    let add = crate::ui::entry();
-    add.set_width_chars(30);
-    add.set_placeholder_text(Some("vd yanhh3d.ee"));
-    let p = Rc::new(SitesPage { base: PageBase::new("sites"), checks: RefCell::new(HashMap::new()), add });
-    p.base.keep(&p.add);
+    let add_buf = gtk::TextBuffer::new(None::<&gtk::TextTagTable>);
+    let view = gtk::TextView::with_buffer(&add_buf);
+    view.set_wrap_mode(gtk::WrapMode::None);
+    view.set_accepts_tab(false);
+    view.set_left_margin(8);
+    view.set_top_margin(6);
+    view.set_bottom_margin(6);
+    let add_box = gtk::ScrolledWindow::new(None::<&gtk::Adjustment>, None::<&gtk::Adjustment>);
+    add_box.set_policy(gtk::PolicyType::Automatic, gtk::PolicyType::Automatic);
+    add_box.set_size_request(px(440.0), px(84.0));
+    add_box.add(&view);
+    add_box.style_context().add_class("frame");
+    let p = Rc::new(SitesPage { base: PageBase::new("sites"), checks: RefCell::new(HashMap::new()), add_buf, add_box });
+    p.base.keep(&p.add_box);
+    // Enter xuống dòng; Ctrl+Enter = «Thêm»
     let weak = Rc::downgrade(&p);
-    p.add.connect_activate(move |_| {
-        if let Some(p) = weak.upgrade() {
-            p.add_site();
+    view.connect_key_press_event(move |_, ev| {
+        use gdk::keys::constants as k;
+        let key = ev.keyval();
+        if (key == k::Return || key == k::KP_Enter) && ev.state().contains(gdk::ModifierType::CONTROL_MASK) {
+            if let Some(p) = weak.upgrade() {
+                p.add_site();
+            }
+            return glib::Propagation::Stop;
         }
+        glib::Propagation::Proceed
     });
     p
 }
@@ -90,19 +109,24 @@ impl SitesPage {
         let h = ui::header("Thêm trang");
         h.set_margin_top(px(22.0));
         b.add(&h);
+        let hint = ui::dim(prefs::ADD_SITES_HINT);
+        hint.set_margin_bottom(px(6.0));
+        b.add(&hint);
         let add = ui::hbox(10.0);
         add.set_margin_bottom(px(10.0));
-        if let Some(p) = self.add.parent() {
+        if let Some(p) = self.add_box.parent() {
             if let Ok(c) = p.downcast::<gtk::Container>() {
-                c.remove(&self.add);
+                c.remove(&self.add_box);
             }
         }
-        add.pack_start(&self.add, false, false, 0);
+        add.pack_start(&self.add_box, false, false, 0);
         let me = self.clone();
-        add.pack_start(&ui::pill("Thêm", move || me.add_site()), false, false, 0);
+        let btn = ui::pill("Thêm", move || me.add_site());
+        btn.set_valign(gtk::Align::Start);
+        add.pack_start(&btn, false, false, 0);
         b.add(&add);
         let n = ui::dim(
-            "Gõ tên miền, vd yanhh3d.ee. App đọc được trang kiểu yanhh3d, theme HaLim (hoathinh3d…), kiểu PhimMoi (phimmois.fun), \
+            "Ctrl+Enter = Thêm. App đọc được trang kiểu yanhh3d, theme HaLim (hoathinh3d…), kiểu PhimMoi (phimmois.fun), \
              mephim.ddns.net, KKPhim (kkphim.com), NguonC (phim.nguonc.com), VSMOV (vsmov.com) và CLB Phim Xưa (sc.k-20.xyz).",
         );
         n.set_margin_bottom(px(10.0));
@@ -137,15 +161,24 @@ impl SitesPage {
         }
     }
 
+    /// «Thêm»: một trang mới → như trước (thêm, đo nhanh); nhiều trang → chỉ thêm cả loạt (không đổi trang đang dùng) và báo
+    /// «Đã thêm N trang: …». Không có trang mới → báo, giữ chữ trong ô để sửa.
     fn add_site(self: &Rc<Self>) {
-        let Some(u) = prefs::normalize_url(&self.add.text()) else {
-            app().toast("Tên trang không hợp lệ.");
+        let buf = &self.add_buf;
+        let text = buf.text(&buf.start_iter(), &buf.end_iter(), false).map(|t| t.to_string()).unwrap_or_default();
+        let r = prefs::add_sites(&text);
+        if r.added.is_empty() {
+            app().toast(r.none_text());
             return;
-        };
-        prefs::add_site(&u);
-        self.add.set_text("");
+        }
+        buf.set_text("");
+        if r.added.len() > 1 || r.existing > 0 || r.invalid > 0 {
+            app().toast(&r.added_text());
+        }
         self.build();
-        self.check(&u);
+        for u in &r.added {
+            self.check(u);
+        }
     }
 
     fn check(self: &Rc<Self>, s: &str) {

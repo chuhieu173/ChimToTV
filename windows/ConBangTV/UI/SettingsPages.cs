@@ -9,14 +9,20 @@ namespace ConBangTV.UI;
 public sealed class SitesPage : Page
 {
     private readonly Dictionary<string, string> _checks = new();
-    private readonly TextBox _add = new() { MinWidth = 340 };
+    // Nhiều dòng: dán một lần nhiều trang, mỗi dòng một trang (Enter xuống dòng, Ctrl+Enter = «Thêm»)
+    private readonly TextBox _add = new()
+    {
+        MinWidth = 420, MaxWidth = 560, MinHeight = 76, MaxHeight = 160, AcceptsReturn = true, TextWrapping = TextWrapping.NoWrap,
+        VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+    };
 
     public SitesPage()
     {
         MenuKey = "sites";
-        _add.KeyDown += (_, e) =>
+        _add.PreviewKeyDown += (_, e) =>
         {
-            if (e.Key != System.Windows.Input.Key.Enter) return;
+            if (e.Key != System.Windows.Input.Key.Enter || (System.Windows.Input.Keyboard.Modifiers & System.Windows.Input.ModifierKeys.Control) == 0)
+                return;
             e.Handled = true;
             Add();
         };
@@ -60,14 +66,17 @@ public sealed class SitesPage : Page
         Body.Children.Add(Ui.Row(Ui.Pill("Đo tất cả", () => _ = CheckAll())));
 
         Body.Children.Add(Ui.Header("Thêm trang", new Thickness(0, 22, 0, 12)));
+        Body.Children.Add(Ui.Dim(Prefs.AddSitesHint, 14, new Thickness(0, 0, 0, 6)));
         var add = new WrapPanel();
         _add.Margin = new Thickness(0, 0, 10, 10);
         // Ô nhập dùng lại qua các lần dựng: gỡ khỏi hàng cũ trước (không thì WPF báo «already the logical child»).
         (_add.Parent as Panel)?.Children.Remove(_add);
         add.Children.Add(_add);
-        add.Children.Add(Ui.Pill("Thêm", Add));
+        var addBtn = Ui.Pill("Thêm", Add);
+        addBtn.VerticalAlignment = VerticalAlignment.Top;
+        add.Children.Add(addBtn);
         Body.Children.Add(add);
-        Body.Children.Add(Ui.Dim("Gõ tên miền, vd yanhh3d.ee. App đọc được trang kiểu yanhh3d, theme HaLim (hoathinh3d…), kiểu PhimMoi " +
+        Body.Children.Add(Ui.Dim("Ctrl+Enter = Thêm. App đọc được trang kiểu yanhh3d, theme HaLim (hoathinh3d…), kiểu PhimMoi " +
                                  "(phimmois.fun), mephim.ddns.net, KKPhim (kkphim.com), NguonC (phim.nguonc.com), VSMOV (vsmov.com) và " +
                                  "CLB Phim Xưa (sc.k-20.xyz).", 14, new Thickness(0, 0, 0, 10)));
         var missing = Prefs.MissingPresets;
@@ -98,18 +107,20 @@ public sealed class SitesPage : Page
         Main.Toast($"Đã đổi sang {Site.HostOf(s)}.");
     }
 
+    /// «Thêm»: một trang mới → như trước (thêm, đo nhanh); nhiều trang → chỉ thêm cả loạt (không đổi trang đang dùng) và báo
+    /// «Đã thêm N trang: …». Không có trang mới → báo, giữ chữ trong ô để sửa.
     private void Add()
     {
-        var u = Prefs.NormalizeUrl(_add.Text);
-        if (u == null)
+        var r = Prefs.AddSites(_add.Text);
+        if (r.Added.Count == 0)
         {
-            Main.Toast("Tên trang không hợp lệ.");
+            Main.Toast(r.NoneText());
             return;
         }
-        Prefs.AddSite(u);
         _add.Text = "";
+        if (r.Added.Count > 1 || r.Existing > 0 || r.Invalid > 0) Main.Toast(r.AddedText());
         Build();
-        _ = Check(u);
+        foreach (var u in r.Added) _ = Check(u);
     }
 
     private async Task Check(string s)
