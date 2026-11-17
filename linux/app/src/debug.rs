@@ -168,7 +168,7 @@ fn handle(r: Req) {
                 crate::ui::spawn(async { cbtv::iptv::refresh(false).await }, |_| {});
             }
             if let Some(k) = r.q.get("play") {
-                app().play_live_key(k.clone());
+                app().play_live_key(k.clone(), None);
             } else if crate::live::current().is_none() {
                 app().show_root(crate::pages::tv::new());
             }

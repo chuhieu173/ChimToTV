@@ -1822,6 +1822,155 @@ pub async fn played(key: &str) {
 }
 
 // ======================================================================================================================
+// Trang chủ: các hàng Truyền hình (Kênh vừa xem, Kênh yêu thích, Trận đang / sắp đá, Radio)
+// ======================================================================================================================
+
+/// Trận còn bao lâu nữa mới đá thì vẫn hiện ở hàng «Trận đang / sắp đá» của trang chủ.
+const HOME_LIVE_AHEAD: f64 = 12.0 * 3600.0;
+
+/// Ô kênh của hàng trang chủ: như ô lưới (`view`) + "l" (danh sách) + "frac" (tiến độ chương trình đang phát / trận đang đá,
+/// 0…1; -1 = không có).
+fn home_cell(l: &Loaded, ix: u32, g: Option<&Guide>, favs: &HashSet<String>, bad: &Map<String, Value>, now: f64) -> Value {
+    let c = &l.channels[ix as usize];
+    let mut v = view(l, ix, g, favs, bad, false);
+    v["l"] = json!(l.list_id);
+    let state = match_state(c.kick, c.dur, now);
+    v["match"] = json!(state);
+    v["matchLine"] = json!(match_line(c.kick, c.dur, c.nolink(), now));
+    let frac = if state == Match::Live && c.dur > 0 {
+        (now - c.kick) / (c.dur as f64 * 60.0)
+    } else if let (Some(s), Some(e)) = (v["now"]["s"].as_f64(), v["now"]["e"].as_f64()) {
+        (now - s) / (e - s).max(1.0)
+    } else {
+        -1.0
+    };
+    v["frac"] = json!(if frac < 0.0 { -1.0 } else { frac.min(1.0) });
+    v
+}
+
+/// Các hàng Truyền hình của trang chủ từ danh sách đã đọc (hàm thuần — `home_rows` lấy dữ liệu của người xem rồi gọi):
+/// - recent: kênh vừa xem đúng thứ tự — kênh của danh sách đang dùng thì như ô lưới (chương trình đang phát, trận), kênh của
+///   danh sách khác (hoặc đã bỏ khỏi danh sách) thì như đã ghi lúc xem (k, n, logo, g, l, radio);
+/// - favs: kênh yêu thích của danh sách đang dùng (theo thứ tự đánh dấu);
+/// - live: trận đang đá (có link trước) rồi sắp đá trong 12 giờ (sớm trước);
+/// - radio: đài vừa nghe trước, rồi các đài khác theo thứ tự danh sách.
+/// Hồ sơ trẻ em: chỉ kênh thiếu nhi, không có live / radio. hide: bỏ kênh hỏng (như lưới khi bật «Ẩn kênh hỏng»).
+#[allow(clippy::too_many_arguments)]
+pub fn home_rows_of(
+    l: &Loaded, g: Option<&Guide>, recent: &[Value], favs: &[String], kids: bool, hide: bool, bad: &Map<String, Value>, now: f64,
+    limit: usize,
+) -> Value {
+    let favset: HashSet<String> = favs.iter().cloned().collect();
+    let ok = |c: &Channel| (!kids || c.kids) && (!hide || channel_bad(c, bad).is_none());
+    let cell = |ix: u32| home_cell(l, ix, g, &favset, bad, now);
+
+    let mut rec = Vec::new();
+    for r in recent {
+        if rec.len() >= limit {
+            break;
+        }
+        let k = r["k"].as_str().unwrap_or("");
+        let same_list = r["l"].as_str().map(|x| x == l.list_id).unwrap_or(true);
+        match l.by_key(k).filter(|_| same_list) {
+            Some((ix, c)) if ok(c) => rec.push(cell(ix)),
+            Some(_) => {}
+            None if !kids => rec.push(r.clone()),
+            None => {}
+        }
+    }
+
+    let fav: Vec<Value> =
+        favs.iter().filter_map(|k| l.by_key(k)).filter(|(_, c)| ok(c)).take(limit).map(|(ix, _)| cell(ix)).collect();
+
+    let mut live: Vec<(u8, f64, u32)> = Vec::new();
+    let mut radio: Vec<u32> = Vec::new();
+    if !kids {
+        for (i, c) in l.channels.iter().enumerate() {
+            if c.kick <= 0.0 || !ok(c) {
+                continue;
+            }
+            let rank = match match_state(c.kick, c.dur, now) {
+                Match::Live => {
+                    if c.nolink() { 1 } else { 0 }
+                }
+                Match::Soon => 2,
+                Match::Later if c.kick - now <= HOME_LIVE_AHEAD => 2,
+                _ => continue,
+            };
+            live.push((rank, c.kick, i as u32));
+        }
+        live.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal)).then(a.2.cmp(&b.2)));
+        live.truncate(limit);
+
+        let mut seen: HashSet<u32> = HashSet::new();
+        for r in recent.iter().filter(|r| r["radio"].as_bool() == Some(true)) {
+            let same_list = r["l"].as_str().map(|x| x == l.list_id).unwrap_or(true);
+            if let Some((ix, c)) = r["k"].as_str().and_then(|k| l.by_key(k)).filter(|_| same_list) {
+                if c.radio && ok(c) && radio.len() < limit && seen.insert(ix) {
+                    radio.push(ix);
+                }
+            }
+        }
+        for (i, c) in l.channels.iter().enumerate() {
+            if radio.len() >= limit {
+                break;
+            }
+            if c.radio && ok(c) && seen.insert(i as u32) {
+                radio.push(i as u32);
+            }
+        }
+    }
+    json!({
+        "list": l.list_id,
+        "recent": rec,
+        "favs": fav,
+        "live": live.iter().map(|x| cell(x.2)).collect::<Vec<_>>(),
+        "radio": radio.iter().map(|&ix| cell(ix)).collect::<Vec<_>>(),
+    })
+}
+
+/// Các hàng Truyền hình của trang chủ cho người xem đang dùng (xem `home_rows_of`). Danh sách đang dùng chưa đọc thì đọc tệp đã
+/// lưu (không tải mạng; giao diện gọi không chặn rồi dựng lại); chưa có tệp thì chỉ có kênh vừa xem (như đã ghi). Không có
+/// danh sách nào: mọi hàng rỗng. "loaded": danh sách đã đọc xong.
+pub async fn home_rows(limit: usize) -> Value {
+    let empty = json!({"recent": [], "favs": [], "live": [], "radio": [], "loaded": false});
+    if active_list().is_none() {
+        return empty;
+    }
+    let rec = recent();
+    let Some(l) = ensure_loaded().await else {
+        let mut v = empty;
+        if !prefs::kids() {
+            v["recent"] = json!(rec.into_iter().take(limit).collect::<Vec<_>>());
+        }
+        return v;
+    };
+    let g = guide();
+    let mut v = home_rows_of(&l, g.as_deref(), &rec, &favorite_keys(), prefs::kids(), hide_bad(), &bad_map(), now_sec(), limit);
+    v["loaded"] = json!(true);
+    v
+}
+
+/// Như `home_rows` nhưng không đọc tệp (dựng trang chủ ngay, không chờ): danh sách chưa đọc thì "loaded": false và chỉ có kênh
+/// vừa xem như đã ghi.
+pub fn home_rows_now(limit: usize) -> Value {
+    let empty = json!({"recent": [], "favs": [], "live": [], "radio": [], "loaded": false});
+    let Some(a) = active_list() else { return empty };
+    let rec = recent();
+    let Some(l) = loaded_for(&a.id) else {
+        let mut v = empty;
+        if !prefs::kids() {
+            v["recent"] = json!(rec.into_iter().take(limit).collect::<Vec<_>>());
+        }
+        return v;
+    };
+    let g = guide();
+    let mut v = home_rows_of(&l, g.as_deref(), &rec, &favorite_keys(), prefs::kids(), hide_bad(), &bad_map(), now_sec(), limit);
+    v["loaded"] = json!(true);
+    v
+}
+
+// ======================================================================================================================
 // Nhắc giờ phát / bóng lăn (giao diện hỏi `due` mỗi 15 giây khi app mở)
 // ======================================================================================================================
 
@@ -1971,6 +2120,43 @@ mod tests {
         assert_eq!(l.channels[0].headers_for("http://a/x.flv").0.as_deref(), Some("https://r/"));
         assert_eq!(l.channels[2].urls.len(), 2);
         assert_eq!(l.groups, vec!["Thể thao", "VTV"]);
+    }
+
+    #[test]
+    fn home_rows_pick_channels() {
+        let base = days_from_civil(2026, 11, 16) as f64 * 86400.0;
+        let m3u = "#EXTM3U\n#EXTINF:-1 group-title=\"Thể thao\",20:00 16/11 ⚽ A vs B (BLV X)\nhttp://a/x.m3u8\n\
+                   #EXTINF:-1 group-title=\"Thể thao\",22:00 16/11 ⚽ C vs D\nhttp://a/c.m3u8\n\
+                   #EXTINF:-1 group-title=\"Thể thao\",23:30 18/11 ⚽ E vs F\nhttp://a/e.m3u8\n\
+                   #EXTINF:-1 group-title=\"VTV\",VTV1 HD\nhttp://v/1.m3u8\n#EXTINF:-1 group-title=\"VTV\",VTV3\nhttp://v/3.m3u8\n\
+                   #EXTINF:-1 group-title=\"Radio\",VOV1\nhttp://r/vov1.m3u8\n#EXTINF:-1 group-title=\"Radio\",VOV2\nhttp://r/vov2.m3u8\n\
+                   #EXTINF:-1 group-title=\"Thiếu nhi\",Kênh Bé\nhttp://k/1.m3u8\n";
+        let l = build("L1", m3u.as_bytes(), base);
+        // 20:00 giờ Việt Nam = 13:00 UTC; xem lúc 20:10 (trận A–B đang đá, C–D sắp đá 22:00, E–F hai ngày nữa — không hiện)
+        let now = base + 13.0 * 3600.0 + 600.0;
+        let recent = vec![
+            json!({"k": "vov2", "n": "VOV2", "g": "Radio", "l": "L1", "radio": true}),
+            json!({"k": "khac", "n": "Kênh danh sách khác", "g": "Phim", "l": "L2"}),
+            json!({"k": "vtv1", "n": "VTV1 HD", "g": "VTV", "l": "L1"}),
+        ];
+        let favs = vec!["vtv3".to_string(), "khongco".to_string()];
+        let v = home_rows_of(&l, None, &recent, &favs, false, false, &Map::new(), now, 16);
+        let names = |k: &str| v[k].as_array().unwrap().iter().map(|c| c["n"].as_str().unwrap_or("").to_string()).collect::<Vec<_>>();
+        assert_eq!(names("recent"), ["VOV2", "Kênh danh sách khác", "VTV1 HD"]);
+        assert_eq!(v["recent"][0]["l"], "L1");
+        assert_eq!(v["recent"][1]["l"], "L2");
+        assert_eq!(names("favs"), ["VTV3"]);
+        assert_eq!(v["live"].as_array().unwrap().len(), 2);
+        assert_eq!(v["live"][0]["match"], "live");
+        assert_eq!(v["live"][1]["match"], "later");
+        assert!(v["live"][0]["frac"].as_f64().unwrap() > 0.0);
+        assert_eq!(names("radio"), ["VOV2", "VOV1"]);
+        // Hồ sơ trẻ em: chỉ kênh thiếu nhi, không trận / radio
+        let k = home_rows_of(&l, None, &recent, &favs, true, false, &Map::new(), now, 16);
+        assert!(k["recent"].as_array().unwrap().is_empty() && k["favs"].as_array().unwrap().is_empty());
+        assert!(k["live"].as_array().unwrap().is_empty() && k["radio"].as_array().unwrap().is_empty());
+        let kid = vec![json!({"k": "kenhbe", "n": "Kênh Bé", "l": "L1"})];
+        assert_eq!(home_rows_of(&l, None, &kid, &[], true, false, &Map::new(), now, 16)["recent"][0]["n"], "Kênh Bé");
     }
 
     #[test]

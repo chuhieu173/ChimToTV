@@ -13,6 +13,7 @@ pub mod history;
 pub mod home;
 pub mod home_mix;
 pub mod home_rows;
+pub mod home_tv;
 pub mod invite;
 pub mod lists;
 pub mod profiles_page;

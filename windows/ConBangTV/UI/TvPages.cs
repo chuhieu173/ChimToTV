@@ -30,9 +30,16 @@ public sealed class TvPage : Page
     private JsonObject? _groups;
     private readonly Grid _searchBox = new();
 
-    public TvPage()
+    /// start: bộ lọc mở sẵn (hàng Truyền hình ở trang chủ: «Kênh yêu thích» → Yêu thích, các hàng khác → Tất cả); null = như
+    /// mở từ menu (có kênh yêu thích thì mở Yêu thích).
+    public TvPage(IptvFilter? start = null)
     {
         MenuKey = "tv";
+        if (start != null)
+        {
+            _filter = start;
+            _favsChosen = true;
+        }
         _searchBox.Children.Add(_search);
         var ph = Ui.Dim("Tìm kênh / số kênh", 14, new Thickness(10, 6, 0, 0));
         ph.IsHitTestVisible = false;
@@ -227,6 +234,26 @@ public sealed class TvPage : Page
 
     private Button Card(JsonNode c, int index)
     {
+        var b = ChannelCard(c);
+        b.Click += (_, _) => _ = Open(c, index);
+        b.MouseRightButtonUp += (_, e) =>
+        {
+            e.Handled = true;
+            _ = Menu(c, index);
+        };
+        b.PreviewKeyDown += (_, e) =>
+        {
+            if (e.Key is not (Key.Apps or Key.M)) return;
+            e.Handled = true;
+            _ = Menu(c, index);
+        };
+        return b;
+    }
+
+    /// Ô kênh (logo, số + tên, chương trình đang phát / trạng thái trận, thanh tiến độ) — lưới kênh và hàng Truyền hình ở trang
+    /// chủ (ô «Kênh vừa xem» của danh sách khác chỉ có tên, logo, nhóm). Chưa gắn việc bấm.
+    public static Button ChannelCard(JsonNode c)
+    {
         var now = Iptv.NowSec();
         var b = new Button
         {
@@ -304,18 +331,6 @@ public sealed class TvPage : Page
         if (l2 != "") root.Children.Add(new TextBlock { Text = l2, Foreground = Ui.Res("TextDim"), FontSize = 12.5, Margin = new Thickness(0, 4, 0, 0), TextTrimming = TextTrimming.CharacterEllipsis });
         b.Content = root;
         b.Opacity = bad != "" ? 0.55 : match == "over" ? 0.7 : 1;
-        b.Click += (_, _) => _ = Open(c, index);
-        b.MouseRightButtonUp += (_, e) =>
-        {
-            e.Handled = true;
-            _ = Menu(c, index);
-        };
-        b.PreviewKeyDown += (_, e) =>
-        {
-            if (e.Key is not (Key.Apps or Key.M)) return;
-            e.Handled = true;
-            _ = Menu(c, index);
-        };
         return b;
     }
 

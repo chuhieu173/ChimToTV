@@ -59,6 +59,8 @@ pub fn sync(m: &str, a: &Value) -> Option<Res> {
             Ok(Value::Null)
         }
         "iptv.recent" => Ok(json!(iptv::recent())),
+        // Các hàng Truyền hình của trang chủ, không đọc tệp (dựng ngay); "loaded": false thì gọi iptv.homeRows rồi dựng lại
+        "iptv.homeRowsNow" => Ok(iptv::home_rows_now(n(a, "limit").clamp(1, 60) as usize)),
         "iptv.markBad" => {
             iptv::mark_bad(&s(a, "url"), &s(a, "reason"));
             Ok(Value::Null)
@@ -100,6 +102,7 @@ pub async fn call(m: &str, a: &Value) -> Option<Res> {
         "iptv.refreshIfOlder" => iptv::refresh_if_older_than(n(a, "seconds")).await.map(|_| Value::Null).map_err(err),
         "iptv.refreshGuide" => iptv::refresh_guide(b(a, "force")).await.map(|_| Value::Null).map_err(err),
         "iptv.groups" => Ok(iptv::groups().await),
+        "iptv.homeRows" => Ok(iptv::home_rows(n(a, "limit").clamp(1, 60) as usize).await),
         "iptv.page" => Ok(iptv::page(&filter(a), n(a, "offset").max(0) as usize, n(a, "limit").clamp(1, 500) as usize).await),
         "iptv.at" => Ok(iptv::at(&filter(a), n(a, "index").max(0) as usize).await),
         "iptv.indexOf" => Ok(json!(iptv::index_of(&filter(a), opt_s(a, "key").as_deref(), opt_s(a, "num").as_deref()).await)),

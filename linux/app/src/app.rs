@@ -553,9 +553,21 @@ impl App {
         l.open(filter, index);
     }
 
-    /// Mở kênh theo khoá (nhắc giờ phát) trong cả danh sách đang chọn.
-    pub fn play_live_key(&self, key: String) {
-        ui::spawn(async move { cbtv::iptv::index_of(&cbtv::iptv::Filter::default(), Some(&key), None).await }, |i| {
+    /// Mở kênh theo khoá (nhắc giờ phát, hàng Truyền hình trên trang chủ) trong cả danh sách đang chọn. `list`: kênh của danh
+    /// sách khác (hàng «Kênh vừa xem») thì đổi sang danh sách đó trước (danh sách đã bị xoá thì tìm trong danh sách đang chọn).
+    pub fn play_live_key(&self, key: String, list: Option<String>) {
+        ui::local(async move {
+            let other = list.filter(|l| {
+                !l.is_empty() && cbtv::iptv::active_list().map(|a| a.id).as_deref() != Some(l.as_str()) &&
+                    cbtv::iptv::lists().iter().any(|x| x.id == *l)
+            });
+            if let Some(l) = other {
+                cbtv::iptv::set_active(Some(&l));
+                if let Some(Err(e)) = ui::run(async { cbtv::iptv::refresh(false).await }).await {
+                    app().toast(&cbtv::util::friendly(&e));
+                }
+            }
+            let i = ui::run(async move { cbtv::iptv::index_of(&cbtv::iptv::Filter::default(), Some(&key), None).await }).await.unwrap_or(-1);
             if i < 0 {
                 app().toast("Danh sách kênh đang chọn không có kênh này.");
             } else {
@@ -593,7 +605,7 @@ impl App {
             ui::local(async move {
                 let a = app();
                 if a.ask_async(if kick { "Bóng lăn" } else { "Sắp phát" }, &text, &["Xem ngay", "Đóng"], None, 0).await == 0 {
-                    a.play_live_key(key);
+                    a.play_live_key(key, None);
                 }
             });
             glib::ControlFlow::Continue

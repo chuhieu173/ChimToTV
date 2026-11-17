@@ -45,6 +45,13 @@ public static class Iptv
 
     public static void SetEpg(string? url) => Native.SyncVoid("iptv.setEpg", new { url });
 
+    /// Các hàng Truyền hình của trang chủ (lõi iptv::home_rows_now — không đọc tệp, dựng ngay): { recent, favs, live, radio:
+    /// [ô kênh…], loaded }. loaded false: danh sách chưa đọc — gọi HomeRows ở nền rồi dựng lại.
+    public static JsonObject HomeRowsNow(int limit) => Native.SyncNode("iptv.homeRowsNow", new { limit }) as JsonObject ?? new JsonObject();
+
+    /// Như HomeRowsNow nhưng đọc danh sách đang dùng nếu chưa đọc (tệp đã lưu, không tải mạng).
+    public static async Task<JsonObject> HomeRows(int limit) => await Native.CallNode("iptv.homeRows", new { limit }) as JsonObject ?? new JsonObject();
+
     public static async Task<JsonObject> Groups() => await Native.CallNode("iptv.groups") as JsonObject ?? new JsonObject();
 
     public static async Task<JsonObject> Page(IptvFilter f, int offset, int limit) =>

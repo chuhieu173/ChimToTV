@@ -36,15 +36,20 @@ pub struct TvPage {
 }
 
 pub fn new() -> Rc<dyn Page> {
+    with_filter(None)
+}
+
+/// Màn Truyền hình mở với bộ lọc chọn sẵn (None: như mở từ menu — có kênh yêu thích thì chọn Yêu thích).
+pub fn with_filter(start: Option<Filter>) -> Rc<dyn Page> {
     let search = ui::entry();
     search.set_width_chars(26);
     search.set_placeholder_text(Some("Tìm kênh / số kênh"));
     let p = Rc::new(TvPage {
         base: PageBase::new("tv"),
         search,
-        filter: RefCell::new(Filter::default()),
+        favs_chosen: Cell::new(start.is_some()),
+        filter: RefCell::new(start.unwrap_or_default()),
         offset: Cell::new(0),
-        favs_chosen: Cell::new(false),
         version: Cell::new(u64::MAX),
         cards: ui::flow(12.0, 12.0),
         info: ui::dim(""),
@@ -89,6 +94,114 @@ pub fn new() -> Rc<dyn Page> {
         glib::ControlFlow::Continue
     });
     p
+}
+
+/// Thẻ kênh (logo, tên, chương trình đang phát / trận / nhóm, thanh tiến độ) — chỉ phần hình, chưa gắn bấm. Dùng ở màn
+/// Truyền hình và các hàng Truyền hình trên trang chủ (home_tv.rs).
+pub fn channel_card(c: &Value) -> gtk::Button {
+    let now = iptv::now_sec();
+    let btn = gtk::Button::new();
+    btn.style_context().add_class("pill");
+    btn.set_widget_name(&format!("tv:{}", s(c, "k")));
+    btn.set_size_request(px(300.0), px(118.0));
+    let v = ui::vbox(4.0);
+    let top = ui::hbox(10.0);
+    let logo = gtk::Image::new();
+    logo.set_size_request(px(64.0), px(40.0));
+    if !s(c, "logo").is_empty() {
+        let weak = logo.downgrade();
+        crate::images::load(&s(c, "logo"), px(64.0), px(40.0), move |p| {
+            if let (Some(p), Some(i)) = (p, weak.upgrade()) {
+                i.set_from_pixbuf(Some(&p));
+            }
+        });
+    }
+    top.pack_start(&logo, false, false, 0);
+    let name = ui::label(&format!("{}  {}", s(c, "num"), s(c, "n")), &[], true);
+    // FlowBox của GTK3 xếp theo cột rộng bằng ô rộng nhất: giới hạn bề rộng chữ để ô giữ ~300 px
+    name.set_max_width_chars(24);
+    name.set_lines(2);
+    name.set_ellipsize(pango::EllipsizeMode::End);
+    name.set_hexpand(true);
+    top.pack_start(&name, true, true, 0);
+    if flag(c, "fav") {
+        top.pack_start(&ui::text("★"), false, false, 0);
+    }
+    v.pack_start(&top, false, false, 0);
+    let bad = s(c, "bad");
+    let m = s(c, "match");
+    let line = s(c, "matchLine");
+    let g = if flag(c, "radio") { format!("📻 {}", s(c, "g")) } else if flag(c, "vod") { format!("🎬 {}", s(c, "g")) } else { s(c, "g") };
+    let (l1, l2, frac) = if !bad.is_empty() {
+        ("Máy này không phát được".to_string(), bad.clone(), -1.0)
+    } else if !line.is_empty() {
+        let k = s(c, "k");
+        let remind = if iptv::has_reminder(&k, None, true) { "🔔 Nhắc lúc bóng lăn · " } else { "" };
+        let f = if m == "live" { (now - d(c, "kick")) / (d(c, "dur") * 60.0) } else { -1.0 };
+        (line.clone(), format!("{remind}{}", s(c, "g")), f)
+    } else if let Some(p) = c.get("now").filter(|x| !x.is_null()) {
+        let (ps, pe) = (d(p, "s"), d(p, "e"));
+        let n = c.get("next").filter(|x| !x.is_null());
+        (
+            format!("{}   {}–{}", s(p, "t"), iptv::clock(ps), iptv::clock(pe)),
+            n.map(|n| format!("Tiếp: {} {}", iptv::clock(d(n, "s")), s(n, "t"))).unwrap_or(g.clone()),
+            (now - ps) / (pe - ps).max(1.0),
+        )
+    } else {
+        (g.clone(), String::new(), -1.0)
+    };
+    let l1w = ui::label(&l1, &[], false);
+    l1w.set_max_width_chars(32);
+    v.pack_start(&l1w, false, false, 0);
+    if frac >= 0.0 {
+        let pb = gtk::ProgressBar::new();
+        pb.set_fraction(frac.clamp(0.0, 1.0));
+        v.pack_start(&pb, false, false, 0);
+    }
+    if !l2.is_empty() {
+        let l2w = ui::dim(&l2);
+        l2w.set_ellipsize(pango::EllipsizeMode::End);
+        l2w.set_line_wrap(false);
+        l2w.set_max_width_chars(36);
+        v.pack_start(&l2w, false, false, 0);
+    }
+    btn.add(&v);
+    btn.set_opacity(if !bad.is_empty() { 0.55 } else if m == "over" { 0.7 } else { 1.0 });
+    btn
+}
+
+/// Trận còn hơn 30 phút mới đá: hỏi trước khi mở — 0 «Nhắc lúc bóng lăn» / «Bỏ nhắc», 1 «Vẫn mở», còn lại «Đóng».
+pub async fn ask_not_started(c: &Value) -> i32 {
+    let kick = d(c, "kick");
+    let m = ((kick - iptv::now_sec()) / 60.0).ceil() as i64;
+    let left = if m >= 24 * 60 {
+        format!("{} ngày", (m + 720) / 1440)
+    } else if m >= 60 {
+        format!("{} giờ {:02} phút", m / 60, m % 60)
+    } else {
+        format!("{m} phút")
+    };
+    let has = iptv::has_reminder(&s(c, "k"), None, true);
+    app()
+        .ask_async(
+            "Trận chưa bắt đầu",
+            &format!("{}\nBóng lăn lúc {} (còn {left}).\nKênh trận đấu thường chỉ lên sóng trước giờ đá 15–30 phút.", s(c, "n"),
+                iptv::kick_text(kick, iptv::now_sec())),
+            &[if has { "Bỏ nhắc" } else { "Nhắc lúc bóng lăn" }, "Vẫn mở", "Đóng"],
+            None,
+            0,
+        )
+        .await
+}
+
+/// Bật / tắt nhắc lúc bóng lăn của kênh trận đấu (báo kết quả).
+pub fn toggle_kick_reminder(c: &Value) {
+    let on = iptv::toggle_reminder(&s(c, "k"), &s(c, "n"), &s(c, "n"), d(c, "kick"), true);
+    app().toast(&if on {
+        format!("Sẽ nhắc lúc bóng lăn ({}) — khi app đang mở.", iptv::kick_text(d(c, "kick"), iptv::now_sec()))
+    } else {
+        "Đã bỏ nhắc.".into()
+    });
 }
 
 fn refresh_list(force: bool) {
@@ -275,74 +388,7 @@ impl TvPage {
     }
 
     fn card(self: &Rc<Self>, c: &Value, index: usize) -> gtk::Widget {
-        let now = iptv::now_sec();
-        let btn = gtk::Button::new();
-        btn.style_context().add_class("pill");
-        btn.set_widget_name(&format!("tv:{}", s(c, "k")));
-        btn.set_size_request(px(300.0), px(118.0));
-        let v = ui::vbox(4.0);
-        let top = ui::hbox(10.0);
-        let logo = gtk::Image::new();
-        logo.set_size_request(px(64.0), px(40.0));
-        if !s(c, "logo").is_empty() {
-            let weak = logo.downgrade();
-            crate::images::load(&s(c, "logo"), px(64.0), px(40.0), move |p| {
-                if let (Some(p), Some(i)) = (p, weak.upgrade()) {
-                    i.set_from_pixbuf(Some(&p));
-                }
-            });
-        }
-        top.pack_start(&logo, false, false, 0);
-        let name = ui::label(&format!("{}  {}", s(c, "num"), s(c, "n")), &[], true);
-        // FlowBox của GTK3 xếp theo cột rộng bằng ô rộng nhất: giới hạn bề rộng chữ để ô giữ ~300 px
-        name.set_max_width_chars(24);
-        name.set_lines(2);
-        name.set_ellipsize(pango::EllipsizeMode::End);
-        name.set_hexpand(true);
-        top.pack_start(&name, true, true, 0);
-        if flag(c, "fav") {
-            top.pack_start(&ui::text("★"), false, false, 0);
-        }
-        v.pack_start(&top, false, false, 0);
-        let bad = s(c, "bad");
-        let m = s(c, "match");
-        let line = s(c, "matchLine");
-        let g = if flag(c, "radio") { format!("📻 {}", s(c, "g")) } else if flag(c, "vod") { format!("🎬 {}", s(c, "g")) } else { s(c, "g") };
-        let (l1, l2, frac) = if !bad.is_empty() {
-            ("Máy này không phát được".to_string(), bad.clone(), -1.0)
-        } else if !line.is_empty() {
-            let k = s(c, "k");
-            let remind = if iptv::has_reminder(&k, None, true) { "🔔 Nhắc lúc bóng lăn · " } else { "" };
-            let f = if m == "live" { (now - d(c, "kick")) / (d(c, "dur") * 60.0) } else { -1.0 };
-            (line.clone(), format!("{remind}{}", s(c, "g")), f)
-        } else if let Some(p) = c.get("now").filter(|x| !x.is_null()) {
-            let (ps, pe) = (d(p, "s"), d(p, "e"));
-            let n = c.get("next").filter(|x| !x.is_null());
-            (
-                format!("{}   {}–{}", s(p, "t"), iptv::clock(ps), iptv::clock(pe)),
-                n.map(|n| format!("Tiếp: {} {}", iptv::clock(d(n, "s")), s(n, "t"))).unwrap_or(g.clone()),
-                (now - ps) / (pe - ps).max(1.0),
-            )
-        } else {
-            (g.clone(), String::new(), -1.0)
-        };
-        let l1w = ui::label(&l1, &[], false);
-        l1w.set_max_width_chars(32);
-        v.pack_start(&l1w, false, false, 0);
-        if frac >= 0.0 {
-            let pb = gtk::ProgressBar::new();
-            pb.set_fraction(frac.clamp(0.0, 1.0));
-            v.pack_start(&pb, false, false, 0);
-        }
-        if !l2.is_empty() {
-            let l2w = ui::dim(&l2);
-            l2w.set_ellipsize(pango::EllipsizeMode::End);
-            l2w.set_line_wrap(false);
-            l2w.set_max_width_chars(36);
-            v.pack_start(&l2w, false, false, 0);
-        }
-        btn.add(&v);
-        btn.set_opacity(if !bad.is_empty() { 0.55 } else if m == "over" { 0.7 } else { 1.0 });
+        let btn = channel_card(c);
         let c1 = c.clone();
         let me = self.clone();
         btn.connect_clicked(move |_| me.open(&c1, index));
@@ -379,26 +425,7 @@ impl TvPage {
         if s(c, "match") == "later" {
             let (c, me) = (c.clone(), self.clone());
             ui::local(async move {
-                let kick = d(&c, "kick");
-                let m = ((kick - iptv::now_sec()) / 60.0).ceil() as i64;
-                let left = if m >= 24 * 60 {
-                    format!("{} ngày", (m + 720) / 1440)
-                } else if m >= 60 {
-                    format!("{} giờ {:02} phút", m / 60, m % 60)
-                } else {
-                    format!("{m} phút")
-                };
-                let has = iptv::has_reminder(&s(&c, "k"), None, true);
-                let r = app()
-                    .ask_async(
-                        "Trận chưa bắt đầu",
-                        &format!("{}\nBóng lăn lúc {} (còn {left}).\nKênh trận đấu thường chỉ lên sóng trước giờ đá 15–30 phút.", s(&c, "n"),
-                            iptv::kick_text(kick, iptv::now_sec())),
-                        &[if has { "Bỏ nhắc" } else { "Nhắc lúc bóng lăn" }, "Vẫn mở", "Đóng"],
-                        None,
-                        0,
-                    )
-                    .await;
+                let r = ask_not_started(&c).await;
                 if r == 0 {
                     me.toggle_kick(&c);
                 } else if r == 1 {
@@ -411,12 +438,7 @@ impl TvPage {
     }
 
     fn toggle_kick(self: &Rc<Self>, c: &Value) {
-        let on = iptv::toggle_reminder(&s(c, "k"), &s(c, "n"), &s(c, "n"), d(c, "kick"), true);
-        app().toast(&if on {
-            format!("Sẽ nhắc lúc bóng lăn ({}) — khi app đang mở.", iptv::kick_text(d(c, "kick"), iptv::now_sec()))
-        } else {
-            "Đã bỏ nhắc.".into()
-        });
+        toggle_kick_reminder(c);
         self.load_cards(true);
     }
 

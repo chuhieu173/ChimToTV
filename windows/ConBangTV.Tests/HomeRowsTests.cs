@@ -48,9 +48,24 @@ public class HomeRowsTests
     {
         var custom = new List<CustomRow> { new("a", null, "hoathinh"), new("t-kr", "kr") };
         var d = HomeFeed.RowDefaults(custom);
-        Assert.Equal(new[] { "new-eps", "continue", "custom-a", "custom-t-kr", "similar" }, d.Take(5));
+        Assert.Equal(new[] { "new-eps", "continue", "tv-recent", "tv-favs", "tv-live", "tv-radio", "custom-a", "custom-t-kr", "similar" }, d.Take(9));
         var m = HomeFeed.MergeRows(new() { "new-eps", "continue", "custom-a", "movies", "similar" }, d);
-        Assert.Equal(new[] { "new-eps", "continue", "custom-a", "custom-t-kr", "movies", "similar" }, Ids(m).Take(6));
+        Assert.Equal(new[] { "new-eps", "continue", "tv-recent", "tv-favs", "tv-live", "tv-radio", "custom-a", "custom-t-kr", "movies", "similar" },
+            Ids(m).Take(10));
+    }
+
+    /// Hàng Truyền hình: mặc định ngay sau «Xem tiếp»; người dùng bản trước (thứ tự đã lưu chưa có) cũng thấy, bật sẵn.
+    [Fact]
+    public void TvRowsDefaultAfterContinue()
+    {
+        var d = HomeFeed.RowDefaults(new List<CustomRow>());
+        Assert.Equal(new[] { "new-eps", "continue", "tv-recent", "tv-favs", "tv-live", "tv-radio", "similar" }, d.Take(7));
+        var m = HomeFeed.MergeRows(new() { "new-eps", "continue", "-similar", "movies", "newest" }, d);
+        Assert.Equal(new[] { "new-eps", "continue", "tv-recent", "tv-favs", "tv-live", "tv-radio", "similar" }, Ids(m).Take(7));
+        Assert.All(m.Where(x => x.Id.StartsWith("tv-")), x => Assert.True(x.On));
+        Assert.Equal("Trận đang / sắp đá", HomeFeed.TvRowTitle("tv-live"));
+        Assert.Null(HomeFeed.TvRowTitle("similar"));
+        Assert.Contains("tv-radio", HomeFeed.AdultRows);
     }
 
     [Fact]

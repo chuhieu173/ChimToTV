@@ -438,8 +438,22 @@ public partial class MainWindow : Window
     }
 
     /// Mở kênh theo khoá (kênh vừa xem / nhắc giờ phát) trong cả danh sách đang chọn.
-    public async Task PlayLiveKey(string key)
+    public async Task PlayLiveKey(string key, string? listId = null)
     {
+        // Kênh của danh sách khác (hàng «Kênh vừa xem» ở trang chủ): đổi sang danh sách đó (tải nếu chưa có / đã cũ) rồi mở
+        if (!string.IsNullOrEmpty(listId) && listId != Iptv.S(Iptv.ActiveList(), "id") && Iptv.Lists().Any(l => Iptv.S(l, "id") == listId))
+        {
+            Iptv.SetActive(listId);
+            try
+            {
+                await Iptv.Refresh(false);
+            }
+            catch (Exception e)
+            {
+                Toast(Util.Friendly(e));
+                return;
+            }
+        }
         var all = new IptvFilter();
         var i = await Iptv.IndexOf(all, key);
         if (i < 0) Toast("Danh sách kênh đang chọn không có kênh này.");

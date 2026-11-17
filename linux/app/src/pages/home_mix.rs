@@ -3,6 +3,7 @@
 //! chậm ghi ở dòng trạng thái. Mỗi hàng một dải vuốt ngang (tới 12 phim, ô «Xem thêm» cuối dải). Bản Windows: Pages.cs HomePage.
 
 use super::detail::{self, Link};
+use super::home_tv;
 use super::lists::{self, CardItem};
 use super::{Page, PageBase};
 use crate::app::app;
@@ -12,8 +13,10 @@ use crate::keynav;
 use crate::ui;
 use cbtv::feed::FeedItem;
 use cbtv::home_feed::{self as hf, Card, FeedRow, Snapshot};
-use cbtv::{prefs, Film};
+use cbtv::{iptv, prefs, Film};
 use gtk::prelude::*;
+use serde_json::Value;
+use std::collections::HashMap;
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
@@ -29,6 +32,12 @@ pub struct HomeMix {
     feed_at: Cell<i64>,
     run: Cell<u64>,
     note: RefCell<Option<gtk::Label>>,
+    /// Dữ liệu các hàng Truyền hình lần dựng gần nhất (iptv::home_rows_now / home_rows).
+    tv: RefCell<Value>,
+    tv_loading: Cell<bool>,
+    /// Các hàng đang hiện (trừ «Có tập mới» / «Xem tiếp»), theo thứ tự trên trang: loại hàng, id hàng, tên ô đầu — sửa nhanh
+    /// (chuyển lên / xuống qua hàng kề, chọn ô của hàng kế sau khi ẩn).
+    shown: RefCell<Vec<(String, String, Option<String>)>>,
 }
 
 pub fn new() -> Rc<dyn Page> {
@@ -41,6 +50,9 @@ pub fn new() -> Rc<dyn Page> {
         feed_at: Cell::new(0),
         run: Cell::new(0),
         note: RefCell::new(None),
+        tv: RefCell::new(Value::Null),
+        tv_loading: Cell::new(false),
+        shown: RefCell::new(Vec::new()),
     })
 }
 
@@ -199,15 +211,20 @@ impl HomeMix {
             let (title, slot) = match row_id.as_str() {
                 "new-eps" => ("Có tập mới".to_string(), row_id.clone()),
                 "continue" => ("Xem tiếp".to_string(), row_id.clone()),
-                _ => match arranged.iter().find(|x| x.0.id == row_id) {
-                    Some((r, s)) if s != "topics" => (r.title.clone(), s.clone()),
-                    _ => return,
+                id => match hf::tv_row_title(id) {
+                    Some(t) => (t.to_string(), row_id.clone()),
+                    None => match arranged.iter().find(|x| x.0.id == row_id) {
+                        Some((r, s)) if s != "topics" => (r.title.clone(), s.clone()),
+                        _ => return,
+                    },
                 },
             };
-            let shown: Vec<String> = arranged.iter().map(|x| x.1.clone()).collect();
+            // Hàng đang hiện theo thứ tự trên trang (cả hàng Truyền hình)
+            let on_page = me.shown.borrow().clone();
+            let shown: Vec<String> = on_page.iter().map(|x| x.0.clone()).collect();
             let prefs_now = hf::row_prefs();
-            let at = arranged.iter().position(|x| x.0.id == row_id);
-            let next_focus = at.and_then(|i| arranged.get(i + 1).or(if i > 0 { arranged.get(i - 1) } else { None })).and_then(|x| x.0.cards.first()).map(|c| c.film.url.clone());
+            let at = on_page.iter().position(|x| x.1 == row_id);
+            let next_focus = at.and_then(|i| on_page.get(i + 1).or(if i > 0 { on_page.get(i - 1) } else { None })).and_then(|x| x.2.clone());
             let mut labels: Vec<String> = vec!["Ẩn hàng này".into()];
             let up = hf::move_shown(&prefs_now, &shown, &slot, true);
             let down = hf::move_shown(&prefs_now, &shown, &slot, false);
@@ -330,8 +347,43 @@ impl HomeMix {
             sec.set_margin_bottom(px(12.0));
             b.add(&sec);
         }
-        // Thứ tự / bật tắt theo cài đặt hiện tại của người xem
-        for r in hf::arrange(&s.rows, None) {
+        // Thứ tự / bật tắt theo cài đặt hiện tại của người xem; hàng Truyền hình (dựng tại chỗ từ danh sách kênh) chen vào đúng
+        // chỗ theo thứ tự trong cài đặt
+        *self.tv.borrow_mut() = iptv::home_rows_now(home_tv::TV_MAX);
+        let prefs_now = hf::row_prefs();
+        let pos: HashMap<&str, i64> = prefs_now.iter().enumerate().map(|(i, p)| (p.0.as_str(), i as i64)).collect();
+        let rank = |slot: &str| if slot == "topics" { -1 } else { pos.get(slot).copied().unwrap_or(i64::MAX) };
+        let tv_rows = home_tv::rows_to_show(&self.tv.borrow(), &prefs_now, self.kids.get());
+        let arranged = hf::arrange_slots(&s.rows, Some(&prefs_now));
+        enum Item {
+            Tv(usize),
+            Film(usize),
+        }
+        let mut seq: Vec<Item> = Vec::new();
+        let mut tv_at = 0;
+        for (i, (_, slot)) in arranged.iter().enumerate() {
+            while tv_at < tv_rows.len() && rank(tv_rows[tv_at].0.as_str()) < rank(slot.as_str()) {
+                seq.push(Item::Tv(tv_at));
+                tv_at += 1;
+            }
+            seq.push(Item::Film(i));
+        }
+        seq.extend((tv_at..tv_rows.len()).map(Item::Tv));
+        let mut shown: Vec<(String, String, Option<String>)> = Vec::new();
+        for it in seq {
+            let i = match it {
+                Item::Tv(i) => {
+                    let (slot, title, items) = &tv_rows[i];
+                    let (cards, more, first) = home_tv::cards(slot, items, self.menu_action(slot));
+                    b.add(&self.strip(title, slot, cards, Some(more)));
+                    shown.push((slot.clone(), slot.clone(), first));
+                    count += 1;
+                    continue;
+                }
+                Item::Film(i) => i,
+            };
+            let (r, slot) = &arranged[i];
+            shown.push((slot.clone(), r.id.clone(), r.cards.first().map(|c| c.film.url.clone())));
             let n = r.cards.len();
             let mut cards: Vec<gtk::Widget> = r.cards.iter().take(STRIP_MAX).map(|c| self.card_widget(c, &r.id)).collect();
             let mut more: Option<Rc<dyn Fn()>> = None;
@@ -348,7 +400,30 @@ impl HomeMix {
             b.add(&self.strip(&r.title, &r.id, cards, more));
             count += 1;
         }
+        *self.shown.borrow_mut() = shown;
+        self.maybe_load_tv();
         count > 0
+    }
+
+    /// Danh sách kênh chưa đọc (vừa mở app): đọc ở nền rồi dựng lại để hiện các hàng Truyền hình (giữ ô đang chọn).
+    fn maybe_load_tv(self: &Rc<Self>) {
+        if self.tv_loading.get() || self.tv.borrow()["loaded"].as_bool().unwrap_or(false) || iptv::active_list().is_none() {
+            return;
+        }
+        self.tv_loading.set(true);
+        let me = self.clone();
+        ui::spawn(async { iptv::home_rows(home_tv::TV_MAX).await }, move |v| {
+            me.tv_loading.set(false);
+            // Đang ở trang khác / trình phát: dựng lại khi quay về (returned)
+            if !v["loaded"].as_bool().unwrap_or(false) || !me.base.body.is_mapped() {
+                return;
+            }
+            let focus = app().window.focused_widget().filter(|f| f.is_ancestor(&me.base.body)).map(|f| f.widget_name().to_string());
+            me.build_mix();
+            if let Some(name) = focus.filter(|n| !n.is_empty()) {
+                me.focus_name(name);
+            }
+        });
     }
 
     /// Chọn / bỏ một chủ đề rồi tải các hàng theo chủ đề.

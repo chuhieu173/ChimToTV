@@ -1,13 +1,17 @@
 //! Trang chủ. Kiểu theo trang: Xem tiếp, phim theo dõi có tập mới, rồi các nhóm phim của trang đang dùng. Kiểu tổng hợp
 //! (mặc định): phim từ mọi nguồn, gộp phim trùng, xếp hàng theo lịch sử xem (home_mix.rs). Bản Windows: Pages.cs HomePage.
 
+use super::home_tv;
 use super::lists::film_card;
 use super::{Page, PageBase};
 use crate::app::app;
 use crate::card::{card, CardOpts};
+use crate::keynav;
 use crate::ui;
-use cbtv::{prefs, Film, Home};
-use std::cell::RefCell;
+use cbtv::home_feed as hf;
+use cbtv::{iptv, prefs, Film, Home};
+use serde_json::Value;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 pub struct HomePage {
@@ -17,6 +21,11 @@ pub struct HomePage {
     mix: std::cell::Cell<bool>,
     kids: std::cell::Cell<bool>,
     rows: RefCell<String>,
+    /// Dữ liệu các hàng Truyền hình lần dựng gần nhất (iptv::home_rows_now / home_rows).
+    tv: RefCell<Value>,
+    tv_loading: Cell<bool>,
+    /// Các hàng Truyền hình đang hiện theo thứ tự: loại hàng, tên ô đầu.
+    shown: RefCell<Vec<(String, Option<String>)>>,
 }
 
 pub fn new() -> Rc<dyn Page> {
@@ -35,6 +44,9 @@ pub fn new_site() -> Rc<dyn Page> {
         mix: std::cell::Cell::new(false),
         kids: std::cell::Cell::new(false),
         rows: RefCell::new(String::new()),
+        tv: RefCell::new(Value::Null),
+        tv_loading: Cell::new(false),
+        shown: RefCell::new(Vec::new()),
     })
 }
 
@@ -71,6 +83,18 @@ impl HomePage {
                 .collect();
             b.add(&ui::section("Phim theo dõi có tập mới", None, cards));
         }
+        // Hàng Truyền hình (kiểu theo trang: ngay dưới Xem tiếp, theo thứ tự trong cài đặt)
+        *self.tv.borrow_mut() = iptv::home_rows_now(home_tv::TV_MAX);
+        let mut shown = Vec::new();
+        for (slot, title, items) in home_tv::rows_to_show(&self.tv.borrow(), &hf::row_prefs(), self.kids.get()) {
+            let (me, sl) = (self.clone(), slot.clone());
+            let menu: Rc<dyn Fn()> = Rc::new(move || me.row_menu(&sl));
+            let (cards, more, first) = home_tv::cards(&slot, &items, menu.clone());
+            b.add(&home_tv::strip(title, cards, more, menu));
+            shown.push((slot, first));
+        }
+        *self.shown.borrow_mut() = shown;
+        self.maybe_load_tv();
         for s in &home.sections {
             b.add(&ui::section(&s.title, None, s.films.iter().map(film_card).collect()));
         }
@@ -80,6 +104,94 @@ impl HomePage {
             b.add(&t);
             b.add(&ui::dim("Có thể trang đã đổi giao diện, hoặc nhà mạng chặn trang này (trang chặn không có phim). Thử trang khác:"));
             b.add(&ui::row(&[ui::pill("🌐  Đổi trang phim", || app().show_root(super::sites::new())).upcast()]));
+        }
+    }
+
+    /// Danh sách kênh chưa đọc (vừa mở app): đọc ở nền rồi dựng lại để hiện các hàng Truyền hình (giữ ô đang chọn).
+    fn maybe_load_tv(self: &Rc<Self>) {
+        if self.tv_loading.get() || self.tv.borrow()["loaded"].as_bool().unwrap_or(false) || iptv::active_list().is_none() {
+            return;
+        }
+        self.tv_loading.set(true);
+        let me = self.clone();
+        ui::spawn(async { iptv::home_rows(home_tv::TV_MAX).await }, move |v| {
+            me.tv_loading.set(false);
+            if !v["loaded"].as_bool().unwrap_or(false) || !me.base.body.is_mapped() || me.home.borrow().is_none() {
+                return;
+            }
+            let focus = app().window.focused_widget().filter(|f| f.is_ancestor(&me.base.body)).map(|f| f.widget_name().to_string());
+            me.build();
+            if let Some(name) = focus.filter(|n| !n.is_empty()) {
+                me.focus_name(name);
+            }
+        });
+    }
+
+    fn focus_name(&self, name: String) {
+        let body = self.base.body.clone();
+        ui::after(40, move || {
+            if let Some(w) = keynav::find_named(body.upcast_ref(), &name) {
+                keynav::focus_and_show(&w);
+            }
+        });
+    }
+
+    /// Sửa nhanh một hàng Truyền hình: ẩn, ▲ / ▼ (qua hàng Truyền hình kề nó — kiểu theo trang chỉ có các hàng này), «Các
+    /// hàng…». Hồ sơ trẻ em: hỏi mã PIN phụ huynh trước (nếu đã đặt).
+    fn row_menu(self: &Rc<Self>, slot: &str) {
+        let me = self.clone();
+        let slot = slot.to_string();
+        ui::local(async move {
+            let a = app();
+            if prefs::kids() && prefs::has_parent_pin() && !a.check_parent("Nhập mã PIN phụ huynh để sửa trang chủ.").await {
+                return;
+            }
+            let Some(title) = hf::tv_row_title(&slot) else { return };
+            let on_page = me.shown.borrow().clone();
+            let shown: Vec<String> = on_page.iter().map(|x| x.0.clone()).collect();
+            let p = hf::row_prefs();
+            let at = on_page.iter().position(|x| x.0 == slot);
+            let next_focus = at.and_then(|i| on_page.get(i + 1).or(if i > 0 { on_page.get(i - 1) } else { None })).and_then(|x| x.1.clone());
+            let up = hf::move_shown(&p, &shown, &slot, true);
+            let down = hf::move_shown(&p, &shown, &slot, false);
+            let mut labels = vec!["Ẩn hàng này"];
+            if up.is_some() {
+                labels.push("▲  Chuyển lên");
+            }
+            if down.is_some() {
+                labels.push("▼  Chuyển xuống");
+            }
+            labels.push("☰  Các hàng…");
+            labels.push("Huỷ");
+            let focus = a.window.focused_widget().map(|w| w.widget_name().to_string());
+            let i = a.ask_async(&format!("Hàng «{title}»"), "", &labels, None, 0).await;
+            if i < 0 {
+                return;
+            }
+            match labels[i as usize] {
+                "Ẩn hàng này" => {
+                    me.apply(hf::hide(&p, &slot), next_focus.or(focus));
+                    a.toast(&format!("Đã ẩn hàng «{title}» — bật lại trong Cài đặt → Các hàng trên trang chủ."));
+                }
+                "▲  Chuyển lên" => me.apply(up.unwrap_or_default(), focus),
+                "▼  Chuyển xuống" => me.apply(down.unwrap_or_default(), focus),
+                "☰  Các hàng…" => a.push(super::home_rows::rows()),
+                _ => {}
+            }
+        });
+    }
+
+    /// Lưu cài đặt các hàng rồi dựng lại (không tải lại trang).
+    fn apply(self: &Rc<Self>, p: Vec<(String, bool)>, focus: Option<String>) {
+        hf::save_rows(&p);
+        *self.rows.borrow_mut() = crate::hooks::rows_signature();
+        self.build();
+        match focus {
+            Some(f) => self.focus_name(f),
+            None => {
+                let me = self.clone();
+                ui::after(40, move || super::focus_first(me.as_ref()));
+            }
         }
     }
 }
