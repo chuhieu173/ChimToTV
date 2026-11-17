@@ -264,7 +264,9 @@ impl Live {
     pub fn open(self: &Rc<Self>, filter: Filter, index: usize) {
         {
             let mut st = self.st.borrow_mut();
-            *st = St { open: true, filter, index, ..Default::default() };
+            // Số lượt (token) không về 0 khi mở lại: hẹn giờ / việc chờ của lần mở trước mang số cũ, không trùng số mới
+            let token = st.token + 1;
+            *st = St { open: true, filter, index, token, ..Default::default() };
         }
         if self.native.borrow().is_none() {
             if let Some(n) = Native::new(crate::player::has_gpu()) {
@@ -356,7 +358,7 @@ impl Live {
             me.st.borrow_mut().source = src;
             me.open_source();
             if me.panel.is_visible() {
-                me.build_panel(false);
+                me.build_panel(false, None);
             }
         });
     }
@@ -614,9 +616,9 @@ impl Live {
 
     /// Tải lại danh sách nếu cũ hơn `age` giây, lấy bản mới của kênh đang xem (cùng khoá). done(true) = nguồn vừa đổi.
     fn refresh_channel(self: &Rc<Self>, age: i64, done: impl FnOnce(bool) + 'static) {
-        let (filter, key) = {
+        let (filter, key, t) = {
             let st = self.st.borrow();
-            (st.filter.clone(), s(&st.ch, "k"))
+            (st.filter.clone(), s(&st.ch, "k"), st.token)
         };
         let me = self.clone();
         ui::spawn(
@@ -629,6 +631,11 @@ impl Live {
                 Some((i as usize, iptv::at(&filter, i as usize).await))
             },
             move |r| {
+                // Trong lúc tải lại danh sách (vài giây) người xem đã sang kênh khác / đóng trình phát: bỏ kết quả, không thì
+                // kênh cũ đè lên kênh đang xem và bị phát lại
+                if me.st.borrow().token != t || !me.st.borrow().open {
+                    return;
+                }
                 let Some((i, fresh)) = r.filter(|(_, f)| !f.is_null()) else {
                     done(false);
                     return;
@@ -1017,14 +1024,15 @@ impl Live {
             return;
         }
         self.panel.show_all();
-        self.build_panel(true);
+        self.build_panel(true, None);
         self.bump_hide();
     }
 
-    /// Bảng kênh: 100 kênh quanh kênh đang xem (danh sách lớn), ô đang xem tô màu.
-    fn build_panel(self: &Rc<Self>, focus: bool) {
+    /// Bảng kênh: 100 kênh quanh kênh đang xem (danh sách lớn), ô đang xem tô màu. `center`: lật trang bảng (▲ / ▼ «nữa»)
+    /// — chỉ đổi vùng hiện, không đổi kênh đang xem (st.index).
+    fn build_panel(self: &Rc<Self>, focus: bool, center: Option<usize>) {
         let (filter, index) = (self.st.borrow().filter.clone(), self.st.borrow().index);
-        let from = index.saturating_sub(40);
+        let from = center.unwrap_or(index).saturating_sub(40);
         let me = self.clone();
         ui::spawn(async move { iptv::page(&filter, from, 100).await }, move |page| {
             ui::clear(&me.panel_list);
@@ -1032,11 +1040,12 @@ impl Live {
             me.panel_title.set_text(&format!("{} · {total} kênh", iptv::active_list().map(|l| l.name).unwrap_or_default()));
             if from > 0 {
                 me.panel_list.pack_start(&btn("▲ Kênh trước nữa", move |l| {
-                    l.st.borrow_mut().index = from.saturating_sub(60);
-                    l.build_panel(true);
+                    l.build_panel(true, Some(from.saturating_sub(60)));
                 }), false, false, 0);
             }
             let cur_index = me.st.borrow().index;
+            // Ô được chọn sẵn: kênh đang xem; lật trang bảng thì ô ở giữa trang mới (kênh đang xem có thể không còn trên trang)
+            let focus_index = center.unwrap_or(cur_index);
             let mut current: Option<gtk::Button> = None;
             for (j, c) in page.get("items").and_then(|x| x.as_array()).cloned().unwrap_or_default().into_iter().enumerate() {
                 let idx = from + j;
@@ -1060,14 +1069,15 @@ impl Live {
                 }
                 if idx == cur_index {
                     bt.style_context().add_class("active");
+                }
+                if idx == focus_index {
                     current = Some(bt.clone());
                 }
                 me.panel_list.pack_start(&bt, false, false, 0);
             }
             if from + 100 < total {
                 me.panel_list.pack_start(&btn("▼ Kênh sau nữa", move |l| {
-                    l.st.borrow_mut().index = (from + 140).min(total.saturating_sub(1));
-                    l.build_panel(true);
+                    l.build_panel(true, Some((from + 140).min(total.saturating_sub(1))));
                 }), false, false, 0);
             }
             me.panel_list.show_all();

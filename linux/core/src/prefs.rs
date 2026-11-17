@@ -181,6 +181,10 @@ fn changed(s: &mut State) {
 
 /// Ghi ngay (lúc thoát app).
 pub fn flush() {
+    // Luồng ghi ngầm và lệnh ghi lúc thoát app có thể chạy cùng lúc: cùng ghi một tệp .tmp thì một bên đổi tên tệp bên kia đang
+    // ghi dở (app thoát đúng lúc đó → prefs.json hỏng, mất hết cài đặt), hoặc bản cũ đè bản mới — ghi lần lượt
+    static WRITING: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    let _w = WRITING.lock().unwrap_or_else(|e| e.into_inner());
     let (text, file) = {
         let mut s = st();
         s.dirty = false;

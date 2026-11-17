@@ -265,6 +265,8 @@ impl App {
         if let Some(p) = self.player.borrow().clone() {
             p.close(false);
         }
+        // Đang xem truyền hình / nghe radio lúc đóng app: ghi nốt giờ đã xem (tới 29 giây chưa ghi) cho giới hạn giờ xem
+        crate::limits::flush();
         cbtv::sync_service::stop();
         prefs::flush();
     }
@@ -386,7 +388,14 @@ impl App {
     /// Không ô nào được chọn (ô cũ bị huỷ khi trang dựng lại) → chọn ô cùng thứ tự trong trang / ô đầu / menu. Người dùng remote /
     /// bàn phím phải luôn thấy một ô sáng.
     pub fn refocus_if_lost(&self) {
-        if self.window.focused_widget().is_some() || !self.window.is_active() || self.playing().is_some() || self.dialog_open() {
+        // Trình phát truyền hình đang mở: bảng kênh / thanh điều khiển ẩn đi mang theo ô đang chọn — không đưa con trỏ về menu
+        // bên dưới (Enter lúc đó bấm nhầm mục menu ẩn sau trình phát)
+        if self.window.focused_widget().is_some()
+            || !self.window.is_active()
+            || self.playing().is_some()
+            || crate::live::current().is_some()
+            || self.dialog_open()
+        {
             return;
         }
         let Some(p) = self.current() else {
@@ -662,6 +671,38 @@ impl App {
                             keynav::focus_and_show(&f);
                         }
                     }
+                }
+                return glib::Propagation::Stop;
+            }
+            // Tab / Shift+Tab và Enter / Space chỉ được tác động trong hộp thoại: chuỗi Tab mặc định của GTK đi cả xuống trang /
+            // menu nằm dưới lớp hộp thoại (vd màn «Ai đang xem?» chặn cửa → Tab tới thẻ «Xem tiếp» ẩn, Enter phát phim của
+            // người xem có mã PIN mà không cần mã)
+            let root: gtk::Widget = self.dialog_box.clone().upcast();
+            let inside = focused.as_ref().filter(|f| keynav::is_inside(f, &root)).cloned();
+            let tab = match key {
+                k::Tab | k::KP_Tab => Some(1isize),
+                k::ISO_Left_Tab => Some(-1isize),
+                _ => None,
+            };
+            if let Some(step) = tab {
+                if text_view.is_some() && inside.is_some() {
+                    return glib::Propagation::Proceed; // ô chữ nhiều dòng: Tab gõ vào ô
+                }
+                // Đi vòng qua các ô / nút của hộp thoại theo thứ tự (Shift+Tab: ngược lại)
+                let all = keynav::targets(&root);
+                let at = inside.as_ref().and_then(|f| all.iter().position(|w| w == f || f.is_ancestor(w)));
+                let next = match at {
+                    Some(i) if !all.is_empty() => all.get((i as isize + step).rem_euclid(all.len() as isize) as usize).cloned(),
+                    _ => keynav::first(&root),
+                };
+                if let Some(n) = next {
+                    keynav::focus_and_show(&n);
+                }
+                return glib::Propagation::Stop;
+            }
+            if inside.is_none() && matches!(key, k::Return | k::KP_Enter | k::ISO_Enter | k::space | k::KP_Space) {
+                if let Some(f) = keynav::first(&root) {
+                    keynav::focus_and_show(&f);
                 }
                 return glib::Propagation::Stop;
             }

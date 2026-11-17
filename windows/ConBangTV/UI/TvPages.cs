@@ -131,8 +131,13 @@ public sealed class TvPage : Page
         _info.Text = text;
     }
 
+    /// Lượt vẽ lại: hai lần vẽ chồng nhau (nhịp 1 giây thấy danh sách đổi + vừa thêm danh sách / bấm ★) thì lần cũ bỏ dở sau
+    /// khi chờ đọc nhóm kênh, không thì thêm một hàng nhóm thứ hai.
+    private int _rebuildSeq;
+
     private async Task Rebuild()
     {
+        var seq = ++_rebuildSeq;
         var st = Iptv.Status();
         _version = st["version"]?.GetValue<long>() ?? 0;
         var list = st["active"] as JsonObject;
@@ -166,7 +171,9 @@ public sealed class TvPage : Page
         {
             Body.Children.Add(Ui.Dim($"Chưa tải được danh sách «{Iptv.S(list, "name")}».\n{err}", 16, new Thickness(0, 20, 0, 0)));
         }
-        _groups = await Iptv.Groups();
+        var groups = await Iptv.Groups();
+        if (seq != _rebuildSeq) return;
+        _groups = groups;
         var total = (int)Iptv.D(_groups, "total");
         var favs = (int)Iptv.D(_groups, "favs");
         if (!_favsChosen && total > 0)

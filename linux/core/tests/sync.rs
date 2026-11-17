@@ -149,6 +149,20 @@ fn hello_and_pairing_by_code() {
     assert_ne!(sync_service::pair_code().unwrap(), code);
     assert!(got.lock().unwrap().contains(&SyncEvent::Message("Đã ghép với TX3.".into())));
 
+    // Dò mã: sai tổng cộng MAX_PAIR_FAILS lần (qua nhiều lần đổi mã) thì đóng ghép tới khi mở lại màn Đồng bộ
+    sync_service::set_pair_code(Some("1234"));
+    for i in 0..sync_service::MAX_PAIR_FAILS {
+        assert!(sync_service::pair_code().is_some(), "lần {i}");
+        let (m, _) = answer(&req("POST", "/pair", &pair_body("dò", "0000"), &[]));
+        assert_eq!(m.status, 403);
+    }
+    assert_eq!(sync_service::pair_code(), None);
+    assert_eq!(answer(&req("GET", "/hello", b"", &[])).1["pairing"], false);
+    let (m, v) = answer(&req("POST", "/pair", &pair_body("dò", "1234"), &[]));
+    assert_eq!((m.status, v["error"].as_str()), (403, Some("closed")));
+    assert!(!sync_service::peers().iter().any(|p| p.id == "dò"));
+    sync_service::set_pair_code(Some("1234")); // mở lại: đếm lại từ đầu
+
     // Ghép lại cùng máy: thay khoá cũ (không thêm máy thứ hai); không có X-Port thì nhớ địa chỉ, không nhớ cổng
     let code = sync_service::pair_code().unwrap();
     let body = serde_json::to_vec(&serde_json::json!({"device": "tv1", "name": " ", "code": code})).unwrap();

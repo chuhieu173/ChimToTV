@@ -1364,6 +1364,9 @@ async fn refresh_inner(l: &IptvList, force: bool) -> Result<()> {
     let t0 = now_ms();
     let path = raw_file(l);
     let mut sig = None;
+    // Tệp sẽ đọc: danh sách theo địa chỉ thì đọc bản vừa tải (.part) trước — chỉ thay tệp cũ khi bản mới có kênh (cổng đăng
+    // nhập Wi‑Fi / trang «hết hạn» trả HTML 200 thì giữ nguyên danh sách đang dùng được)
+    let mut src = path.clone();
     if let Some(url) = &l.url {
         set_status(Some("Đang tải danh sách kênh…".into()));
         let part = dir().join(format!("{}.part", l.id));
@@ -1378,22 +1381,43 @@ async fn refresh_inner(l: &IptvList, force: bool) -> Result<()> {
             crate::log::d("IPTV", &format!("danh sách «{}» không đổi từ lần trước ({} ms)", l.name, now_ms() - t0));
             return Ok(());
         }
-        std::fs::rename(&part, &path).map_err(|e| Error::App(format!("Không ghi được danh sách: {e}")))?;
+        // Danh sách vừa bị xoá trong lúc tải: bỏ tệp tải về (không để lại tệp mồ côi)
+        if !lists().iter().any(|x| x.id == l.id) {
+            let _ = std::fs::remove_file(&part);
+            return Ok(());
+        }
+        src = part;
         sig = Some(s);
     }
     set_status(Some("Đang đọc danh sách kênh…".into()));
     let id = l.id.clone();
-    let p2 = path.clone();
+    let p2 = src.clone();
     let parsed = tokio::task::spawn_blocking(move || -> std::io::Result<Loaded> {
         let f = std::fs::File::open(&p2)?;
         Ok(build(&id, open_maybe_gz(f), now_sec()))
     })
     .await
-    .map_err(|e| Error::App(e.to_string()))?
-    .map_err(|e| Error::App(format!("Không đọc được danh sách: {e}")))?;
+    .map_err(|e| Error::App(e.to_string()))
+    .and_then(|r| r.map_err(|e| Error::App(format!("Không đọc được danh sách: {e}"))));
+    let drop_part = || {
+        if src != path {
+            let _ = std::fs::remove_file(&src);
+        }
+    };
+    let parsed = match parsed {
+        Ok(p) => p,
+        Err(e) => {
+            drop_part();
+            return Err(e);
+        }
+    };
     if parsed.channels.is_empty() {
+        drop_part();
         let why = if parsed.saw_extinf { "Danh sách không có kênh nào." } else { "Tệp tải về không phải danh sách M3U." };
         return Err(Error::App(why.into()));
+    }
+    if src != path {
+        std::fs::rename(&src, &path).map_err(|e| Error::App(format!("Không ghi được danh sách: {e}")))?;
     }
     crate::log::d("IPTV", &format!(
         "danh sách «{}» — {} mục → {} kênh, lịch {} ({} ms)",
@@ -1405,7 +1429,8 @@ async fn refresh_inner(l: &IptvList, force: bool) -> Result<()> {
     ));
     let count = parsed.channels.len() as u32;
     let epg = parsed.epg.clone();
-    {
+    // Trong lúc tải người dùng đã chọn danh sách khác: không đè danh sách đang dùng (lần sau đọc lại từ tệp)
+    if active_list().map(|a| a.id).as_deref() == Some(l.id.as_str()) {
         let mut s = state();
         s.loaded = Some(Arc::new(parsed));
     }
@@ -1676,14 +1701,17 @@ pub struct Filter {
 fn filtered(l: &Arc<Loaded>, f: &Filter) -> Arc<Vec<u32>> {
     let kids = prefs::kids();
     let hide = hide_bad();
-    let key = format!("{}|{:?}|{}|{}|{kids}|{hide}", l.list_id, f.group, f.favs, f.q);
+    // Kênh yêu thích là của từng người xem (đổi người xem / đồng bộ không tăng version): khoá có cả người xem và danh
+    // sách yêu thích, không thì hàng «Kênh yêu thích» của người mới hiện kênh của người trước
+    let fav_list = if f.favs { favorite_keys() } else { Vec::new() };
+    let key = format!("{}|{:?}|{}|{}|{kids}|{hide}|{}|{}", l.list_id, f.group, f.favs, f.q, prefs::profile_id(), fav_list.join("\u{1}"));
     let version = state().version;
     if let Some((k, v, ids)) = &state().filter {
         if *k == key && *v == version {
             return ids.clone();
         }
     }
-    let favs: HashSet<String> = if f.favs { favorite_keys().into_iter().collect() } else { HashSet::new() };
+    let favs: HashSet<String> = fav_list.into_iter().collect();
     let bad = if hide { bad_map() } else { Map::new() };
     let q = f.q.trim();
     let nq = norm(q);

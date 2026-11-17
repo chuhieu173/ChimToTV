@@ -443,18 +443,22 @@ public sealed class LiveView : UserControl
         {
             _listChecked = true;
             ShowLoading("Đang kiểm tra link mới…");
-            if (await RefreshChannel(600)) RetryFromFirst();
-            else if (t == _token) ShowError(text, true);
+            var changed = await RefreshChannel(600);
+            if (changed == true) RetryFromFirst();
+            else if (changed == false && t == _token) ShowError(text, true);
             return;
         }
         ShowError(text, !permanent);
     }
 
-    /// Tải lại danh sách nếu cũ hơn age giây, lấy bản mới của kênh đang xem (cùng khoá). true = nguồn của kênh vừa đổi.
-    private async Task<bool> RefreshChannel(int age)
+    /// Tải lại danh sách nếu cũ hơn age giây, lấy bản mới của kênh đang xem (cùng khoá). true = nguồn của kênh vừa đổi;
+    /// null = trong lúc tải người xem đã sang kênh khác / đóng trình phát (bỏ kết quả, bên gọi không làm gì nữa — không thì
+    /// kênh cũ đè lên kênh đang xem và bị phát lại).
+    private async Task<bool?> RefreshChannel(int age)
     {
         var old = _ch;
         if (old == null) return false;
+        var t = _token;
         try
         {
             await Iptv.RefreshIfOlder(age);
@@ -463,9 +467,12 @@ public sealed class LiveView : UserControl
         {
             Log.D("tv", "tải lại danh sách lỗi: " + e.Message);
         }
+        if (t != _token || !IsOpen) return null;
         var idx = await Iptv.IndexOf(_filter, Iptv.S(old, "k"));
+        if (t != _token || !IsOpen) return null;
         if (idx < 0) return false;
         var fresh = await Iptv.At(_filter, idx);
+        if (t != _token || !IsOpen) return null;
         if (fresh == null) return false;
         var before = string.Join("\n", Urls().Select(u => Iptv.S(u, "url")));
         _index = idx;
@@ -477,7 +484,7 @@ public sealed class LiveView : UserControl
 
     private async Task RefreshThenRetry()
     {
-        await RefreshChannel(120);
+        if (await RefreshChannel(120) == null) return;
         RetryFromFirst();
     }
 
@@ -505,10 +512,16 @@ public sealed class LiveView : UserControl
             await RefreshThenRetry();
             return;
         }
-        if (Iptv.S(Iptv.ActiveList(), "url") != "" && await RefreshChannel(600))
+        if (Iptv.S(Iptv.ActiveList(), "url") != "")
         {
-            RetryFromFirst();
-            return;
+            var t = _token;
+            var changed = await RefreshChannel(600);
+            if (changed == null || t != _token) return;
+            if (changed == true)
+            {
+                RetryFromFirst();
+                return;
+            }
         }
         _reopens = 0;
         OpenSource();
@@ -791,15 +804,17 @@ public sealed class LiveView : UserControl
         BumpHide();
     }
 
-    /// Bảng kênh: 100 kênh quanh kênh đang xem (danh sách lớn), ô đang xem tô màu.
-    private async Task BuildPanel(bool focus)
+    /// Bảng kênh: 100 kênh quanh kênh đang xem (danh sách lớn), ô đang xem tô màu. center: lật trang bảng (▲ / ▼ «nữa») —
+    /// chỉ đổi vùng hiện, không đổi kênh đang xem (_index).
+    private async Task BuildPanel(bool focus, int? center = null)
     {
-        var from = Math.Max(0, _index - 40);
+        var from = Math.Max(0, (center ?? _index) - 40);
+        var focusIndex = center ?? _index;
         var page = await Iptv.Page(_filter, from, 100);
         _panelList.Children.Clear();
         var total = (int)Iptv.D(page, "total");
         _panelTitle.Text = $"{Iptv.S(Iptv.ActiveList(), "name")} · {total} kênh";
-        if (from > 0) _panelList.Children.Add(Ui.Pill("▲ Kênh trước nữa", () => { _index = Math.Max(0, from - 60); _ = BuildPanel(true); }));
+        if (from > 0) _panelList.Children.Add(Ui.Pill("▲ Kênh trước nữa", () => { _ = BuildPanel(true, Math.Max(0, from - 60)); }));
         Button? current = null;
         var i = from;
         foreach (var c in page["items"] as JsonArray ?? new JsonArray())
@@ -818,10 +833,10 @@ public sealed class LiveView : UserControl
                 BumpHide();
             };
             b.GotKeyboardFocus += (_, _) => BumpHide();
-            if (idx == _index) current = b;
+            if (idx == focusIndex) current = b;
             _panelList.Children.Add(b);
         }
-        if (from + 100 < total) _panelList.Children.Add(Ui.Pill("▼ Kênh sau nữa", () => { _index = Math.Min(total - 1, from + 140); _ = BuildPanel(true); }));
+        if (from + 100 < total) _panelList.Children.Add(Ui.Pill("▼ Kênh sau nữa", () => { _ = BuildPanel(true, Math.Min(total - 1, from + 140)); }));
         if (current != null)
         {
             await Dispatcher.BeginInvoke(() =>

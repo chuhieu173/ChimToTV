@@ -177,6 +177,12 @@ pub struct Mpv {
     pub h: Handle,
 }
 
+/// Chuỗi C cho mpv: bỏ ký tự NUL (link kênh trong danh sách có thể chứa %00 — `|User-Agent=a%00b` — CString::new báo lỗi,
+/// unwrap làm cả app văng mỗi lần mở kênh đó).
+fn cs(s: &str) -> CString {
+    CString::new(s.replace('\0', "")).unwrap_or_default()
+}
+
 impl Mpv {
     /// Tạo + khởi động với các tuỳ chọn (tên, giá trị). None khi libmpv không có / không khởi động được.
     pub fn new(opts: &[(&str, &str)]) -> Option<Mpv> {
@@ -215,13 +221,13 @@ impl Mpv {
     }
 
     pub fn set_option(&self, k: &str, v: &str) -> c_int {
-        let (k, v) = (CString::new(k).unwrap(), CString::new(v).unwrap());
+        let (k, v) = (cs(k), cs(v));
         // SAFETY: chuỗi C hợp lệ trong lúc gọi
         unsafe { (self.l.set_option_string)(self.h, k.as_ptr(), v.as_ptr()) }
     }
 
     pub fn command(&self, args: &[&str]) -> c_int {
-        let cs: Vec<CString> = args.iter().map(|a| CString::new(*a).unwrap()).collect();
+        let cs: Vec<CString> = args.iter().map(|a| cs(a)).collect();
         let mut ps: Vec<*const c_char> = cs.iter().map(|c| c.as_ptr()).collect();
         ps.push(std::ptr::null());
         // SAFETY: mảng chuỗi C kết thúc bằng NULL, sống tới hết lệnh
@@ -233,28 +239,28 @@ impl Mpv {
     }
 
     pub fn set_str(&self, k: &str, v: &str) -> c_int {
-        let (k, v) = (CString::new(k).unwrap(), CString::new(v).unwrap());
+        let (k, v) = (cs(k), cs(v));
         let mut p = v.as_ptr();
         // SAFETY: MPV_FORMAT_STRING nhận con trỏ tới char*
         unsafe { (self.l.set_property)(self.h, k.as_ptr(), FORMAT_STRING, &mut p as *mut *const c_char as *mut c_void) }
     }
 
     pub fn set_flag(&self, k: &str, v: bool) -> c_int {
-        let k = CString::new(k).unwrap();
+        let k = cs(k);
         let mut f: c_int = v as c_int;
         // SAFETY: MPV_FORMAT_FLAG nhận int*
         unsafe { (self.l.set_property)(self.h, k.as_ptr(), FORMAT_FLAG, &mut f as *mut c_int as *mut c_void) }
     }
 
     pub fn set_double(&self, k: &str, v: f64) -> c_int {
-        let k = CString::new(k).unwrap();
+        let k = cs(k);
         let mut d: c_double = v;
         // SAFETY: MPV_FORMAT_DOUBLE nhận double*
         unsafe { (self.l.set_property)(self.h, k.as_ptr(), FORMAT_DOUBLE, &mut d as *mut c_double as *mut c_void) }
     }
 
     pub fn get_double(&self, k: &str) -> Option<f64> {
-        let k = CString::new(k).unwrap();
+        let k = cs(k);
         let mut d: c_double = 0.0;
         // SAFETY: như trên
         let r = unsafe { (self.l.get_property)(self.h, k.as_ptr(), FORMAT_DOUBLE, &mut d as *mut c_double as *mut c_void) };
@@ -262,7 +268,7 @@ impl Mpv {
     }
 
     pub fn get_flag(&self, k: &str) -> Option<bool> {
-        let k = CString::new(k).unwrap();
+        let k = cs(k);
         let mut f: c_int = 0;
         // SAFETY: như trên
         let r = unsafe { (self.l.get_property)(self.h, k.as_ptr(), FORMAT_FLAG, &mut f as *mut c_int as *mut c_void) };
@@ -271,7 +277,7 @@ impl Mpv {
 
     #[cfg_attr(not(debug_assertions), allow(dead_code))]
     pub fn get_i64(&self, k: &str) -> Option<i64> {
-        let k = CString::new(k).unwrap();
+        let k = cs(k);
         let mut v: i64 = 0;
         // SAFETY: như trên
         let r = unsafe { (self.l.get_property)(self.h, k.as_ptr(), FORMAT_INT64, &mut v as *mut i64 as *mut c_void) };
@@ -280,7 +286,7 @@ impl Mpv {
 
     #[cfg_attr(not(debug_assertions), allow(dead_code))]
     pub fn get_str(&self, k: &str) -> Option<String> {
-        let k = CString::new(k).unwrap();
+        let k = cs(k);
         let mut p: *mut c_char = std::ptr::null_mut();
         // SAFETY: mpv cấp chuỗi, giải phóng bằng mpv_free
         unsafe {

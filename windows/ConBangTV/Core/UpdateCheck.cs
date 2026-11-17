@@ -10,7 +10,7 @@ namespace ConBangTV.Core;
 /// tag win-v* có tệp .exe. Cài: tải tệp mới, đổi tên tệp đang chạy thành .old, đặt tệp mới vào chỗ cũ rồi mở lại app.
 public static class UpdateCheck
 {
-    public const string ReleasesApi = "https://api.github.com/repos/conbangtv/ChimToTV/releases?per_page=30";
+    public const string ReleasesApi = "https://api.github.com/repos/conbangtv/ChimToTV/releases?per_page=100";
     public const string ReleasesPage = "https://github.com/conbangtv/ChimToTV/releases";
     public const string Prefix = "win-v";
     public const long CheckEvery = 2 * 60 * 60 * 1000L;

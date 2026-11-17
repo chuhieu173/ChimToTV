@@ -111,9 +111,10 @@ public partial class MainWindow : Window
                 Close();
                 return;
             }
+            // «Ai đang xem?» khi mở app (từ 2 người xem), hoặc người đang dùng có khoá — chọn xong mới hỏi cập nhật (hộp cập nhật
+            // hiện giữa chừng sẽ thay hộp chọn người xem, hộp chọn hiện lại thì «Có bản mới» bị coi như «Để sau»)
+            if (Prefs.CurrentProfile.Locked || (Prefs.AskProfile && Prefs.Profiles.Count > 1)) await PickProfile(!Prefs.CurrentProfile.Locked);
             _ = CheckUpdate(false);
-            // «Ai đang xem?» khi mở app (từ 2 người xem), hoặc người đang dùng có khoá
-            if (Prefs.CurrentProfile.Locked || (Prefs.AskProfile && Prefs.Profiles.Count > 1)) _ = PickProfile(!Prefs.CurrentProfile.Locked);
         });
     }
 
@@ -463,6 +464,7 @@ public partial class MainWindow : Window
     /// Trình phát truyền hình đã đóng: về trang trước.
     public void LiveClosed()
     {
+        _ = CheckUpdate(false); // có bản mới mà lúc nãy đang xem thì hỏi bây giờ
         PlayerHost.Content = _player;
         PlayerHost.Visibility = Visibility.Collapsed;
         Shell.Visibility = Visibility.Visible;
@@ -493,6 +495,12 @@ public partial class MainWindow : Window
             lv.Notice("🔔 " + text, 12000);
             return;
         }
+        // Đang xem phim: hộp hỏi nằm khuất sau hình (phím do trình phát giữ) — báo ngay trong trình phát
+        if (Player is { } pv)
+        {
+            pv.Notice("🔔 " + text, 12000);
+            return;
+        }
         if (await Ask(Iptv.B(r, "kick") ? "Bóng lăn" : "Sắp phát", text, new[] { "Xem ngay", "Đóng" }) == 0) await PlayLiveKey(key);
     }
 
@@ -500,6 +508,7 @@ public partial class MainWindow : Window
     public void PlayerClosed()
     {
         SyncService.SyncSoon(1);
+        _ = CheckUpdate(false); // có bản mới mà lúc nãy đang xem thì hỏi bây giờ
         PlayerHost.Visibility = Visibility.Collapsed;
         Shell.Visibility = Visibility.Visible;
         Activate();
@@ -883,8 +892,13 @@ public partial class MainWindow : Window
                 return;
             }
             if (!manual && Prefs.IsUpdateSnoozed(rel.Version)) return;
-            // Đang xem phim thì để lúc khác (lần kiểm sau)
-            if (!manual && Player != null) return;
+            // Đang xem phim / truyền hình (hộp hỏi nằm khuất sau hình, phím OK bấm nhầm «Cập nhật ngay») hay đang có hộp thoại
+            // khác: để lúc đóng trình phát / lần kiểm sau
+            if (!manual && (Player != null || Live != null || _picking || DialogLayer.Visibility == Visibility.Visible))
+            {
+                Prefs.LastUpdateCheck = 0;
+                return;
+            }
             var summary = UpdateCheck.Summary(rel.Notes);
             var choice = await Ask($"Có bản mới: Côn Bằng TV {rel.Version}", (summary.Length > 0 ? summary + "\n\n" : "") +
                 $"Bản đang dùng: {UpdateCheck.CurrentVersion}.", new[] { "Cập nhật ngay", "Để sau" });
