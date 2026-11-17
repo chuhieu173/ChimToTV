@@ -219,6 +219,47 @@ struct IptvChannelView: Identifiable {
     var tid: String?
 }
 
+/// Một ô kênh của hàng Truyền hình trên trang chủ (Iptv.home).
+struct IptvHomeItem: Hashable, Identifiable {
+    /// Duy nhất trong hàng (vị trí) — không theo khoá kênh (một kênh có thể nằm ở nhiều nhóm)
+    let id: String
+    let k: String
+    /// Danh sách của kênh (kênh vừa xem của danh sách khác: bấm thì đổi sang danh sách đó)
+    let list: String?
+    let n: String
+    let logo: String?
+    let radio: Bool
+    /// Dòng 2: chương trình đang phát / giờ trận / tên nhóm
+    let line: String
+    /// Tiến độ 0…1 (chương trình đang phát / trận đang đá); -1 = không có
+    let frac: Double
+    /// Nhãn góc: ĐANG ĐÁ / SẮP ĐÁ / RADIO
+    let tag: String?
+    /// Nhãn đỏ (trận đang đá)
+    let live: Bool
+    /// Vị trí trong bộ lọc Yêu thích (hàng «Kênh yêu thích»: ↑↓ trong trình phát đi trong yêu thích); -1 = mở theo khoá
+    let index: Int
+}
+
+/// Các hàng Truyền hình của trang chủ.
+struct IptvHome: Equatable {
+    var list: String? = nil
+    var recent: [IptvHomeItem] = []
+    var favs: [IptvHomeItem] = []
+    var live: [IptvHomeItem] = []
+    var radio: [IptvHomeItem] = []
+
+    func items(_ row: String) -> [IptvHomeItem] {
+        switch row {
+        case "tv-recent": return recent
+        case "tv-favs": return favs
+        case "tv-live": return live
+        case "tv-radio": return radio
+        default: return []
+        }
+    }
+}
+
 /// Kênh vừa xem (mới nhất trước, tối đa 12).
 struct IptvRecent: Codable, Equatable {
     var k: String
@@ -890,6 +931,118 @@ enum Iptv {
     static func played(_ key: String) async {
         guard let l = await ensureLoaded(), let (_, c) = l.byKey(key) else { return }
         addRecent(c, group: c.g < l.groups.count ? l.groups[c.g] : "")
+    }
+
+    // MARK: - Hàng Truyền hình trên trang chủ
+
+    /// Số ô tối đa mỗi hàng Truyền hình của trang chủ.
+    static let homeMax = 16
+
+    /// Kênh cho hàng «Trận đang / sắp đá»: đang đá có link trước, rồi đang đá chưa có hình, rồi sắp đá (bóng lăn sớm trước);
+    /// một trận ở nhiều nhóm (cùng khoá) chỉ lấy một.
+    static func pickLive(_ ch: [IptvChannel], now: Double, limit: Int) -> [Int] {
+        var picked: [(rank: Int, kick: Double, i: Int)] = []
+        for (i, c) in ch.enumerated() where c.kick > 0 {
+            let r: Int
+            switch IptvParse.matchState(kick: c.kick, dur: c.dur, now: now) {
+            case .live: r = c.nolink ? 1 : 0
+            case .soon: r = 2
+            case .later: r = 3
+            case .none, .over: continue
+            }
+            picked.append((r, c.kick, i))
+        }
+        picked.sort { ($0.rank, $0.kick, $0.i) < ($1.rank, $1.kick, $1.i) }
+        var seen = Set<String>()
+        var out: [Int] = []
+        for p in picked where seen.insert(ch[p.i].k).inserted {
+            out.append(p.i)
+            if out.count >= limit { break }
+        }
+        return out
+    }
+
+    /// Đài cho hàng «Radio»: đài vừa nghe trước (theo thứ tự vừa nghe), rồi các đài khác theo thứ tự danh sách; mỗi khoá một ô.
+    static func pickRadio(_ ch: [IptvChannel], recent: [String], limit: Int) -> [Int] {
+        var first: [String: Int] = [:]
+        for (i, c) in ch.enumerated() where c.radio && first[c.k] == nil { first[c.k] = i }
+        var seen = Set<String>()
+        var out: [Int] = []
+        for k in recent {
+            guard let i = first[k], seen.insert(k).inserted else { continue }
+            out.append(i)
+            if out.count >= limit { return out }
+        }
+        for (i, c) in ch.enumerated() where c.radio && seen.insert(c.k).inserted {
+            out.append(i)
+            if out.count >= limit { break }
+        }
+        return out
+    }
+
+    /// Dữ liệu các hàng Truyền hình của trang chủ: kênh vừa xem (kèm chương trình đang phát nếu thuộc danh sách đang dùng),
+    /// yêu thích, trận đang / sắp đá, radio của danh sách đang dùng. Chưa có danh sách / chưa đọc được thì chỉ có kênh vừa xem.
+    /// Hồ sơ trẻ em: không có trận đấu / radio.
+    static func home(limit: Int = homeMax) async -> IptvHome {
+        let recents = recent()
+        let active = activeList()
+        if active == nil && recents.isEmpty { return IptvHome() }
+        let l = active == nil ? nil : await ensureLoaded()
+        let now = nowSec()
+        let g = guide()
+        let favs = Set(favoriteKeys())
+        var out = IptvHome(list: l?.listId)
+        func item(_ ix: Int, _ id: String, index: Int, in l: IptvLoaded) -> IptvHomeItem {
+            let v = view(l, ix, guide: g, favs: favs, bad: [:], full: false)
+            var line = v.g
+            var frac = -1.0
+            var tag: String? = nil
+            var live = false
+            switch v.match {
+            case .live:
+                tag = "ĐANG ĐÁ"
+                live = true
+                if v.dur > 0 { frac = min(1, max(0, (now - v.kick) / Double(v.dur * 60))) }
+            case .soon, .later:
+                tag = "SẮP ĐÁ"
+            case .none, .over:
+                break
+            }
+            if v.match != .none {
+                line = v.matchLine ?? line
+            } else if let p = v.now {
+                line = p.t
+                if p.e > p.s { frac = min(1, max(0, (now - p.s) / (p.e - p.s))) }
+            }
+            if v.radio && tag == nil { tag = "RADIO" }
+            return IptvHomeItem(id: id, k: v.k, list: l.listId, n: v.n, logo: v.logo, radio: v.radio, line: line, frac: frac, tag: tag,
+                                live: live, index: index)
+        }
+        for (j, r) in recents.prefix(limit).enumerated() {
+            if let l = l, r.l == nil || r.l == l.listId, let (ix, _) = l.byKey(r.k) {
+                out.recent.append(item(ix, "r\(j)", index: -1, in: l))
+            } else {
+                let radio = r.radio == true
+                out.recent.append(IptvHomeItem(id: "r\(j)", k: r.k, list: r.l, n: r.n, logo: r.logo, radio: radio, line: r.g, frac: -1,
+                                               tag: radio ? "RADIO" : nil, live: false, index: -1))
+            }
+        }
+        guard let l = l else { return out }
+        for (j, i) in filtered(l, IptvFilter(favs: true)).prefix(limit).enumerated() {
+            out.favs.append(item(Int(i), "f\(j)", index: j, in: l))
+        }
+        if !Prefs.kids {
+            if l.hasMatches {
+                for (j, i) in pickLive(l.channels, now: now, limit: limit).enumerated() {
+                    out.live.append(item(i, "m\(j)", index: -1, in: l))
+                }
+            }
+            let heard = recents.filter { $0.radio == true && ($0.l == nil || $0.l == l.listId) }.map { $0.k }
+            for (j, i) in pickRadio(l.channels, recent: heard, limit: limit).enumerated() {
+                out.radio.append(item(i, "a\(j)", index: -1, in: l))
+            }
+        }
+        return out
     }
 
     // MARK: - Nhắc giờ phát / bóng lăn (giao diện hỏi `dueReminder` mỗi 15 giây khi app mở)

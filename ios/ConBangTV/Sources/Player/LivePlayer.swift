@@ -1206,7 +1206,10 @@ final class LiveController: UIHostingController<LiveView> {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        model.onClose = { [weak self] in self?.dismiss(animated: true) }
+        model.onClose = { [weak self] in
+            self?.dismiss(animated: true)
+            AppModel.shared.refreshTvHome() // trang chủ: hàng «Kênh vừa xem» / tiến độ chương trình
+        }
         model.begin()
     }
 

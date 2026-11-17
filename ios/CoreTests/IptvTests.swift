@@ -114,6 +114,31 @@ final class IptvTests: XCTestCase {
         XCTAssertEqual(IptvParse.listUrlKey("HTTPS://Short.Gy/AbC/"), "short.gy/AbC")
     }
 
+    /// Hàng «Trận đang / sắp đá» và «Radio» trên trang chủ.
+    func testHomePicks() {
+        func ch(_ k: String, kick: Double = 0, dur: Int = 130, radio: Bool = false, link: Bool = true) -> IptvChannel {
+            IptvChannel(k: k, n: k, g: 0, num: "", logo: nil, tid: nil, urls: [link ? "http://s.example/\(k).m3u8" : "http://s.example/novideo.mp4"],
+                        referer: nil, ua: nil, hdr: [], kick: kick, dur: dur, radio: radio, vod: false, kids: false)
+        }
+        let now = 1_800_000_000.0
+        let list = [
+            ch("thuong"),
+            ch("sap-xa", kick: now + 5 * 3600),
+            ch("dang-da", kick: now - 600),
+            ch("sap-da", kick: now + 600),
+            ch("da-xong", kick: now - 4 * 3600),
+            ch("dang-da", kick: now - 600), // cùng trận ở nhóm khác
+            ch("dang-da-2", kick: now - 1200),
+            ch("vov1", radio: true),
+            ch("bbc", radio: true),
+            ch("vov1", radio: true), // trùng khoá
+        ]
+        XCTAssertEqual(Iptv.pickLive(list, now: now, limit: 16).map { list[$0].k }, ["dang-da-2", "dang-da", "sap-da", "sap-xa"])
+        XCTAssertEqual(Iptv.pickLive(list, now: now, limit: 2).count, 2)
+        XCTAssertEqual(Iptv.pickRadio(list, recent: ["bbc", "khong-co"], limit: 16).map { list[$0].k }, ["bbc", "vov1"])
+        XCTAssertEqual(Iptv.pickRadio(list, recent: [], limit: 1).map { list[$0].k }, ["vov1"])
+    }
+
     func testGzip() throws {
         // «hello\n» nén gzip (tạo sẵn bằng gzip -n)
         let gz: [UInt8] = [0x1F, 0x8B, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03, 0xCB, 0x48, 0xCD, 0xC9, 0xC9, 0xE7, 0x02, 0x00,
