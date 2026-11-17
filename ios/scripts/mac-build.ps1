@@ -8,7 +8,8 @@
 #   .\ios\scripts\mac-build.ps1 -SyncOnly   chỉ gửi mã nguồn + dựng project (xcodegen), không biên dịch
 # Mã nguồn lấy từ thư mục làm việc của máy này (cả phần chưa commit): ios\ và app\src\main\assets\ (trình phát dùng chung).
 # Dựng và đóng gói giống .github/workflows/ios.yml (cùng ios/scripts/package.sh / package-mac.sh). Tệp về dist\mac\ (dist\ không
-# lên git). Bản phát hành chính thức vẫn dựng trên GitHub: Xcode mới hơn, máy sạch.
+# lên git). Từ 17/11/2026 bản phát hành chính thức cũng dựng ở đây (anh chọn): -Release → dist\mac\ConBangTV-iPad-<bản>.ipa,
+# -Mac -Release → dist\mac\ConBangTV-Mac-<bản>.zip; GitHub Actions (.github/workflows/ios.yml) chỉ còn là dự phòng.
 #
 # Mac: Sonoma 14.4 → tối đa Xcode 15.4 (Swift 5.10, SDK iOS 17.5), cũ hơn Xcode 16.x của GitHub — mã phải dựng được trên cả hai.
 # Đăng nhập: tệp $env:CONBANG_MAC_INFO, mặc định ..\_May_Test_App\info.txt (ngoài repo, danh sách các máy thử): dòng tên máy có

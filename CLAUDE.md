@@ -38,11 +38,15 @@ sang `ConBangTV…apk` từ 13/11/2026 (anh bảo), nhưng release TV vẫn kèm
 
 ## Phát hành bản iPad (`ios/`, cài bằng TrollStore)
 
-1. Tăng `MARKETING_VERSION` trong `ios/project.yml`; gộp nhánh `ios` vào `main` (nhánh `ios` em được tự đẩy để dựng
-   bản thử; `main` + phát hành chờ anh bảo).
-2. `gh workflow run ios.yml --ref main -f release=true` → artifact `ipa` có `ConBangTV-iPad-<bản>.ipa` (mã gói
-   `vn.chimto.tv`, không có cổng gỡ lỗi). Kiểm Info.plist (mã gói, tên, bản), cài thử lên iPad thật.
-3. `.\release.ps1 ipad -Notes <tệp ghi chú> -File ConBangTV-iPad-<bản>.ipa` — script **luôn đặt `--latest=false`**: app TV đọc
+1. Tăng `MARKETING_VERSION` và `CURRENT_PROJECT_VERSION` (số build) trong `ios/project.yml`, commit; `main` + phát hành chờ anh bảo.
+2. **Dựng trên Mac mini trong nhà** (anh chọn 17/11/2026 — không dựng bản chính trên GitHub Actions nữa; `ios.yml` giữ làm dự phòng):
+   thư mục làm việc đúng commit phát hành, rồi `.\ios\scripts\mac-build.ps1 -Release` (test lõi + IPA thử + IPA chính, ~4 phút) →
+   **`dist\mac\ConBangTV-iPad-<bản>.ipa`** (mã gói `vn.chimto.tv`, số build lấy từ `project.yml`, mã NextDNS từ `keys\nextdns.txt`).
+   Script chạy được nằm ở nhánh trong máy `chi-trong-may` (anh dặn không đẩy nhánh này): mượn tạm
+   `git show chi-trong-may:ios/scripts/mac-build.ps1 | Set-Content -Encoding utf8 ios\scripts\mac-build.ps1`, dựng xong
+   `git checkout -- ios/scripts/mac-build.ps1`. Mac mini có Xcode 15.4 / Swift 5.10. Kiểm Info.plist (mã gói, tên, bản, build), không
+   có cổng gỡ lỗi (tệp chạy không có chuỗi `/tvstatus`), cài thử lên iPad / iPhone thật.
+3. `.\release.ps1 ipad -Notes <tệp ghi chú> -File dist\mac\ConBangTV-iPad-<bản>.ipa` — script **luôn đặt `--latest=false`**: app TV đọc
    `releases/latest` + tệp `.apk`, link Downloader cũng đi theo Latest. Ghi chú cũng phải có `## Có gì mới`. Script tự chép tệp
    vào link cố định (xem dưới).
 4. Kiểm: `releases/latest` vẫn là bản Android (script tự kiểm, lệch thì trả về bản TV mới nhất); release iPad có `.ipa`; tải từ
@@ -50,11 +54,12 @@ sang `ConBangTV…apk` từ 13/11/2026 (anh bảo), nhưng release TV vẫn kèm
 
 ## Phát hành bản Mac (Mac Catalyst từ `ios/`, từ 13/11/2026)
 
-1. Cùng số bản với iPad (`MARKETING_VERSION` trong `ios/project.yml`). Mã phải dựng được cả bằng Xcode 15.4 / Swift 5.10 (Mac mini
-   trong nhà: `.\ios\scripts\mac-build.ps1 -Mac [-Release] [-Run]`) lẫn Xcode của GitHub.
-2. `gh workflow run ios.yml --ref main -f release=true` → artifact `mac` có `ConBangTV-Mac-<bản>.zip` (Intel + Apple Silicon, ký
-   ad-hoc, mã gói `vn.chimto.tv`, không có cổng gỡ lỗi). Kiểm Info.plist, `lipo -archs`, `codesign --verify`; chạy thử trên Mac.
-3. `.\release.ps1 mac -Notes <tệp ghi chú> -File ConBangTV-Mac-<bản>.zip` — tag `mac-v<bản>`, script **luôn đặt `--latest=false`**,
+1. Cùng số bản với iPad (`MARKETING_VERSION` trong `ios/project.yml`). Mã phải dựng được bằng Xcode 15.4 / Swift 5.10 của Mac mini
+   (vẫn nên dựng được cả bằng Xcode của GitHub — `ios.yml` là dự phòng).
+2. **Dựng trên Mac mini** (anh chọn 17/11/2026, mượn script như bản iPad ở trên): `.\ios\scripts\mac-build.ps1 -Mac -Release -NoTest`
+   (~8 phút) → **`dist\mac\ConBangTV-Mac-<bản>.zip`** (Intel + Apple Silicon, ký ad-hoc, mã gói `vn.chimto.tv`, không có cổng gỡ lỗi;
+   script in ra kiến trúc và mã gói). Kiểm Info.plist, `lipo -archs`, `codesign --verify`; chạy thử trên Mac.
+3. `.\release.ps1 mac -Notes <tệp ghi chú> -File dist\mac\ConBangTV-Mac-<bản>.zip` — tag `mac-v<bản>`, script **luôn đặt `--latest=false`**,
    tự chép tệp vào link cố định `conbangtv_macos`. Ghi chú cũng phải có `## Có gì mới` (app hiện trong hộp «Có bản mới»).
 4. Kiểm: `releases/latest` vẫn là bản Android; release có `.zip`; tải từ link công khai và link cố định, SHA-256 khớp; tự cập nhật
    thật từ bản trước (bản trong `/Applications` của Mac mini).
