@@ -32,7 +32,9 @@ class TvActivity : BaseActivity() {
         private const val FAV = -2L
         private const val ALL = -1L
 
-        fun open(a: Activity) = a.startActivity(Intent(a, TvActivity::class.java))
+        /** favs: true = mở sẵn nhóm «★ Yêu thích», false = «Tất cả» (null: lần đầu có kênh yêu thích thì «★ Yêu thích»). */
+        fun open(a: Activity, favs: Boolean? = null) =
+            a.startActivity(Intent(a, TvActivity::class.java).apply { favs?.let { putExtra("favs", it) } })
     }
 
     private data class Group(val id: Long, val title: String, val count: Int)
@@ -107,6 +109,10 @@ class TvActivity : BaseActivity() {
                 grid.post { focusGrid() }
                 true
             } else false
+        }
+        if (intent.hasExtra("favs")) {
+            favsChosen = true
+            group = if (intent.getBooleanExtra("favs", false)) FAV else ALL
         }
         Iptv.listen(changed)
         debugIntent(intent)

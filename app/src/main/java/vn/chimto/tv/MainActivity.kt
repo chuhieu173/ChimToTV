@@ -61,7 +61,7 @@ class MainActivity : BaseActivity() {
     private var drawerOpen = false
 
     private val menuAdapter = MenuAdapter<Entry>({ it.title }, ::onMenu)
-    private val gridAdapter = FilmGridAdapter(::openFilm, ::loadMore, ::confirmRemove, ::openMore, ::toggleTopic, ::rowMenu)
+    private val gridAdapter = FilmGridAdapter(::openFilm, ::loadMore, ::confirmRemove, ::openMore, ::toggleTopic, ::rowMenu, ::openChannel)
     private lateinit var homeNote: TextView
 
     /**
@@ -70,6 +70,17 @@ class MainActivity : BaseActivity() {
      * khi dựng lại (vd chủ đề vừa bấm).
      */
     private var feedSnap: HomeFeed.Snapshot? = null
+
+    /**
+     * Hàng Truyền hình của trang chủ (HomeFeed.TV_ROWS: kênh vừa xem / yêu thích / trận / radio), đọc ở luồng nền (loadTv) —
+     * id hàng → các kênh; hàng không có kênh thì không có trong map.
+     */
+    private var tvRows: Map<String, List<HomeChannel>> = emptyMap()
+    private var tvToken = 0
+    private var tvVersion = -1
+
+    /** Danh sách kênh / lịch / yêu thích vừa đổi (Iptv.version) lúc đang ở trang chủ: đọc lại hàng Truyền hình. */
+    private val tvChanged: () -> Unit = { if (Iptv.version != tvVersion && onHome()) loadTv() }
     private var feedAt = 0L
     private var autoFresh: List<FreshCard> = emptyList()
     private var moreFrom: String? = null
@@ -300,6 +311,7 @@ class MainActivity : BaseActivity() {
 
     override fun onPause() {
         SyncNet.onApplied = null
+        Iptv.unlisten(tvChanged)
         super.onPause()
     }
 
@@ -361,6 +373,9 @@ class MainActivity : BaseActivity() {
         // Mở phim có tập mới rồi quay ra: số "mới" trên menu đổi theo; tên người xem / phim thu nhỏ cũng vậy
         refreshMenu()
         if (homeToken == token || active?.kind == Kind.FOLLOWS) Follows.check(this, done = ::onFollowsChecked)
+        // Xem kênh xong quay ra / đổi yêu thích trong màn Truyền hình: hàng Truyền hình mới (kênh vừa xem, chương trình đang phát)
+        Iptv.listen(tvChanged)
+        if (onHome()) loadTv()
     }
 
     /** Chọn xong người xem ở màn "Ai đang xem?" (đã nhập đúng mã PIN nếu có). */
@@ -724,6 +739,7 @@ class MainActivity : BaseActivity() {
         loadedMix = Prefs.homeMixOn
         loadedKids = Prefs.kids
         loadedRows = rowsSignature()
+        loadTv()
         if (Prefs.homeMixOn) {
             showMixHome()
             return
@@ -922,6 +938,7 @@ class MainActivity : BaseActivity() {
         is FilmRow -> r.film.url
         is MoreRow -> "more:" + r.key
         is ChipRow -> "chip:" + r.id
+        is ChannelCell -> "tv:${r.slot}:${r.ch.key}"
         else -> null
     }
 
@@ -975,7 +992,11 @@ class MainActivity : BaseActivity() {
     private fun relayoutFeed(focusKey: String? = focusedKey()) {
         val snap = feedSnap
         if (snap == null || !Prefs.homeMixOn) {
+            // refreshHead chỉ giữ ô phim nằm thẳng trong lưới; đang đứng trong dải vuốt ngang (ô kênh của hàng Truyền hình, dải
+            // «Xem tiếp») thì chọn lại theo khoá — chuyển hàng: đúng ô đó; ẩn hàng: ô đầu hàng kế ("": ô phim đầu trang)
+            val inStrip = grid.focusedChild?.let { gridAdapter.items.getOrNull(grid.getChildAdapterPosition(it)) } is StripRow
             refreshHead()
+            if (inStrip) focusKeyAfterSubmit(focusKey ?: "")
             return
         }
         head = headRows()
@@ -1000,20 +1021,90 @@ class MainActivity : BaseActivity() {
         val (title, slot) = when (rowId) {
             "new-eps" -> "Có tập mới" to rowId
             "continue" -> "Xem tiếp" to rowId
+            in HomeFeed.TV_IDS -> HomeFeed.TV_ROWS.first { it.first == rowId }.second to rowId
             else -> arranged.firstOrNull { it.first.id == rowId }?.let { it.first.title to it.second } ?: return
         }
         if (slot == "topics") return
-        val shown = arranged.map { it.second }
-        // Ô cần chọn sau khi ẩn hàng: phim đầu của hàng kế (hàng cuối: hàng trên)
-        val at = arranged.indexOfFirst { it.first.id == rowId }
-        val next = if (at < 0) null else (arranged.getOrNull(at + 1) ?: arranged.getOrNull(at - 1))?.first
+        // Các hàng đang hiện (cả hàng Truyền hình), đúng thứ tự trên trang
+        val shown = gridAdapter.items.mapNotNull { r ->
+            val id = (r as? HeaderRow)?.row ?: return@mapNotNull null
+            if (id in HomeFeed.TV_IDS || id in HomeFeed.HEAD_ROWS) id else arranged.firstOrNull { it.first.id == id }?.second
+        }
+        val next = nextRowKey(rowId)
         HomeRowsUi.rowMenu(this, title, slot, shown,
             changed = { hidden ->
                 loadedRows = rowsSignature() // chỉ xếp lại, không cần tải lại
-                if (hidden) relayoutFeed(next?.cards?.firstOrNull()?.film?.url ?: "") else relayoutFeed()
+                if (hidden) relayoutFeed(next ?: "") else relayoutFeed()
             },
             closed = ::afterHomeSettings,
         )
+    }
+
+    /** Ô cần chọn sau khi ẩn hàng [rowId]: ô đầu của hàng kế (hàng cuối: hàng trên). */
+    private fun nextRowKey(rowId: String): String? {
+        val items = gridAdapter.items
+        val heads = items.indices.filter { (items[it] as? HeaderRow)?.row != null }
+        val k = heads.indexOfFirst { (items[it] as HeaderRow).row == rowId }
+        if (k < 0) return null
+        val target = heads.getOrNull(k + 1) ?: heads.getOrNull(k - 1) ?: return null
+        return items.drop(target + 1).firstNotNullOfOrNull { r -> if (r is StripRow) keyOf(r.cells.firstOrNull()) else keyOf(r) }
+    }
+
+    // ---- Hàng Truyền hình ----
+
+    /** Các hàng Truyền hình đang bật của người xem (hồ sơ trẻ em: không có trận / radio). */
+    private fun tvIds(): Set<String> = HomeFeed.rowPrefs()
+        .filter { (id, on) -> on && id in HomeFeed.TV_IDS && !(Prefs.kids && id in HomeFeed.ADULT_ROWS) }
+        .map { it.first }.toSet()
+
+    /**
+     * Đọc các hàng Truyền hình ở luồng nền (danh sách kênh lớn / lịch phát sóng trên TV box yếu: không chặn trang chủ); khác lần
+     * trước thì xếp lại trang chủ (giữ ô đang chọn).
+     */
+    private fun loadTv() {
+        val ids = tvIds()
+        val t = ++tvToken
+        tvVersion = Iptv.version
+        background({ if (ids.isEmpty()) emptyMap() else Iptv.homeRows(ids, STRIP_MAX) }) { r ->
+            if (t != tvToken) return@background
+            val m = r.getOrDefault(emptyMap())
+            if (m == tvRows) return@background
+            val focus = focusedKey()
+            tvRows = m
+            if (!onHome()) return@background
+            if (Prefs.homeMixOn && feedSnap != null) {
+                relayoutFeed(focus)
+            } else {
+                refreshHead()
+                // Đang đứng trên một ô kênh (vd vừa xem kênh đó quay ra — «Kênh vừa xem» đưa nó lên đầu): chọn lại đúng ô đó
+                if (focus != null && focus.startsWith("tv:")) focusKeyAfterSubmit(focus)
+            }
+        }
+    }
+
+    /** Một hàng Truyền hình: tiêu đề + dải ô kênh, ô cuối «Xem thêm» mở màn Truyền hình. Không có kênh → không có hàng. */
+    private fun tvRow(id: String): List<GridRow> {
+        val chans = tvRows[id].orEmpty()
+        if (chans.isEmpty() || id !in tvIds()) return emptyList()
+        val title = HomeFeed.TV_ROWS.first { it.first == id }.second
+        val more = MoreRow(id, title, 0, tv = true)
+        // Khoá dải kèm kênh đứng đầu: thứ tự đổi (vừa xem kênh khác) thì dải về đầu, không giữ chỗ đã vuốt tới của thứ tự cũ
+        val key = "tv:$id:${chans.first().key}"
+        return listOf(HeaderRow(title, more, row = id), StripRow(key, chans.map { ChannelCell(id, it) } + more))
+    }
+
+    /**
+     * Bấm ô kênh: phát luôn. Hàng «Kênh yêu thích»: trình phát đi trong các kênh yêu thích (▲ ▼); kênh của danh sách khác
+     * («Kênh vừa xem»): đổi sang danh sách đó.
+     */
+    private fun openChannel(cell: ChannelCell) {
+        val c = cell.ch
+        val active = Iptv.activeList?.id
+        when {
+            c.id >= 0 && c.listId == active && cell.slot == "tv-favs" -> LiveActivity.open(this, ChannelFilter(favs = true), -1, c.id)
+            c.id >= 0 && c.listId == active -> LiveActivity.open(this, ChannelFilter(), -1, c.id)
+            else -> LiveActivity.playKey(this, c.key, c.listId)
+        }
     }
 
     /** Đóng hộp «Các hàng…» / «Nguồn…» mở từ trang chủ: cài đặt đổi thì xếp lại / tải hàng mới (giữ ô đang chọn). */
@@ -1044,8 +1135,15 @@ class MainActivity : BaseActivity() {
             val on = Prefs.homeTopics
             HomeFeed.TOPICS.forEach { (id, label) -> out += ChipRow(id, label, id in on) }
         }
-        // Thứ tự / bật tắt theo cài đặt hiện tại của người xem (bản lưu dựng trước khi đổi cũng xếp đúng ngay)
-        for (row in HomeFeed.arrange(snap.rows)) {
+        // Thứ tự / bật tắt theo cài đặt hiện tại của người xem (bản lưu dựng trước khi đổi cũng xếp đúng ngay); hàng Truyền hình
+        // xếp lẫn vào theo cài đặt
+        val arranged = HomeFeed.arrangeSlots(snap.rows)
+        for (p in HomeFeed.placeTv(arranged.map { it.second }, tvRows.keys)) {
+            if (p is HomeFeed.Placed.Tv) {
+                out += tvRow(p.id)
+                continue
+            }
+            val row = arranged[(p as HomeFeed.Placed.Film).i].first
             val n = row.cards.size
             if (strips) {
                 // Dải vuốt ngang: tới STRIP_MAX phim; còn nữa (hoặc nguồn có trang sau) thì «Xem thêm ›» ở tiêu đề + ô cuối dải
@@ -1065,6 +1163,11 @@ class MainActivity : BaseActivity() {
 
     /** «Xem thêm»: cả hàng (danh sách có phân trang của nguồn nếu có, không thì mọi phim đã gộp). Back quay lại trang chủ. */
     private fun openMore(m: MoreRow) {
+        if (m.key in HomeFeed.TV_IDS) {
+            // Hàng Truyền hình: màn Truyền hình (hàng yêu thích: mở sẵn nhóm «★ Yêu thích»; trận / radio: «Tất cả»)
+            TvActivity.open(this, favs = m.key == "tv-favs")
+            return
+        }
         val row = feedSnap?.rows?.firstOrNull { it.id == m.key } ?: return
         titleView.text = row.title
         homeNote.visibility = View.GONE
@@ -1094,11 +1197,6 @@ class MainActivity : BaseActivity() {
     /** Chọn / bỏ một chủ đề (người xem chưa có lịch sử) rồi tải lại trang chủ, giữ ô chủ đề đang chọn. */
     private fun toggleTopic(c: ChipRow) {
         if (c.id.startsWith("sort:")) return sortList(c.id == "sort:imdb")
-        // Hàng «Kênh vừa xem» (Truyền hình): mở kênh
-        if (c.id.startsWith("iptv:")) {
-            val k = c.id.removePrefix("iptv:")
-            return LiveActivity.playKey(this, k, Iptv.recent.firstOrNull { it.optString("k") == k }?.optString("l"))
-        }
         val set = Prefs.homeTopics.toMutableSet()
         if (!set.add(c.id)) set.remove(c.id)
         Prefs.homeTopics = set
@@ -1288,11 +1386,10 @@ class MainActivity : BaseActivity() {
             val cells = items.map { FilmRow(historyFilm(it), resume = true, removable = true) }
             if (strips) rows += StripRow("head-continue", cells) else rows += cells
         }
-        // Truyền hình: kênh vừa xem (như trang chủ bản Legacy) — chỉ khi có danh sách kênh, không phải hồ sơ trẻ em
-        val chans = if (Prefs.kids || Iptv.activeList == null) emptyList() else Iptv.recent.take(if (strips) 3 else gridAdapter.spanCount)
-        if (chans.isNotEmpty()) {
-            rows += HeaderRow("Kênh vừa xem")
-            rows += chans.map { o -> ChipRow("iptv:" + o.optString("k"), (if (o.optBoolean("radio")) "📻 " else "📺 ") + o.optString("n"), false) }
+        // Hàng Truyền hình (kênh vừa xem / yêu thích / trận / radio) ngay dưới «Xem tiếp», theo thứ tự cài đặt — khi trang chủ
+        // theo trang, hoặc trang chủ tổng hợp chưa có hàng phim; có hàng phim thì xếp lẫn với chúng (feedRows)
+        if (!(Prefs.homeMixOn && feedSnap != null)) {
+            for (p in HomeFeed.placeTv(emptyList(), tvRows.keys)) if (p is HomeFeed.Placed.Tv) rows += tvRow(p.id)
         }
         return rows
     }

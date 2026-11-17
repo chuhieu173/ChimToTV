@@ -113,7 +113,8 @@ object HomeRowsUi {
             if (id.startsWith("custom-")) {
                 return Prefs.homeCustom.firstOrNull { it.key == id }?.let { "＋ " + HomeFeed.customTitle(it) } ?: id
             }
-            return HomeFeed.ROWS.first { it.first == id }.second.replace("Vì …", "Vì ${Prefs.profile.name}")
+            val name = HomeFeed.ROWS.first { it.first == id }.second.replace("Vì …", "Vì ${Prefs.profile.name}")
+            return if (id in HomeFeed.TV_IDS) "$name (Truyền hình)" else name
         }
         fun save(prefs: List<Pair<String, Boolean>>) = HomeFeed.saveRows(prefs)
         fun button(parent: LinearLayout, text: String, tag: String, onClick: () -> Unit) = button(a, parent, text, tag, onClick)
@@ -159,6 +160,7 @@ object HomeRowsUi {
         render = render@{
             list.removeAllViews()
             list.addView(note(a, "Hàng tắt thì không tải. «Có tập mới» và «Xem tiếp» luôn ở đầu trang; hàng nào không đủ phim thì tự ẩn. " +
+                "Hàng (Truyền hình) lấy kênh từ danh sách đang dùng ở mục Truyền hình · Radio. " +
                 "Trên trang chủ: nhấn Menu (hoặc giữ OK) trên một phim của hàng để ẩn / chuyển nhanh." +
                 if (Prefs.kids) "\nHồ sơ trẻ em: chỉ các hàng hoạt hình hợp trẻ em." else ""))
             val shown = HomeFeed.rowPrefs().filter { visible(it.first) }

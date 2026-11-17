@@ -79,6 +79,16 @@ data class IptvList(
 /** Một chương trình của lịch phát sóng (giây từ 1970). */
 data class Programme(val s: Double, val e: Double, val t: String)
 
+/**
+ * Một ô kênh của hàng Truyền hình trên trang chủ (Iptv.homeRows). id = mã kênh trong danh sách đang dùng (-1: kênh của danh
+ * sách khác — chỉ có tên / logo / nhóm đã lưu trong «Kênh vừa xem»); progs = chương trình đang phát và vài chương trình sau.
+ */
+data class HomeChannel(
+    val key: String, val listId: String?, val id: Long, val name: String, val num: String, val logo: String?, val group: String,
+    val radio: Boolean, val vod: Boolean, val kick: Double, val dur: Int, val nolink: Boolean, val fav: Boolean,
+    val progs: List<Programme>,
+)
+
 /** Lọc kênh của lưới / bảng kênh: nhóm (null = tất cả), chỉ yêu thích, chữ tìm (tên hoặc số kênh). */
 data class ChannelFilter(val group: Long? = null, val favs: Boolean = false, val q: String = "") {
     fun extras(i: android.content.Intent) {
@@ -216,6 +226,22 @@ class IptvStore(val file: File) {
             c.getInt(15) != 0, c.getInt(16) != 0,
         )
     }
+
+    private fun select(cond: String, order: String, limit: Int, kids: Boolean, hideBad: Boolean): List<Channel> {
+        val (w, a) = where(ChannelFilter(), kids, hideBad, emptyList())
+        val sql = "SELECT $cols FROM ch " + (if (w.isEmpty()) "WHERE $cond" else "$w AND $cond") + " $order LIMIT $limit"
+        return db.rawQuery(sql, a).use { c -> buildList { while (c.moveToNext()) add(read(c)) } }
+    }
+
+    /** Kênh trận đấu chưa xong (đang đá / sắp đá / chưa tới giờ), giờ bóng lăn sớm trước — trang chủ «Trận đang / sắp đá». */
+    fun unfinishedMatches(now: Double, kids: Boolean, hideBad: Boolean, limit: Int): List<Channel> {
+        if (!hasMatches) return emptyList()
+        val n = "%.0f".format(java.util.Locale.US, now)
+        return select("kick IS NOT NULL AND $n < kick + dur * 60", "ORDER BY kick, id", limit, kids, hideBad)
+    }
+
+    /** Đài radio theo thứ tự danh sách — trang chủ «Radio». */
+    fun radios(kids: Boolean, hideBad: Boolean, limit: Int): List<Channel> = select("radio = 1", "ORDER BY id", limit, kids, hideBad)
 
     /** Kênh theo mã (giữ thứ tự của [ids]). */
     fun byIds(ids: LongArray): List<Channel> {
@@ -1162,6 +1188,65 @@ object Iptv {
         if (c.radio) item.put("radio", true)
         val r = listOf(item) + recent.filter { it.optString("k") != c.k }.take(11)
         Prefs.iptvSet("iptv_recent", JSONArray(r).toString(), own = true)
+    }
+
+    /**
+     * Dữ liệu các hàng Truyền hình của trang chủ (gọi ở luồng nền): [ids] = các hàng cần (HomeFeed.TV_IDS đang bật), tối đa
+     * [max] ô mỗi hàng; hàng không có kênh thì không có trong kết quả. Chưa có danh sách kênh → rỗng. Danh sách chưa đọc vào máy
+     * (chưa tải lần nào) thì chỉ có «Kênh vừa xem» (tên / logo đã lưu).
+     *  - tv-recent: kênh vừa xem của người xem, đúng thứ tự (kênh của danh sách đang dùng: kèm chương trình đang phát).
+     *  - tv-favs: kênh yêu thích của danh sách đang dùng.
+     *  - tv-live: trận đang đá (có link trước) rồi sắp đá (sớm trước).
+     *  - tv-radio: đài vừa nghe trước, rồi các đài khác theo thứ tự danh sách.
+     */
+    fun homeRows(ids: Set<String>, max: Int): Map<String, List<HomeChannel>> {
+        val l = activeList ?: return emptyMap()
+        val kids = Prefs.kids
+        val hide = hideBad
+        val now = nowSec()
+        val s = store()
+        val g = if (s != null) guide() else null
+        val favKeys = favoriteKeys
+        val favs = favKeys.toSet()
+        val rec = recent
+        fun progs(c: Channel): List<Programme> =
+            if (g == null) emptyList() else runCatching { g.programmes(c) }.getOrDefault(emptyList()).filter { it.e > now }.take(3)
+        fun home(c: Channel) = HomeChannel(c.k, l.id, c.id, c.n, c.num, c.logo, c.g, c.radio, c.vod, c.kick, c.dur, c.nolink,
+            c.k in favs, progs(c))
+        val out = LinkedHashMap<String, List<HomeChannel>>()
+        if ("tv-recent" in ids) {
+            val list = rec.take(max).map { o ->
+                val k = o.optString("k")
+                val lid = o.optString("l").ifEmpty { null }
+                val c = if (s != null && (lid == null || lid == l.id)) runCatching { s.byKey(k) }.getOrNull() else null
+                c?.let(::home) ?: HomeChannel(k, lid, -1, o.optString("n"), "", o.optString("logo").ifEmpty { null }, o.optString("g"),
+                    o.optBoolean("radio"), false, 0.0, 0, false, false, emptyList())
+            }
+            if (list.isNotEmpty()) out["tv-recent"] = list
+        }
+        if (s == null) return out
+        if ("tv-favs" in ids && favKeys.isNotEmpty()) {
+            val f = s.ids(ChannelFilter(favs = true), kids, hide, favKeys, now)
+            val list = s.byIds(f.copyOf(minOf(max, f.size))).map(::home)
+            if (list.isNotEmpty()) out["tv-favs"] = list
+        }
+        if ("tv-live" in ids && !kids) {
+            fun rank(c: Channel) = when (c.match(now)) {
+                IptvParse.Match.LIVE -> if (c.nolink) 1 else 0
+                IptvParse.Match.SOON -> 2
+                else -> 3
+            }
+            val list = s.unfinishedMatches(now, kids, hide, 300).filter { rank(it) < 3 }
+                .sortedWith(compareBy<Channel>({ rank(it) }, { it.kick }, { it.id })).take(max).map(::home)
+            if (list.isNotEmpty()) out["tv-live"] = list
+        }
+        if ("tv-radio" in ids && !kids) {
+            val heard = rec.filter { it.optBoolean("radio") && (it.optString("l").ifEmpty { null } ?: l.id) == l.id }
+                .mapNotNull { o -> runCatching { s.byKey(o.optString("k")) }.getOrNull() }
+            val list = (heard + s.radios(kids, hide, max + heard.size)).distinctBy { it.k }.take(max).map(::home)
+            if (list.isNotEmpty()) out["tv-radio"] = list
+        }
+        return out
     }
 
     private fun badMap(): Map<String, String> = runCatching {

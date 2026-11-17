@@ -95,8 +95,14 @@ data class FilmRow(
     val chip: String? = null, val links: List<FeedItem> = emptyList(), val row: String? = null,
 ) : GridRow
 
-/** Ô cuối hàng của trang chủ tổng hợp: mở cả danh sách của hàng (key = id hàng; count = số phim, 0 = không ghi). */
-data class MoreRow(val key: String, val title: String, val count: Int) : GridRow
+/**
+ * Ô cuối hàng của trang chủ tổng hợp: mở cả danh sách của hàng (key = id hàng; count = số phim, 0 = không ghi). tv: ô cuối dải
+ * kênh (hàng Truyền hình) — cao bằng ô kênh, mở màn Truyền hình.
+ */
+data class MoreRow(val key: String, val title: String, val count: Int, val tv: Boolean = false) : GridRow
+
+/** Ô kênh của hàng Truyền hình trên trang chủ (slot = id hàng, vd "tv-favs"): bấm là phát kênh; Menu / giữ OK: sửa nhanh hàng. */
+data class ChannelCell(val slot: String, val ch: HomeChannel) : GridRow
 
 /** Ô chọn chủ đề (người xem chưa có lịch sử); on = đã chọn. */
 data class ChipRow(val id: String, val label: String, val on: Boolean) : GridRow
@@ -163,6 +169,7 @@ class FilmGridAdapter(
     private val onMore: (MoreRow) -> Unit = {},
     private val onChip: (ChipRow) -> Unit = {},
     private val onRowMenu: (String) -> Unit = {},
+    private val onChannel: (ChannelCell) -> Unit = {},
 ) : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
     private val rows = ArrayList<GridRow>()
     private var focusPosition = -1
@@ -197,8 +204,18 @@ class FilmGridAdapter(
     }
 
     class ChipHolder(val text: TextView) : RecyclerView.ViewHolder(text)
+    class ChannelHolder(view: View) : RecyclerView.ViewHolder(view) {
+        val logo: ImageView = view.findViewById(R.id.logo)
+        val abbr: TextView = view.findViewById(R.id.abbr)
+        val name: TextView = view.findViewById(R.id.name)
+        val star: TextView = view.findViewById(R.id.star)
+        val prog: TextView = view.findViewById(R.id.prog)
+        val track: android.widget.ProgressBar = view.findViewById(R.id.track)
+        val time: TextView = view.findViewById(R.id.time)
+        val next: TextView = view.findViewById(R.id.next)
+    }
 
-    private fun isCell(r: GridRow?) = r is FilmRow || r is MoreRow || r is ChipRow
+    private fun isCell(r: GridRow?) = r is FilmRow || r is MoreRow || r is ChipRow || r is ChannelCell
 
     /** Ô đầu tiên chọn được (dải vuốt ngang: chính dải). */
     private fun isFocusRow(r: GridRow?) = isCell(r) || r is StripRow
@@ -267,6 +284,7 @@ class FilmGridAdapter(
         is MoreRow -> if (cellWidth > 0) 7 else 3
         is ChipRow -> 4
         is StripRow -> 5
+        is ChannelCell -> 8
     }
 
     override fun onViewRecycled(holder: RecyclerView.ViewHolder) {
@@ -303,7 +321,7 @@ class FilmGridAdapter(
             )
             5 -> {
                 val ctx = parent.context
-                val inner = FilmGridAdapter(onClick, {}, onRemove, onMore, onChip, onRowMenu)
+                val inner = FilmGridAdapter(onClick, {}, onRemove, onMore, onChip, onRowMenu, onChannel)
                 val list = StripList(ctx).apply {
                     layoutParams = RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
                     layoutManager = LinearLayoutManager(ctx, LinearLayoutManager.HORIZONTAL, false)
@@ -361,6 +379,10 @@ class FilmGridAdapter(
                     focusZoom()
                 },
             )
+            8 -> ChannelHolder(inflater.inflate(R.layout.item_channel, parent, false).apply {
+                layoutParams = RecyclerView.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, context.dp(132))
+                focusZoom(1.04f)
+            })
             else -> CardHolder(inflater.inflate(R.layout.item_card, parent, false)).also { it.itemView.focusZoom() }
         }
     }
@@ -384,12 +406,22 @@ class FilmGridAdapter(
         }
     }
 
-    /** Ô của dải vuốt ngang: bề ngang cố định; ô «Xem thêm» hẹp, cao bằng poster (ô phim: viền 6dp, đệm 5dp, tỉ lệ 2:3). */
+    /**
+     * Ô của dải vuốt ngang: bề ngang cố định; ô «Xem thêm» hẹp, cao bằng poster (ô phim: viền 6dp, đệm 5dp, tỉ lệ 2:3). Ô kênh
+     * (hàng Truyền hình) rộng bằng hai ô phim (ít nhất 250dp), cao 132dp như ô kênh của màn Truyền hình; ô «Xem thêm» cuối dải
+     * kênh cao bằng ô kênh.
+     */
     private fun sizeCell(v: View, row: GridRow) {
         if (cellWidth <= 0) return
         val lp = v.layoutParams as? RecyclerView.LayoutParams ?: return
         val m = v.context.dp(6)
-        if (row is MoreRow) {
+        if (row is ChannelCell) {
+            lp.width = maxOf(cellWidth * 2, v.context.dp(262)) - 2 * m
+            lp.height = v.context.dp(132)
+        } else if (row is MoreRow && row.tv) {
+            lp.width = maxOf((cellWidth * 0.62f).toInt(), v.context.dp(96)) - 2 * m
+            lp.height = v.context.dp(132)
+        } else if (row is MoreRow) {
             val poster = (cellWidth - 2 * m - 2 * v.context.dp(5)) * 3 / 2
             lp.width = maxOf((cellWidth * 0.62f).toInt(), v.context.dp(96)) - 2 * m // đủ chỗ chữ «Xem thêm»
             lp.height = poster + 2 * v.context.dp(5)
@@ -398,6 +430,55 @@ class FilmGridAdapter(
         }
         lp.setMargins(m, m, m, m)
         v.layoutParams = lp
+    }
+
+    /** Ô kênh (hàng Truyền hình): như ô kênh của màn Truyền hình — chương trình đang phát / trạng thái trận tính lúc vẽ. */
+    private fun bindChannel(h: ChannelHolder, row: ChannelCell) {
+        sizeCell(h.itemView, row)
+        val c = row.ch
+        val ctx = h.itemView.context
+        val now = nowSec()
+        h.abbr.text = c.name
+        h.abbr.visibility = if (c.logo == null) View.VISIBLE else View.INVISIBLE
+        ImageLoader.load(h.logo, c.logo, 160)
+        h.name.text = if (c.num.isEmpty()) c.name else android.text.SpannableString("${c.num}  ${c.name}").apply {
+            setSpan(android.text.style.ForegroundColorSpan(0xFF8D959E.toInt()), 0, c.num.length, 0)
+        }
+        h.star.visibility = if (c.fav) View.VISIBLE else View.INVISIBLE
+        val ms = IptvParse.matchState(c.kick, c.dur, now)
+        val line = IptvParse.matchLine(c.kick, c.dur, c.nolink, now)
+        var frac = -1.0
+        h.prog.setTextColor(ctx.colorOf(R.color.text))
+        if (line != null) {
+            h.prog.text = line
+            h.prog.setTextColor(
+                when (ms) {
+                    IptvParse.Match.LIVE -> 0xFFFF6166.toInt()
+                    IptvParse.Match.SOON -> ctx.colorOf(R.color.focus)
+                    IptvParse.Match.OVER -> ctx.colorOf(R.color.text_dim)
+                    else -> ctx.colorOf(R.color.text)
+                },
+            )
+            h.time.text = ""
+            h.next.text = c.group
+            if (ms == IptvParse.Match.LIVE) frac = (now - c.kick) / (c.dur * 60)
+        } else {
+            val p = c.progs.nowAt(now)
+            val n = c.progs.nextAt(now)
+            val g = when {
+                c.radio -> "📻 Radio · ${c.group}"
+                c.vod -> "🎬 ${c.group}"
+                else -> c.group
+            }
+            h.prog.text = p?.t ?: g
+            h.time.text = p?.let { "${IptvParse.clock(it.s)}–${IptvParse.clock(it.e)}" } ?: ""
+            h.next.text = n?.let { "Tiếp: ${IptvParse.clock(it.s)} ${it.t}" } ?: if (p != null) g else ""
+            if (p != null) frac = (now - p.s) / (p.e - p.s)
+        }
+        h.track.visibility = if (frac >= 0) View.VISIBLE else View.INVISIBLE
+        if (frac >= 0) h.track.progress = (frac.coerceIn(0.0, 1.0) * 1000).toInt()
+        h.itemView.setOnClickListener { onChannel(row) }
+        menuOn(h.itemView) { onRowMenu(row.slot) }
     }
 
     override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
@@ -446,9 +527,15 @@ class FilmGridAdapter(
                 isActivated = row.on
                 setOnClickListener { onChip(row) }
             }
+            is ChannelCell -> bindChannel(holder as ChannelHolder, row)
             is MoreRow -> if (holder is TileHolder) {
                 sizeCell(holder.text, row)
-                holder.text.text = android.text.SpannableString(if (row.count > 0) "›\nXem thêm\n${row.count} phim" else "›\nXem thêm").apply {
+                val label = when {
+                    row.tv -> "›\nXem thêm\nkênh"
+                    row.count > 0 -> "›\nXem thêm\n${row.count} phim"
+                    else -> "›\nXem thêm"
+                }
+                holder.text.text = android.text.SpannableString(label).apply {
                     setSpan(android.text.style.RelativeSizeSpan(2.2f), 0, 1, 0) // dấu › to
                 }
                 holder.text.setOnClickListener { onMore(row) }

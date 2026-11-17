@@ -64,12 +64,25 @@ object HomeFeed {
     )
 
     /**
+     * Hàng Truyền hình (dựng tại chỗ từ danh sách kênh đang dùng — Iptv.homeRows, không tải qua mạng như các hàng phim): kênh
+     * vừa xem, kênh yêu thích, trận đang / sắp đá, radio. Mặc định ngay sau «Xem tiếp»; không có kênh thì hàng tự ẩn.
+     */
+    val TV_ROWS = listOf(
+        "tv-recent" to "Kênh vừa xem",
+        "tv-favs" to "Kênh yêu thích",
+        "tv-live" to "Trận đang / sắp đá",
+        "tv-radio" to "Radio",
+    )
+    val TV_IDS = TV_ROWS.map { it.first }.toSet()
+
+    /**
      * Các hàng người xem bật / tắt, sắp thứ tự được (Cài đặt → Trang chủ → Các hàng), theo thứ tự mặc định. «Có tập mới» /
      * «Xem tiếp» (HEAD_ROWS) chỉ bật / tắt — luôn ở đầu trang; hàng trẻ em (KIDS_ROWS) chỉ có ở hồ sơ trẻ em.
      */
     val ROWS = listOf(
         "new-eps" to "Có tập mới",
         "continue" to "Xem tiếp",
+    ) + TV_ROWS + listOf(
         "similar" to "Giống «phim vừa xem»",
         "interest" to "Vì … hay xem <thể loại> (sở thích 1)",
         "dominant" to "Loại phim hay xem · mới cập nhật",
@@ -84,8 +97,11 @@ object HomeFeed {
     val HEAD_ROWS = setOf("new-eps", "continue")
     val KIDS_ROWS = setOf("kids-young", "kids-family", "kids-dub")
 
-    /** Hàng hồ sơ trẻ em không có (chỉ hoạt hình hợp trẻ em: không lấy danh sách chung / thuyết minh / phim lẻ). */
-    val ADULT_ROWS = setOf("dominant", "dub", "newest", "movies")
+    /**
+     * Hàng hồ sơ trẻ em không có (chỉ hoạt hình hợp trẻ em: không lấy danh sách chung / thuyết minh / phim lẻ; Truyền hình: không
+     * có trận đấu / radio — kênh vừa xem / yêu thích vẫn có, Iptv đã lọc kênh thiếu nhi).
+     */
+    val ADULT_ROWS = setOf("dominant", "dub", "newest", "movies", "tv-live", "tv-radio")
 
     /** Tối đa số hàng tự thêm. */
     const val CUSTOM_MAX = 6
@@ -111,9 +127,14 @@ object HomeFeed {
             LANGS.firstOrNull { it.first == r.lang && r.lang.isNotEmpty() }?.second?.lowercase()).joinToString(" · ")
     }
 
-    /** Thứ tự mặc định: «Có tập mới», «Xem tiếp», các hàng tự thêm (theo lúc thêm), rồi các hàng app tự chọn. */
-    fun rowDefaults(custom: List<CustomRow> = Prefs.homeCustom): List<String> =
-        ROWS.take(2).map { it.first } + custom.map { it.key } + ROWS.drop(2).map { it.first }
+    /**
+     * Thứ tự mặc định: «Có tập mới», «Xem tiếp», các hàng Truyền hình, các hàng tự thêm (theo lúc thêm), rồi các hàng app tự
+     * chọn.
+     */
+    fun rowDefaults(custom: List<CustomRow> = Prefs.homeCustom): List<String> {
+        val head = 2 + TV_ROWS.size
+        return ROWS.take(head).map { it.first } + custom.map { it.key } + ROWS.drop(head).map { it.first }
+    }
 
     /**
      * Ghép thứ tự đã lưu ("id" bật, "-id" tắt) với các hàng mặc định: bỏ id lạ / trùng, hàng mặc định chưa có (hàng mới ở bản
@@ -166,6 +187,32 @@ object HomeFeed {
         }
         return keyed.filter { (_, s) -> pos[s] != -1 }
             .sortedBy { (_, s) -> if (s == "topics") -1 else pos[s] ?: Int.MAX_VALUE }
+    }
+
+    /** Một chỗ trên trang chủ tổng hợp: hàng phim thứ [i] (theo arrangeSlots) hoặc hàng Truyền hình [id]. */
+    sealed interface Placed {
+        data class Film(val i: Int) : Placed
+        data class Tv(val id: String) : Placed
+    }
+
+    /**
+     * Xếp các hàng Truyền hình có kênh ([tv]) vào giữa các hàng phim đã xếp (loại hàng [feedSlots], theo thứ tự hiện): mỗi hàng
+     * Truyền hình đứng trước hàng phim đầu tiên đứng sau nó trong cài đặt; hàng tắt bỏ đi; hàng theo chủ đề (người xem mới)
+     * luôn đầu, hàng lạ cuối.
+     */
+    fun placeTv(feedSlots: List<String>, tv: Collection<String>, prefs: List<Pair<String, Boolean>> = rowPrefs()): List<Placed> {
+        val pos = HashMap<String, Int>()
+        prefs.forEachIndexed { i, (id, on) -> pos[id] = if (on) i else -1 }
+        val tvOn = prefs.filter { it.second && it.first in tv }.map { it.first }
+        val out = ArrayList<Placed>()
+        var t = 0
+        feedSlots.forEachIndexed { i, s ->
+            val p = if (s == "topics") -1 else pos[s] ?: Int.MAX_VALUE
+            while (t < tvOn.size && (pos[tvOn[t]] ?: Int.MAX_VALUE) < p) out += Placed.Tv(tvOn[t++])
+            out += Placed.Film(i)
+        }
+        while (t < tvOn.size) out += Placed.Tv(tvOn[t++])
+        return out
     }
 
     /** Lưu cài đặt các hàng ("id" bật, "-id" tắt). */

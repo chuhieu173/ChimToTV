@@ -45,14 +45,36 @@ class HomeRowsTest {
         assertEquals(listOf("topic-cn", "movies", "newest", "interest-a"), HomeFeed.arrange(rows, prefs).map { it.id })
     }
 
-    /** Hàng tự thêm đứng ngay sau «Xem tiếp»; hàng vừa thêm (chưa có trong thứ tự đã lưu) cũng vào đó. */
+    /**
+     * Hàng Truyền hình ngay sau «Xem tiếp», rồi hàng tự thêm; hàng vừa thêm (chưa có trong thứ tự đã lưu — vd người dùng bản cũ
+     * chưa có hàng Truyền hình) cũng vào đúng chỗ đó.
+     */
     @Test
     fun customRowsDefaultAfterHead() {
+        val tv = listOf("tv-recent", "tv-favs", "tv-live", "tv-radio")
         val custom = listOf(CustomRow("a", type = "hoathinh"), CustomRow("t-kr", topic = "kr"))
         val d = HomeFeed.rowDefaults(custom)
-        assertEquals(listOf("new-eps", "continue", "custom-a", "custom-t-kr", "similar"), d.take(5))
+        assertEquals(listOf("new-eps", "continue") + tv + listOf("custom-a", "custom-t-kr", "similar"), d.take(9))
         val m = HomeFeed.mergeRows(listOf("new-eps", "continue", "custom-a", "movies", "similar"), d)
-        assertEquals(listOf("new-eps", "continue", "custom-a", "custom-t-kr", "movies", "similar"), m.take(6).map { it.first })
+        assertEquals(listOf("new-eps", "continue") + tv + listOf("custom-a", "custom-t-kr", "movies", "similar"), m.take(10).map { it.first })
+        assertEquals(true, m.filter { it.first in tv }.all { it.second })
+    }
+
+    /** Hàng Truyền hình xếp vào giữa các hàng phim theo cài đặt; tắt thì bỏ; hàng chủ đề vẫn đầu. */
+    @Test
+    fun placesTvRowsAmongFilmRows() {
+        val prefs = listOf("new-eps" to true, "continue" to true, "tv-recent" to true, "tv-favs" to false, "similar" to true,
+            "tv-live" to true, "newest" to true, "tv-radio" to true)
+        fun show(p: List<HomeFeed.Placed>) = p.map { if (it is HomeFeed.Placed.Tv) it.id else "#" + (it as HomeFeed.Placed.Film).i }
+        // tv-favs tắt; tv-radio không có kênh (không trong danh sách tv)
+        assertEquals(listOf("#0", "tv-recent", "#1", "tv-live", "#2"),
+            show(HomeFeed.placeTv(listOf("topics", "similar", "newest"), setOf("tv-recent", "tv-favs", "tv-live"), prefs)))
+        // Không có hàng phim (trang chủ đang tải): các hàng Truyền hình theo thứ tự cài đặt
+        assertEquals(listOf("tv-recent", "tv-live", "tv-radio"),
+            show(HomeFeed.placeTv(emptyList(), setOf("tv-radio", "tv-live", "tv-recent"), prefs)))
+        // Hàng lạ (không có trong cài đặt) cuối
+        assertEquals(listOf("tv-recent", "#0", "tv-live", "#1"),
+            show(HomeFeed.placeTv(listOf("similar", "bogus"), setOf("tv-recent", "tv-live"), prefs)))
     }
 
     @Test
