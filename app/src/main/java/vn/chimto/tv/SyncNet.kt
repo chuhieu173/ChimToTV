@@ -56,6 +56,13 @@ object SyncNet {
     @Volatile var pairCode: String? = null
         private set
     private var pairTries = 0
+    /** Số lần đoán sai từ lúc mở hộp Đồng bộ (cả các mã đã đổi) — tới MAX_PAIR_FAILS thì thôi cho ghép (như lõi Rust). */
+    private var pairFails = 0
+    /**
+     * Mã 4 số chỉ có 10 000 khả năng, đổi mã sau 5 lần sai vẫn để máy lạ trong mạng đoán hết trong vài giây: sai tổng cộng
+     * chừng này lần thì đóng ghép — mở lại hộp Đồng bộ để có mã mới.
+     */
+    private const val MAX_PAIR_FAILS = 20
 
     val found = LinkedHashMap<String, SyncFound>()
     @Volatile var busy = false
@@ -147,13 +154,17 @@ object SyncNet {
 
     /** Hộp thoại Đồng bộ mở: hiện mã ghép 4 số (đổi mỗi lần mở), mở cổng + tìm máy. */
     fun openPairing() {
-        pairCode = "%04d".format(SecureRandom().nextInt(10000))
-        pairTries = 0
+        synchronized(this) {
+            pairCode = "%04d".format(SecureRandom().nextInt(10000))
+            pairTries = 0
+            pairFails = 0
+        }
         start()
     }
 
     fun closePairing() {
-        pairCode = null
+        // Cùng khoá với pairRequest: yêu cầu ghép đang chạy không mở lại ghép sau khi hộp đã đóng
+        synchronized(this) { pairCode = null }
         if (peers.isEmpty()) stop()
     }
 
@@ -313,9 +324,17 @@ object SyncNet {
         val device = o.optString("device")
         if (device.isEmpty()) return Http1.json(400, "json")
         if (o.optString("code") != code) {
-            // Đoán sai nhiều lần: đổi mã
-            if (++pairTries >= 5) {
-                openPairing()
+            pairFails++
+            if (pairFails >= MAX_PAIR_FAILS) {
+                // Sai quá nhiều (dò mã): thôi cho ghép tới khi mở lại hộp Đồng bộ
+                pairCode = null
+                pairTries = 0
+                TvLog.i("Đồng bộ: nhập sai mã ghép quá nhiều lần — đóng ghép")
+                changed()
+            } else if (++pairTries >= 5) {
+                // Đoán sai nhiều lần: đổi mã
+                pairCode = "%04d".format(SecureRandom().nextInt(10000))
+                pairTries = 0
                 changed()
             }
             return Http1.json(403, "code")

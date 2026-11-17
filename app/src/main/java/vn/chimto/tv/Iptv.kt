@@ -712,7 +712,7 @@ object Iptv {
     fun addList(input: String, name: String? = null): IptvList {
         val url = IptvParse.listUrl(input)
         val l = IptvList("l${System.currentTimeMillis()}", name?.trim()?.takeIf { it.isNotEmpty() } ?: IptvParse.nameFromUrl(url), url, null, null)
-        saveLists(lists + l)
+        synchronized(this) { saveLists(lists + l) } // đọc + ghi danh sách liền một mạch (luồng nhận tệp / tải xong cùng ghi)
         setActive(l.id)
         return l
     }
@@ -725,7 +725,11 @@ object Iptv {
      * qua. Danh sách đầu tiên vừa thêm thành danh sách đang dùng (các danh sách khác tải khi được chọn). Tên: một danh sách thì dùng
      * [name]; nhiều thì «name 1», «name 2»…; không có tên thì đặt theo địa chỉ.
      */
-    fun addLists(text: String, name: String? = null): AddMany {
+    fun addLists(text: String, name: String? = null): AddMany = synchronized(this) { addListsLocked(text, name) }.also { r ->
+        if (r.added.isNotEmpty()) setActive(r.added.first().id)
+    }
+
+    private fun addListsLocked(text: String, name: String?): AddMany {
         val all = lists.toMutableList()
         var existing = 0
         val fresh = IptvParse.splitUrls(text).filter { u ->
@@ -745,10 +749,7 @@ object Iptv {
             }
             IptvList("l$stamp", n, url, null, null).also { stamp++; all += it }
         }
-        if (added.isNotEmpty()) {
-            saveLists(all)
-            setActive(added.first().id)
-        }
+        if (added.isNotEmpty()) saveLists(all)
         return AddMany(added, existing)
     }
 
@@ -759,15 +760,22 @@ object Iptv {
         if ("#EXTINF" !in head && "http" !in head) {
             return Result.failure(IllegalArgumentException("Tệp không phải danh sách M3U (không có dòng #EXTINF / địa chỉ kênh nào)."))
         }
-        val id = "l${System.currentTimeMillis()}"
-        val dest = File(files, "$id.m3u")
-        if (!src.renameTo(dest)) {
-            runCatching { src.copyTo(dest, overwrite = true); src.delete() }
-                .onFailure { return Result.failure(IllegalStateException("Không ghi được tệp vào máy (bộ nhớ đầy?).")) }
+        // Chép vào thư mục danh sách + ghi danh sách liền một mạch: dọn tệp (cleanup) chạy giữa chừng thì xoá mất tệp chưa có
+        // trong danh sách; hai tệp gửi tới cùng lúc thì một danh sách bị ghi đè mất
+        val l = synchronized(this) {
+            var stamp = System.currentTimeMillis()
+            while (lists.any { it.id == "l$stamp" }) stamp++
+            val id = "l$stamp"
+            val dest = File(files, "$id.m3u")
+            if (!src.renameTo(dest)) {
+                runCatching { src.copyTo(dest, overwrite = true); src.delete() }
+                    .onFailure { return Result.failure(IllegalStateException("Không ghi được tệp vào máy (bộ nhớ đầy?).")) }
+            }
+            IptvList(id, name?.trim()?.takeIf { it.isNotEmpty() } ?: IptvParse.nameFromFile(fileName), null, dest.name,
+                fileName.substringAfterLast('/')).also { saveLists(lists + it) }
         }
-        val l = IptvList(id, name?.trim()?.takeIf { it.isNotEmpty() } ?: IptvParse.nameFromFile(fileName), null, dest.name,
-            fileName.substringAfterLast('/'))
-        saveLists(lists + l)
+        val id = l.id
+        val dest = File(files, l.file!!)
         setActive(id)
         TvLog.i("IPTV: thêm danh sách từ tệp «$fileName» (${dest.length()} byte) → $id")
         return Result.success(l)
@@ -788,7 +796,7 @@ object Iptv {
 
     fun removeList(id: String) {
         val l = lists.firstOrNull { it.id == id } ?: return
-        saveLists(lists.filter { it.id != id })
+        synchronized(this) { saveLists(lists.filter { it.id != id }) }
         l.file?.let { File(files, it).delete() }
         synchronized(this) {
             if (storeList == id) retire()
@@ -865,9 +873,12 @@ object Iptv {
         guide?.file?.name?.let(keep::add)
         l.forEach { x -> epgFileOf(x.id)?.let(keep::add) }
         cache.listFiles()?.forEach { f ->
-            val base = f.name.removeSuffix("-journal")
+            // Tệp phụ của SQLite (-journal, -wal, -shm) đi theo tệp chính: không thì mỗi lần làm mới lịch để lại 64 KB tệp mồ côi
+            val base = f.name.removeSuffix("-journal").removeSuffix("-wal").removeSuffix("-shm")
             if (base.endsWith(".db") && base !in keep && System.currentTimeMillis() - f.lastModified() > 60_000) f.delete()
-            if ((f.name.startsWith("in-") || f.name.startsWith("dl-")) && System.currentTimeMillis() - f.lastModified() > 3600_000) f.delete()
+            if ((f.name.startsWith("in-") || f.name.startsWith("dl-") || f.name.contains(".db.part")) &&
+                System.currentTimeMillis() - f.lastModified() > 3600_000
+            ) f.delete()
         }
         val files = l.mapNotNull { it.file }.toSet()
         this.files.listFiles()?.forEach { if (it.name !in files) it.delete() }
@@ -973,27 +984,37 @@ object Iptv {
         }) { r ->
             loading = false
             status = null
+            // Trong lúc tải người dùng đã chọn / thêm danh sách khác (refresh lúc đang tải chỉ xếp hàng chờ): tải tiếp danh sách
+            // đó, người chờ chờ tiếp — không thì báo «xong» mà danh sách mới chưa tải, màn Truyền hình hiện «Chưa tải danh sách»
+            fun finish(err: String?, guide: Boolean = false) {
+                val a = activeList
+                if (a != null && a.id != l.id && (a.url != null || a.file != null)) {
+                    refresh(false, null)
+                    return
+                }
+                finishWaiters(err)
+                if (guide) refreshGuide(false, null)
+            }
             r.onFailure { e ->
                 val why = if (e is java.io.IOException) e.friendly() else (e.message ?: e.javaClass.simpleName)
                 TvLog.i("IPTV: tải danh sách ${l.url ?: l.file} lỗi: $why")
                 updateList(l.id) { it.copy(err = why) }
                 changed()
-                finishWaiters("Không tải được danh sách kênh: $why")
+                finish("Không tải được danh sách kênh: $why")
             }
             r.onSuccess { x ->
                 if (x.same) {
                     TvLog.i("IPTV: danh sách ${l.url} không đổi từ lần trước (${System.currentTimeMillis() - t0} ms)")
                     updateList(l.id) { it.copy(updated = System.currentTimeMillis(), err = null) }
                     changed(false)
-                    finishWaiters(null)
-                    refreshGuide(false, null)
+                    finish(null, guide = true)
                     return@onSuccess
                 }
                 if (x.count == 0) {
                     val why = if (!x.sawExtinf) "Tệp tải về không phải danh sách M3U." else "Danh sách không có kênh nào."
                     updateList(l.id) { it.copy(err = why) }
                     changed()
-                    finishWaiters(why)
+                    finish(why)
                     return@onSuccess
                 }
                 TvLog.i("IPTV: danh sách ${l.url ?: l.file} — ${x.count} kênh, lịch ${x.epg ?: "không có"} (${System.currentTimeMillis() - t0} ms)")
@@ -1003,8 +1024,7 @@ object Iptv {
                     }
                 }
                 changed()
-                finishWaiters(null)
-                refreshGuide(false, null)
+                finish(null, guide = true)
             }
         }
     }
@@ -1135,6 +1155,9 @@ object Iptv {
             status = "Đang tải lịch phát sóng…"
             changed(false)
             val out = File(cache, "epg-${l.id}-${System.currentTimeMillis()}.db")
+            // Dựng vào tệp tạm rồi mới đổi tên: tệp .db mới nhất là lịch đang dùng (epgFileOf) — dựng thẳng vào tên đó thì màn
+            // đang mở đọc phải tệp dở dang (mất lịch suốt lúc tải) và dọn tệp xoá luôn lịch cũ còn tốt
+            val part = File(cache, out.name + ".part")
             val t0 = System.currentTimeMillis()
             inBackground({
                 val c = openUrl(url)
@@ -1143,7 +1166,16 @@ object Iptv {
                 val gz = b.read() == 0x1f && b.read() == 0x8b
                 b.reset()
                 (if (gz) GZIPInputStream(b, 64 * 1024) else b).use { input ->
-                    runCatching { EpgStore.build(input, out, url, s::hasTid, s::hasKey) }.onFailure { out.delete() }.getOrThrow()
+                    try {
+                        val n = EpgStore.build(input, part, url, s::hasTid, s::hasKey)
+                        File(part.path + "-journal").delete()
+                        if (!part.renameTo(out)) throw java.io.IOException("không ghi được tệp lịch")
+                        n
+                    } catch (e: Throwable) {
+                        part.delete()
+                        File(part.path + "-journal").delete()
+                        throw e
+                    }
                 }
             }) { r2 ->
                 guideLoading = false

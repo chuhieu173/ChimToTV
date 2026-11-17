@@ -171,7 +171,9 @@ object Prefs {
         "history", "positions", "pos_film", "follows", "last_follow_check", "private_mode",
         // Đồng bộ trong nhà: lúc lưu chỗ xem, lúc xoá phim khỏi lịch sử / bỏ theo dõi
         "pos_time", "hist_del", "follow_del",
-        "base_url", "seek_step", "auto_next", "video_fill",
+        // Chất lượng video, ngôn ngữ phụ đề hay chọn (k("video_quality") / k("sub_lang")): xoá người xem thì xoá theo — người thêm
+        // sau dùng lại mã đó không nhận lựa chọn của người cũ (như bản Windows / Linux)
+        "base_url", "seek_step", "auto_next", "video_fill", "video_quality", "sub_lang",
         // Giới hạn giờ xem (WatchLimit)
         "limit_min", "bedtime", "watch_day", "watch_sec", "watch_extra", "unblock_until",
         // Trang chủ tổng hợp (HomeFeed): kiểu trang chủ, chủ đề đã chọn, tập mới nhất đã thấy của từng phim, hồ sơ trẻ em,

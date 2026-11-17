@@ -112,6 +112,8 @@ class LiveActivity : BaseActivity() {
     private var limitShowing = false
     private var limitWarned = false
     private var pausedLive = false
+    /** Màn đang dừng (onStop → onStart): việc chờ không được mở luồng. */
+    private var stopped = false
 
     // Đài radio: thẻ đài thay cho hình (danh sách ghi là radio, hoặc luồng không có hình)
     private var radio = false
@@ -170,6 +172,9 @@ class LiveActivity : BaseActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Phim đang thu nhỏ (hình trong hình / cửa sổ nhỏ trong app): tắt phim đó (lưu chỗ xem) — không thì hai luồng tiếng
+        // chạy cùng lúc và phím phát / chuyển tập của remote điều khiển phim thay vì kênh
+        PlayerActivity.closePip()
         setContentView(R.layout.activity_live)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         video = findViewById(R.id.video)
@@ -265,6 +270,12 @@ class LiveActivity : BaseActivity() {
                 return@reload
             }
             val at = pager.indexOf(wantId)
+            // Mở theo mã kênh (nhắc giờ phát, Kênh vừa xem, trang chủ) mà kênh bị lọc khỏi danh sách đang xem (hồ sơ trẻ em, kênh
+            // máy này không phát được đang ẩn): báo, đừng lặng lẽ phát kênh số 1
+            if (at < 0 && wantId >= 0 && index < 0) {
+                showError("Kênh này không có trong danh sách đang xem.", retry = false)
+                return@reload
+            }
             playChannelAt(if (at >= 0) at else index.coerceIn(0, pager.size - 1))
         }
         mainHandler.post(ticker)
@@ -282,21 +293,37 @@ class LiveActivity : BaseActivity() {
 
     override fun onStop() {
         super.onStop()
-        // Ra màn hình chính / mở Lịch đè lên: dừng hẳn (truyền hình trực tiếp — quay lại thì mở lại đúng giờ phát)
+        // Ra màn hình chính / mở Lịch đè lên: dừng hẳn (truyền hình trực tiếp — quay lại thì mở lại đúng giờ phát). Huỷ mọi việc
+        // đang chờ (mở lại sau 1 giây, thử lại trận sau 20 giây, đọc kênh) và nhịp mỗi giây: không thì luồng tự phát lại khi app
+        // đang ở nền, và nhịp đếm giờ xem của màn đã dừng làm lệch giờ xem của trình phát khác
         if (!closed && !isFinishing) {
             WatchLimit.flush()
+            token++
             teardown()
             started = false
             pausedLive = true
+            stopped = true
+            mainHandler.removeCallbacks(ticker)
         }
     }
 
     override fun onStart() {
         super.onStart()
+        if (stopped && !closed) {
+            stopped = false
+            mainHandler.removeCallbacks(ticker)
+            mainHandler.post(ticker)
+        }
         if (pausedLive && !closed) {
             pausedLive = false
             reopens = 0
-            openSource()
+            // Hết giờ xem (màn «Hết giờ xem» còn đó, hoặc tới giờ lúc app ở nền): không mở lại luồng sau màn chặn — cho xem thêm
+            // xong thì màn đó tự mở lại kênh
+            if (limitShowing || WatchLimit.block() != null) {
+                checkLimit()
+                return
+            }
+            if (channel == null) playChannelAt(index) else openSource()
         }
     }
 
@@ -369,6 +396,11 @@ class LiveActivity : BaseActivity() {
     private fun openSource() {
         val t = ++token
         teardown()
+        // Màn đã dừng (app ở nền) hoặc đang hiện «Hết giờ xem»: không mở luồng (quay lại app thì onStart mở)
+        if (stopped || limitShowing) {
+            if (stopped) pausedLive = true
+            return
+        }
         started = false
         pausedProgressive = false
         baseBehind = -1
@@ -1086,6 +1118,7 @@ class LiveActivity : BaseActivity() {
             }
             return
         }
+        token++ // việc đang chờ (nhận dạng link, mở lại sau 1 giây…) không được mở luồng sau màn hết giờ
         teardown()
         started = false
         limitShowing = true
@@ -1101,7 +1134,8 @@ class LiveActivity : BaseActivity() {
                 ProfileUi.grant(this, cancelled = { limitShowing = false; checkLimit() }) {
                     limitShowing = false
                     limitWarned = false
-                    openSource()
+                    // Hết giờ đúng lúc đang đọc kênh (việc đọc đã bị huỷ): đọc lại kênh rồi mới mở
+                    if (channel == null) playChannelAt(index) else openSource()
                 }
             }
             .setNegativeButton("Thoát") { _, _ -> close() }

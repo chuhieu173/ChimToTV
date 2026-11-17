@@ -102,6 +102,9 @@ object Doh {
         val key = host.lowercase().trimEnd('.')
         if (IPV4.matches(key) || key == "localhost") return InetAddress.getByName(key)
         cache[key]?.takeIf { it.until > System.currentTimeMillis() }?.let { return it.addr ?: throw noDomain(key) }
+        // Tên miền sai («.cdn.x.com», «a..b.com», nhãn dài quá 63 byte — script quảng cáo viết ẩu): khỏi hỏi, để DNS của thiết bị
+        // báo lỗi. Hỏi thì DnsWire.query ném lỗi và mọi máy chủ DNS mã hoá bị coi là hỏng, nghỉ 2 phút (như bản Rust)
+        if (key.isEmpty() || key.length > 253 || key.split('.').any { it.isEmpty() || it.length > 63 }) return null
         // Nhiều kết nối cùng lúc tới một tên miền (ảnh bìa, API…): chỉ hỏi một lần, các kết nối kia chờ kết quả đó
         val job = FutureTask { lookup(key, servers) }
         val running = inflight.putIfAbsent(key, job)

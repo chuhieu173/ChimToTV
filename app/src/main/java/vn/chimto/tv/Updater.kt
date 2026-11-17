@@ -185,10 +185,12 @@ object Updater {
         busy = true
         Prefs.lastUpdateCheck = System.currentTimeMillis()
         val app = activity.applicationContext
-        activity.background<Pair<Release?, File?>>({
+        // inBackground (không phải activity.background): màn mở việc kiểm (Cài đặt) đóng giữa chừng — tải ~150 MB mất vài phút —
+        // thì vẫn phải trả busy và giữ bản đã tải, không thì bộ cập nhật kẹt «Đang kiểm tra…» tới khi tắt app
+        inBackground<Pair<Release?, File?>>({
             val rel = latest()
-            if (rel == null || !isNewer(rel.version)) return@background null to null
-            if (!manual && Prefs.isUpdateSnoozed(rel.version)) return@background null to null
+            if (rel == null || !isNewer(rel.version)) return@inBackground null to null
+            if (!manual && Prefs.isUpdateSnoozed(rel.version)) return@inBackground null to null
             val file = download(app, rel)
             verify(app, file)?.let { reason ->
                 file.delete()
@@ -197,17 +199,20 @@ object Updater {
             rel to file
         }) { r ->
             busy = false
+            val alive = !activity.isFinishing && !activity.isDestroyed
             r.onSuccess { (rel, file) ->
                 if (rel == null || file == null) {
-                    status("Đang dùng bản mới nhất (${BuildConfig.VERSION_NAME}).")
+                    if (alive) status("Đang dùng bản mới nhất (${BuildConfig.VERSION_NAME}).")
                 } else {
                     ready = rel to file
-                    status("Đã tải bản ${rel.version}.")
-                    offer(activity, rel, file)
+                    if (alive) {
+                        status("Đã tải bản ${rel.version}.")
+                        offer(activity, rel, file)
+                    } // màn đã đóng: lần autoCheck sau (màn chính) hỏi cài
                 }
             }.onFailure {
                 Log.w("ChimToUpdate", "Kiểm tra cập nhật lỗi", it)
-                status("Không kiểm tra được cập nhật: ${it.friendly()}")
+                if (alive) status("Không kiểm tra được cập nhật: ${it.friendly()}")
             }
         }
     }
