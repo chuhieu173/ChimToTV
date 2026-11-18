@@ -563,11 +563,14 @@ TV / iPad dùng chung cả nhà: mỗi người một hồ sơ, chọn ở màn 
 - Lịch sử có từ trước là của người xem đầu tiên **Cả nhà** (đổi tên được). Thêm người ở **Cài đặt → Người xem** (tối đa
   8, mỗi người một màu); người mới bắt đầu với trang phim + cài đặt xem của người đang dùng, lịch sử trống.
 - Nhà có từ 2 người: mở app — và quay lại app sau 30 phút không dùng — thì hỏi **Ai đang xem?** (tắt được: "Hỏi «Ai đang
-  xem?» khi mở app"). Đổi người lúc nào cũng được: mục **Người xem: …** đầu menu (iPad: tên người xem ở đầu menu).
+  xem?» khi mở app"). Đổi người lúc nào cũng được: mục **Người xem: …** đầu menu (iPad: tên người xem ở đầu menu). Từ TV 2.23,
+  quay lại sau 30 phút ở bất kỳ màn nào (Truyền hình, trang phim, trình phát…) cũng về màn chính hỏi người xem; thông báo nhắc
+  giờ phát cũng hỏi người xem trước khi mở kênh.
 - **Mã PIN** 4 số, bật / tắt riêng từng người (Cài đặt → chọn người → Đặt / Đổi / Tắt mã PIN): người có mã phải nhập đúng
   mới mở hồ sơ, sửa hay xoá. App chỉ lưu mã băm. Người đang dùng có mã thì mở app luôn phải nhập mã (kể cả khi tắt hỏi
   "Ai đang xem?"). Quên mã: chỉ xoá dữ liệu app (mất lịch sử, cài đặt) mới mở lại được — PIN để trẻ khỏi vào nhầm hồ sơ
-  người lớn, không phải mật khẩu bảo mật.
+  người lớn, không phải mật khẩu bảo mật. Màn «Ai đang xem?» đang chặn (người đang dùng có mã): «Sửa người xem…» / «Quản lý
+  người xem…» chỉ mở phần Người xem (TV 2.23 / iPad · iPhone · Mac 1.23; Windows / Linux không mở).
 - Đổi người lúc phim đang thu nhỏ: app lưu chỗ xem cho người cũ rồi đóng phim đó.
 
 ## Đồng bộ trong nhà (từ 2.2)
@@ -576,7 +579,8 @@ TV và iPad / iPhone (bản 1.3+) cùng mạng Wi‑Fi đồng bộ với nhau: 
 
 - **Ghép máy:** TV: Cài đặt → **Đồng bộ với iPad / iPhone…** (hiện mã ghép 4 số); iPad / iPhone: Cài đặt → **Đồng bộ trong
   nhà** (cũng hiện mã) → chọn máy kia trong danh sách «Ghép với máy khác» rồi nhập mã đang hiện trên máy đó. Mã chỉ dùng được
-  lúc màn đồng bộ đang mở, dùng một lần; đoán sai 5 lần thì đổi mã. Mạng chia nhiều lớp (máy không tự thấy nhau) thì gõ địa
+  lúc màn đồng bộ đang mở, dùng một lần; đoán sai 5 lần thì đổi mã, sai tổng cộng 20 lần thì ngừng cho ghép tới khi mở lại
+  màn đồng bộ (từ TV 2.23 / iPad · Mac 1.23 / Windows 1.21 / Linux 1.7). Mạng chia nhiều lớp (máy không tự thấy nhau) thì gõ địa
   chỉ IP của máy kia. Lần đầu iPad / iPhone hỏi cho phép tìm thiết bị trong mạng cục bộ: chọn Cho phép.
 - **Đồng bộ gì:** lịch sử xem, hàng Xem tiếp, chỗ đang xem dở, tập đã xem, phim theo dõi (số tập đã thấy), danh sách trang
   phim. Người xem đầu tiên của hai máy ghép với nhau, người khác ghép theo tên (vd «Bố» ↔ «Bố»); người chỉ có ở một máy
@@ -653,6 +657,10 @@ thay vì ~200 ms trở lên. Tên miền không có (NXDOMAIN) là trả lời t
 máy chủ video `v.lumenbox.top` của dexter.pw) thì app hỏi máy chủ sau (Cloudflare → Google) thay vì dừng ở câu trả lời đó (trước đây
 coi là trả lời thật nên phim đứng hình). Nhà mạng không đọc / sửa được truy vấn DNS, nhưng vẫn thấy tên trang lúc kết nối (phần
 đó do [Vượt chặn nhà mạng](#vượt-chặn-nhà-mạng-từ-21) lo) và IP đích. Đang bật proxy với «DNS của proxy» thì proxy tự hỏi DNS.
+**Từ 2.23 / iPad · Mac 1.23 / Windows 1.21 / Linux 1.7:** app giữ **mọi** địa chỉ máy chủ DNS trả (trước chỉ giữ địa chỉ đầu); kết
+nối thẳng thử lần lượt tối đa 4 địa chỉ (4 giây mỗi địa chỉ, địa chỉ cuối 10–15 giây), hết thì thử địa chỉ DNS của máy (khác các địa
+chỉ đã thử, không phải địa chỉ chặn) — CDN / dịch vụ rút gọn link có một địa chỉ chết không còn làm hỏng tới hết thời hạn nhớ, mạng chỉ
+có IPv6 / NAT64 vẫn vào được. Tên miền sai (nhãn rỗng, dài quá 63 byte) không làm máy chủ DNS nào bị coi là hỏng.
 
 Tắt DNS mã hoá mà vẫn bật Vượt chặn: DNS của máy trả 0.0.0.0 / :: (bị chặn) hoặc không trả lời thì app vẫn hỏi lại qua chuỗi
 trên — vd ảnh bìa CLB Phim Xưa (`clbphimxua.com`) bị bộ lọc DNS trong nhà chặn.

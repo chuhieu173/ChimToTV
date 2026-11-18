@@ -9,6 +9,89 @@ Bản Windows (Windows 10 / 11, một tệp `.exe`) ghi riêng với tiêu đề
 Bản Mac (macOS 12+, từ 13/11/2026, cùng mã nguồn và số bản với bản iPad) ghi riêng với tiêu đề "Mac …", tag `mac-v…`.
 Bản Linux (Ubuntu 22.04+ / Linux Mint 21+ / Debian 12+, từ 13/11/2026, tệp `.deb`) ghi riêng với tiêu đề "Linux …", tag `linux-v…`.
 
+## 2.23 — 18/11/2026 (sửa lỗi sau audit cả 5 bản)
+
+Anh yêu cầu audit lại cả 5 bản («báo cáo lỗi và fix lỗi nếu có»), rồi duyệt thêm 5 mục đề xuất. Cùng đợt với iPad / iPhone / Mac 1.23,
+Windows 1.21, Linux 1.7.
+
+- **Giới hạn giờ xem ở Truyền hình:** hết giờ rồi bấm Home mở lại app thì kênh phát tiếp sau màn «Hết giờ xem» — nay không mở luồng khi
+  màn chặn đang hiện; ra nền thì huỷ mọi việc chờ (mở lại sau 1 giây, thử lại trận sau 20 giây, đọc kênh) và nhịp đếm giây — không còn
+  tự phát khi app ở nền.
+- **«Ai đang xem?» không còn bị vượt qua:** quay lại app sau ≥ 30 phút mà màn hiện lên đầu không phải màn chính (Truyền hình, trang phim,
+  trình phát, Cài đặt…) thì về màn chính hỏi người xem; thông báo nhắc giờ phát mở qua màn chính (qua màn miễn trừ / «Ai đang xem?» rồi
+  mới mở kênh). «Sửa người xem…» ở màn chặn cửa của người có mã PIN chỉ mở phần Người xem.
+- **Đồng bộ:** nhập sai mã ghép 20 lần (kể cả qua các lần đổi mã) thì ngừng cho ghép tới khi mở lại hộp Đồng bộ — mã 4 số trước đây máy lạ
+  trong mạng dò hết được trong vài giây.
+- **Kết nối:** DNS mã hoá giữ mọi địa chỉ của tên miền, cổng nội bộ thử lần lượt tối đa 4 địa chỉ rồi tới DNS của thiết bị.
+- **Truyền hình:** lịch phát sóng dựng vào tệp tạm rồi đổi tên (không mất lịch lúc đang tải, lịch cũ không bị xoá khi tải lỗi); đổi danh sách
+  lúc danh sách khác đang tải thì tải tiếp danh sách mới; mở kênh khi phim đang thu nhỏ thì tắt phim đó; kênh bị lọc (hồ sơ trẻ em) thì báo
+  thay vì phát kênh số 1; nhật ký che username / mật khẩu trong link Xtream.
+- **Khác:** «Kiểm tra cập nhật» không còn kẹt khi đóng Cài đặt giữa lúc tải; tên miền sai không làm mọi máy chủ DNS bị coi là hỏng; dán nhiều
+  trang bỏ qua «v.v.», «e.g.»; xoá người xem thì xoá cả chất lượng video / ngôn ngữ phụ đề của người đó.
+- bản 2.23 · versionCode 47 · tag `v2.23` (Latest) · commit `dbbb331` (sửa: `cb0a27d`, `037d9e3`) · `ConBangTV-2.23.apk` = `ConBangTV.apk` =
+  `ChimToTV.apk` 151 569 152 byte · SHA-256 `ec7fcca761fc461e243bde1cbd530f6b79b3103cd8cb36c9b8efdca71d561c05` · chứng chỉ `949ef2b5…177b`
+- Thử: test đơn vị 193 đạt (mới: `TvLogTest`, ca «v.v.» trong `SitePasteTest`). Bản thử trên TX3: hết giờ → Home → mở lại, kênh không phát
+  lại; Home khi đang xem thì dừng hẳn, mở lại phát tiếp; chỉnh đồng hồ giả lập 31 phút → về màn chính hỏi «Ai đang xem?»; ý định thông báo
+  nhắc giờ → hỏi người xem rồi mới mở VTV1; «Sửa người xem…» ở màn chặn của hồ sơ có khoá chỉ còn phần Người xem; lịch phát sóng giữ nguyên
+  lúc đang tải lại.
+- Đăng lúc 11:45:53 bằng `release.ps1 tv` (Latest = `v2.23`, ba tệp cùng SHA-256, hai link cố định đúng 2.23). **Tự cập nhật thật 2.22 → 2.23
+  trên TX3**: «Có bản mới 2.23 (đang dùng 2.22)» (đủ «Có gì mới») → «Cài đặt ngay» → màn cài của hệ thống (▼ rồi ▶ tới «CÀI ĐẶT») → **2.23
+  lúc 12:03:27**, mở lại chạy bình thường.
+
+## iPad / iPhone 1.23 và Mac 1.23 — 18/11/2026 (sửa lỗi sau audit)
+
+- **Hết giờ xem:** phim ở cửa sổ hình trong hình / bấm ▶ trên màn hình khoá, AirPods thì dừng lại ngay (trước chỉ dừng một lần); không vào
+  hình trong hình khi đang hết giờ; truyền hình huỷ việc chờ khi hết giờ (không tự phát sau màn «Hết giờ xem»).
+- **«Ai đang xem?»:** xoá người đang xem từ màn này (mở từ menu) mà người còn lại đều có mã PIN thì màn này thành màn chặn cửa; ở màn chặn của
+  người có mã PIN, nút thành «Quản lý người xem…» và chỉ mở phần Người xem (không xoá lịch sử / đổi trang phim… khi chưa nhập mã).
+- **Truyền hình:** không còn nhảy về kênh cũ khi danh sách vừa tải lại; danh sách tải ra tệp tạm, đọc được kênh mới thay tệp cũ (trang HTML
+  của Wi‑Fi khách sạn không còn xoá danh sách); bộ lọc «Yêu thích» nhớ theo người xem; lưới kênh không tràn màn iPhone khi chữ cỡ lớn; chạm
+  widget «Xem tiếp» lúc đang nghe radio thì tắt kênh trước.
+- **Đồng bộ:** sai mã ghép 20 lần thì ngừng cho ghép. **Kết nối:** DNS mã hoá dùng mọi địa chỉ, hết thì DNS của máy (mạng IPv6 / NAT64); tải
+  danh sách kênh thử lại bằng mạng của máy với mọi lỗi kết nối. **Khác:** không văng với JSON lồng quá sâu / số tập quá lớn; bộ cập nhật đọc
+  100 release; nhật ký che tài khoản trong link; dán nhiều trang bỏ qua «v.v.».
+- iPad / iPhone: bản 1.23 (build 30) · tag `ios-v1.23` · `ConBangTV-iPad-1.23.ipa` 5 966 967 byte · SHA-256
+  `117d3a7b0c1a1c2a33204b4f7284d9c3654045fe3a6805bd45952882a92f7139`; Mac: bản 1.23 (build 30) · tag `mac-v1.23` · `ConBangTV-Mac-1.23.zip`
+  9 069 372 byte (Intel + Apple Silicon, ký ad-hoc, `codesign --verify` đạt, không cổng gỡ lỗi) · SHA-256
+  `e68a787aaea731a2c13848b4a862fdfd92c6eedcde4412640d5b65a0f1a1ab60` · commit `dbbb331` (sửa: `cb8052b`, `13b140e`) · dựng trên Mac mini
+- Thử: test lõi Swift 179 đạt (mới: `LogTests`, ca độ lồng JSON / số lớn, «v.v.»). Bản Mac thử: phát / chuyển / đóng kênh; DNS trả đủ các địa
+  chỉ; màn chặn của hồ sơ có khoá → «Quản lý người xem…» chỉ mở trang «Người xem». IPA chính (`vn.chimto.tv` 1.23 / 30, không `/tvstatus`) cài
+  lên iPhone 6s Plus bằng TrollStore, mở được, không có báo cáo sập.
+- Đăng lúc 11:48:31 (iPad) và 12:04:16 (Mac) bằng `release.ps1 ipad|mac -File dist\mac\…`; link cố định chép đè, khớp SHA-256. **Tự cập nhật
+  thật Mac 1.22.1 → 1.23** (Mac mini): «Có bản mới 1.23 — Đang dùng 1.22.1» → «Cài đặt ngay» → mở lại 1.23 trong ~5 giây (12:06).
+
+## Windows 1.21 — 18/11/2026 (sửa lỗi sau audit)
+
+- **Truyền hình:** không còn nhảy về kênh cũ khi danh sách vừa tải lại; «Kênh trước / sau nữa» chỉ lật trang bảng kênh (trước đổi luôn kênh
+  đang xem); trang Truyền hình không còn hai hàng nhóm kênh khi vẽ lại chồng nhau.
+- **Hộp thoại khuất sau trình phát:** «Có bản mới» không hiện lúc đang xem phim / truyền hình (lỡ bấm OK là cập nhật giữa lúc xem) — hỏi khi
+  đóng trình phát, và hỏi sau màn «Ai đang xem?»; nhắc giờ phát báo ngay trong trình phát phim.
+- Mở trình duyệt chỉ nhận link http(s). Từ lõi Rust: sai mã ghép 20 lần thì ngừng cho ghép (bỏ SO_REUSEADDR — hai cửa sổ app không nghe chồng
+  cổng); danh sách kênh tải lỗi không xoá danh sách đang dùng; DNS mã hoá dùng mọi địa chỉ; bộ cập nhật đọc 100 release; log.txt che tài khoản
+  trong link; JSON lồng quá sâu không làm app văng; ghi prefs.json lần lượt.
+- bản 1.21.0 · tag `win-v1.21` · `ConBangTV-Windows-1.21.exe` 120 364 438 byte · SHA-256
+  `97a66f7a6cd53ac00a13118fe07b9e30b23bba09dc48721f5656342c3b965aaa` · commit `dbbb331` (sửa: `799da2e`, `8c7454c`)
+- Thử: `windows\build.ps1` — test lõi Rust 195 + tích hợp đạt, .NET 38 đạt. Bản thử: lật trang bảng kênh giữ kênh 1, chọn kênh 141 ở trang mới
+  mở được, ▼ sang 142; trang chủ và kênh phát qua đường kết nối mới. Tệp đóng gói chạy với thư mục dữ liệu riêng.
+- Đăng lúc 11:51:04 bằng `release.ps1 windows`; link cố định `conbangtv_windows` = 1.21. **Tự cập nhật thật 1.20 → 1.21** (bản sao chạy riêng):
+  «Có bản mới» → «Cập nhật ngay» (UI Automation) 12:07:59 → tệp chạy 1.21.0 lúc 12:08:18, mở lại bình thường.
+
+## Linux 1.7 — 18/11/2026 (sửa lỗi sau audit)
+
+- **Đỡ tốn bộ nhớ:** trang rời khỏi ngăn trang (mở mục menu khác, thay trang, Back) được huỷ từng ô — trước đây hàm bấm giữ tham chiếu tới
+  chính trang nên không trang nào được giải phóng (ảnh bìa, hẹn giờ mỗi giây của màn Truyền hình). Thử 120 lần chuyển trang: 120/120 trang
+  được giải phóng, bộ nhớ đứng ~150 MB (trước tăng 159 → 183 MB).
+- **Truyền hình:** không còn nhảy về kênh cũ khi danh sách vừa tải lại (số lượt không về 0 khi mở lại); «Kênh trước / sau nữa» chỉ lật trang;
+  link kênh có ký tự NUL không làm app tắt; đóng app ghi nốt giờ đã xem truyền hình; không đưa con trỏ về menu ẩn sau trình phát.
+- **Hộp thoại:** Tab / Shift+Tab / Enter không lọt xuống trang phía sau (màn «Ai đang xem?» chặn cửa) — Tab đi vòng trong hộp thoại.
+- Từ lõi Rust: như bản Windows 1.21 (mã ghép, danh sách kênh, DNS mọi địa chỉ, cập nhật 100 release, log che tài khoản, JSON sâu).
+- bản 1.7.0 · tag `linux-v1.7` · `ConBangTV-Linux-1.7.deb` 6 224 572 byte · SHA-256 `3854fe04ac7baec0f941deeb3c5b3aac6c023fdbb1ebcd58d02ab5053d60ea2f` ·
+  commit `dbbb331` (sửa: `799da2e`, `8c7454c`) · dựng trong container Ubuntu 22.04 (glibc ≤ 2.34), tệp chạy không có cổng gỡ lỗi
+- Thử: test lõi đạt trên máy ảo (195 + tích hợp). Bản thử: Tab trong hộp miễn trừ đi vòng «Đồng ý» ↔ «Thoát»; lật trang bảng kênh giữ kênh đang
+  xem, chọn kênh 141 mở được; 120 lần chuyển trang không văng, không lỗi GTK.
+- Đăng lúc 11:53:31 bằng `release.ps1 linux`; link cố định `conbangtv_linux` = 1.7. **Tự cập nhật thật 1.6 → 1.7** trên máy ảo: «Có bản mới:
+  Côn Bằng TV 1.7» → «Cập nhật ngay» → gói 1.7.0 lúc ~12:05:20, mở lại `--updated`.
+
 ## iPad / iPhone 1.22.1 và Mac 1.22.1 — 17/11/2026 (sửa: bàn phím che ô dán nhiều trang)
 
 - **Sửa lỗi của 1.22 trên iPhone / iPad:** ô dán nhiều trang (SwiftUI `TextEditor`) ở **Chọn trang phim** → «Thêm trang» và **Cài đặt** → **Địa chỉ trang phim** không tự cuộn lên trên bàn phím như ô một dòng cũ — chạm ô ở nửa dưới màn hình là bàn phím che ô, gõ không thấy chữ (đo trên iPhone 6s Plus iOS 15: bàn phím từ y 435; ô ở y 415 / 513 → bị che). Giờ chọn ô (và khi ô thêm / bớt dòng) thì danh sách cuộn ô lên sát thanh tiêu đề, nút Thêm / Lưu ngay dưới (`@FocusState` + `ScrollViewReader`, neo mép trên — neo nút vào mép bàn phím thì Form Cài đặt cuộn quá ~200 pt). Mac không đổi cách dùng (không cuộn), chỉ giữ cùng số bản.
