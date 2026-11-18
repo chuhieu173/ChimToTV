@@ -27,6 +27,13 @@ public class SitesTests : PrefsTest
         }, Prefs.SplitSites(Paste));
         // «bad..host» là tên sai; «localhost», «.an.example», số bản: bỏ qua không báo
         Assert.Equal(1, Prefs.InvalidSites(Paste));
+        // «v.v.», «e.g.», «tr.5» trong câu: bỏ qua không báo; IP đủ 4 phần, xn--… vẫn nhận
+        const string abbr = "Các trang phim-a.example, phim-b.example v.v. (e.g. tr.5)\nhttp://10.0.0.5:8080/x xn--fiq228c.xn--p1ai";
+        Assert.Equal(new[] { "https://phim-a.example", "https://phim-b.example", "http://10.0.0.5:8080", "https://xn--fiq228c.xn--p1ai" },
+            Prefs.SplitSites(abbr));
+        Assert.Equal(0, Prefs.InvalidSites(abbr));
+        Assert.True(Prefs.PlausibleHost("https://phim.example:8443/a@b"));
+        Assert.False(Prefs.PlausibleHost("v.v") || Prefs.PlausibleHost("tr.5"));
         Assert.Empty(Prefs.SplitSites(""));
         Assert.Empty(Prefs.SplitSites("# chỉ có chú thích\n\n   \n"));
         Assert.Equal(new[] { "https://www.phim-a.example" }, Prefs.SplitSites("www.phim-a.example\nphim-a.example/\nhttps://phim-a.example"));

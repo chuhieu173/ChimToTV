@@ -631,8 +631,27 @@ public static class Prefs
         if (t.Length == 0 || !t.Contains('.') || t.StartsWith('.')) return null;
         // Số bản kiểu «1.5», «2.21», «1.2.3» — không phải trang (địa chỉ IP đủ 4 phần vẫn nhận)
         if (t.All(c => c is >= '0' and <= '9' or '.') && t.Count(c => c == '.') < 3) return null;
+        // Chữ viết tắt trong câu («v.v.», «e.g.»): đuôi một chữ cái — không phải trang, bỏ qua không báo
+        if (!PlausibleHost(t)) return null;
         var n = NormalizeUrl(t);
         return n == null ? "" : SiteRoot(n) ?? "";
+    }
+
+    /// Đuôi tên miền đọc được: từ 2 chữ cái trở lên (hoặc «xn--…»), hay địa chỉ IPv4. «v.v», «e.g», «tr.5» (chữ viết tắt trong
+    /// câu) → false. Cùng luật với lõi Rust prefs::plausible_host, Android SitePaste.plausibleHost, iPad Prefs.plausibleHost.
+    public static bool PlausibleHost(string t)
+    {
+        var i = t.IndexOf("://", StringComparison.Ordinal);
+        var host = i >= 0 ? t[(i + 3)..] : t;
+        var end = host.IndexOfAny(new[] { '/', '?', '#' });
+        if (end >= 0) host = host[..end];
+        var at = host.LastIndexOf('@');
+        if (at >= 0) host = host[(at + 1)..];
+        var colon = host.IndexOf(':');
+        if (colon >= 0) host = host[..colon];
+        if (host.Length > 0 && host.All(c => c is >= '0' and <= '9' or '.')) return true;
+        var tld = host[(host.LastIndexOf('.') + 1)..];
+        return tld.StartsWith("xn--", StringComparison.OrdinalIgnoreCase) || (tld.Length >= 2 && tld.All(char.IsLetter));
     }
 
     /// Tách đoạn dán nhiều trang: tách theo dòng và khoảng trắng, bỏ dòng trống / dòng chú thích «#», bỏ chữ không có dấu chấm;

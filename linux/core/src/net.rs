@@ -260,6 +260,42 @@ async fn socks_address(c: &SocksConfig, host: &str) -> Result<Vec<u8>> {
     Ok(ip_bytes(ip.ip()))
 }
 
+/// Mọi địa chỉ DNS của máy trả, IPv4 trước (giữ thứ tự).
+pub async fn system_resolve_all(host: &str, port: u16) -> std::io::Result<Vec<SocketAddr>> {
+    let mut list: Vec<SocketAddr> = tokio::net::lookup_host((host, port)).await?.collect();
+    list.sort_by_key(|a| !a.is_ipv4());
+    if list.is_empty() {
+        return Err(std::io::Error::new(std::io::ErrorKind::NotFound, "không có địa chỉ"));
+    }
+    Ok(list)
+}
+
+/// Kết nối thẳng thử lần lượt các địa chỉ (tối đa 4; địa chỉ chưa phải cuối cùng chờ 4 giây, địa chỉ cuối 15 giây): một địa
+/// chỉ của CDN / dịch vụ rút gọn link chết thì sang địa chỉ sau. Err = lỗi của địa chỉ cuối.
+pub async fn connect_any(targets: &[SocketAddr]) -> Result<TcpStream> {
+    let mut list: Vec<SocketAddr> = Vec::new();
+    for t in targets {
+        if !list.contains(t) && list.len() < 4 {
+            list.push(*t);
+        }
+    }
+    let mut last = Error::Net("không có địa chỉ".into());
+    for (k, t) in list.iter().enumerate() {
+        let wait = if k + 1 == list.len() { 15 } else { 4 };
+        match tokio::time::timeout(Duration::from_secs(wait), TcpStream::connect(t)).await {
+            Ok(Ok(s)) => {
+                if k > 0 {
+                    crate::log::d("net", &format!("{t} nhận (sau {k} địa chỉ không trả lời)"));
+                }
+                return Ok(s);
+            }
+            Ok(Err(e)) => last = e.into(),
+            Err(_) => last = Error::Timeout,
+        }
+    }
+    Err(last)
+}
+
 /// Hỏi DNS của máy (ưu tiên IPv4).
 pub async fn system_resolve(host: &str, port: u16) -> std::io::Result<SocketAddr> {
     let list: Vec<SocketAddr> = tokio::net::lookup_host((host, port)).await?.collect();
@@ -317,16 +353,31 @@ pub async fn connect(host: &str, port: u16) -> Result<Conn> {
     }
     // DNS mã hoá (mặc định), hoặc Vượt chặn: DNS của máy chặn tên miền (trả 0.0.0.0…) → địa chỉ hỏi qua DNS mã hoá;
     // None = DNS của máy
-    let target = match crate::doh::for_connect(host).await? {
-        Some(ip) => SocketAddr::new(ip, port),
-        None => match host.trim_matches(|ch| ch == '[' || ch == ']').parse::<IpAddr>() {
-            Ok(ip) => SocketAddr::new(ip, port),
-            Err(_) => system_resolve(host, port).await.map_err(|_| Error::Net("Không tìm thấy tên miền (trang đổi tên miền hoặc bị chặn?).".into()))?,
+    let not_found = || Error::Net("Không tìm thấy tên miền (trang đổi tên miền hoặc bị chặn?).".into());
+    let (targets, secure) = match crate::doh::for_connect_all(host).await? {
+        Some(ips) if !ips.is_empty() => (ips.into_iter().map(|ip| SocketAddr::new(ip, port)).collect::<Vec<_>>(), crate::prefs::secure_dns()),
+        _ => match host.trim_matches(|ch| ch == '[' || ch == ']').parse::<IpAddr>() {
+            Ok(ip) => (vec![SocketAddr::new(ip, port)], false),
+            Err(_) => (system_resolve_all(host, port).await.map_err(|_| not_found())?, false),
         },
     };
-    let s = match tokio::time::timeout(Duration::from_secs(15), TcpStream::connect(target)).await {
-        Ok(r) => r?,
-        Err(_) => return Err(Error::Timeout),
+    let s = match connect_any(&targets).await {
+        Ok(s) => s,
+        // DNS mã hoá: mọi địa chỉ không nhận kết nối → thử địa chỉ DNS của máy (khác địa chỉ đã thử, không phải địa chỉ chặn
+        // 0.0.0.0 / 127.x) — CDN trả địa chỉ khác nhau theo máy chủ DNS; mạng chỉ có IPv6 / NAT64 thì DNS của máy mới trả
+        // địa chỉ dùng được
+        Err(e) if secure => {
+            let rest: Vec<SocketAddr> = match system_resolve_all(host, port).await {
+                Ok(all) if !all.iter().any(|a| crate::doh::blocked(&a.ip())) => all.into_iter().filter(|a| !targets.contains(a)).collect(),
+                _ => Vec::new(),
+            };
+            if rest.is_empty() {
+                return Err(e);
+            }
+            crate::log::d("net", &format!("{host}: địa chỉ của DNS mã hoá không nhận — thử DNS của máy"));
+            connect_any(&rest).await?
+        }
+        Err(e) => return Err(e),
     };
     Ok(tcp_conn(s, false))
 }
@@ -535,4 +586,23 @@ async fn relay(client: TcpStream, up: Conn, gen_rx: &mut tokio::sync::watch::Rec
 pub(crate) fn test_lock() -> std::sync::MutexGuard<'static, ()> {
     static L: Mutex<()> = Mutex::new(());
     L.lock().unwrap_or_else(|e| e.into_inner())
+}
+
+#[cfg(test)]
+mod connect_tests {
+    use super::*;
+
+    /// Địa chỉ đầu không nhận kết nối (cổng đóng) → sang địa chỉ sau; không địa chỉ nào nhận → lỗi.
+    #[tokio::test]
+    async fn connect_any_skips_dead_addresses() {
+        let live = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let dead = {
+            let l = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+            l.local_addr().unwrap()
+        }; // đã đóng: kết nối bị từ chối ngay
+        let s = connect_any(&[dead, dead, live.local_addr().unwrap()]).await.unwrap();
+        assert_eq!(s.peer_addr().unwrap(), live.local_addr().unwrap());
+        assert!(connect_any(&[dead]).await.is_err());
+        assert!(connect_any(&[]).await.is_err());
+    }
 }

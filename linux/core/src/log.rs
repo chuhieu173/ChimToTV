@@ -26,6 +26,7 @@ pub fn start() {
 /// Ghi một dòng nhật ký: `log::d("net", "…")`.
 pub fn d(tag: &str, message: &str) {
     let (date, hms) = stamp();
+    let message = redact(message);
     let line = format!("{hms} {tag}: {message}");
     if std::env::var_os("CONBANG_DEBUG").is_some() {
         eprintln!("{line}");
@@ -44,6 +45,26 @@ pub fn d(tag: &str, message: &str) {
     }
 }
 
+static QUERY_SECRET: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
+    regex::Regex::new(r"(?i)([?&](?:username|user|password|pass|pwd|token|key)=)[^&#\s]*").unwrap()
+});
+static XTREAM_PATH: std::sync::LazyLock<regex::Regex> =
+    std::sync::LazyLock::new(|| regex::Regex::new(r"(?i)(/(?:live|movie|series|timeshift)/)[^/\s]+/[^/\s]+/").unwrap());
+static USER_INFO: std::sync::LazyLock<regex::Regex> =
+    std::sync::LazyLock::new(|| regex::Regex::new(r"(://)[^/\s@]+@").unwrap());
+
+/// Che tài khoản trong link trước khi ghi nhật ký (tệp log.txt nằm trên đĩa, gửi kèm khi báo lỗi): tham số username /
+/// password / token… của link, đường dẫn Xtream `/live/<tên>/<mật khẩu>/…`, `user:pass@` trước tên máy chủ. Như TvLog
+/// của bản Android.
+pub fn redact(s: &str) -> String {
+    if !s.contains("://") && !s.contains('=') {
+        return s.to_string();
+    }
+    let s = QUERY_SECRET.replace_all(s, "${1}***");
+    let s = XTREAM_PATH.replace_all(&s, "${1}***/***/");
+    USER_INFO.replace_all(&s, "${1}***@").into_owned()
+}
+
 /// Các dòng có số thứ tự > since; trả kèm số thứ tự cuối để lần sau hỏi tiếp.
 pub fn since(since: u64) -> (u64, Vec<String>) {
     let st = STATE.lock().unwrap();
@@ -57,4 +78,20 @@ fn stamp() -> (String, String) {
         format!("{:04}-{:02}-{:02}", tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday),
         format!("{:02}:{:02}:{:02}.{:03}", tm.tm_hour, tm.tm_min, tm.tm_sec, ms % 1000),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::redact;
+
+    #[test]
+    fn hides_credentials_in_links() {
+        assert_eq!(
+            redact("tải http://tv.example:8080/get.php?username=an&password=b1&type=m3u_plus lỗi"),
+            "tải http://tv.example:8080/get.php?username=***&password=***&type=m3u_plus lỗi"
+        );
+        assert_eq!(redact("VTV1 (nguồn 1/2) http://tv.example/live/an/b1/123.ts"), "VTV1 (nguồn 1/2) http://tv.example/live/***/***/123.ts");
+        assert_eq!(redact("https://an:b1@tv.example/x.m3u?token=abc#t"), "https://***@tv.example/x.m3u?token=***#t");
+        assert_eq!(redact("danh sách «Thử» — 467 kênh"), "danh sách «Thử» — 467 kênh");
+    }
 }

@@ -864,7 +864,25 @@ fn site_token(raw: &str) -> Option<Option<String>> {
     if t.chars().all(|c| c.is_ascii_digit() || c == '.') && t.matches('.').count() < 3 {
         return None;
     }
+    // Chữ viết tắt trong câu («v.v.», «e.g.»): đuôi một chữ cái — không phải trang, bỏ qua không báo
+    if !plausible_host(t) {
+        return None;
+    }
     Some(normalize_url(t).and_then(|u| site_root(&u)))
+}
+
+/// Đuôi tên miền đọc được: từ 2 chữ cái trở lên (hoặc «xn--…»), hay địa chỉ IPv4. «v.v», «e.g», «tr.5» (chữ viết tắt trong câu)
+/// → false. Cùng luật với Android `SitePaste.plausibleHost`, Windows `Prefs.PlausibleHost`, iPad `Prefs.plausibleHost`.
+pub fn plausible_host(t: &str) -> bool {
+    let rest = t.split_once("://").map(|x| x.1).unwrap_or(t);
+    let host = rest.split(['/', '?', '#']).next().unwrap_or("");
+    let host = host.rsplit_once('@').map(|x| x.1).unwrap_or(host);
+    let host = host.split(':').next().unwrap_or("");
+    if !host.is_empty() && host.chars().all(|c| c.is_ascii_digit() || c == '.') {
+        return true;
+    }
+    let tld = host.rsplit('.').next().unwrap_or("");
+    tld.to_ascii_lowercase().starts_with("xn--") || (tld.chars().count() >= 2 && tld.chars().all(char::is_alphabetic))
 }
 
 /// Tách đoạn dán nhiều trang: tách theo dòng và khoảng trắng, bỏ dòng trống / dòng chú thích «#», bỏ chữ không có dấu chấm;
@@ -1534,6 +1552,21 @@ kkphim.com
         );
         // «bad..host» là tên sai; «localhost», «.an.example», số bản: bỏ qua không báo
         assert_eq!(parse_sites(text).1, 1);
+        // «v.v.», «e.g.», «tr.5» trong câu: bỏ qua không báo; IP đủ 4 phần, xn--… vẫn nhận
+        let abbr = "Các trang a1.example, b2.example v.v. (e.g. tr.5)\nhttp://10.0.0.5:8080/x xn--fiq228c.xn--p1ai";
+        assert_eq!(
+            parse_sites(abbr),
+            (
+                vec![
+                    "https://a1.example".to_string(),
+                    "https://b2.example".into(),
+                    "http://10.0.0.5:8080".into(),
+                    "https://xn--fiq228c.xn--p1ai".into()
+                ],
+                0
+            )
+        );
+        assert!(plausible_host("https://phim.example:8443/a@b") && !plausible_host("v.v") && !plausible_host("tr.5"));
         assert_eq!(split_sites(""), Vec::<String>::new());
         assert_eq!(split_sites("# chỉ có chú thích\n\n   \n"), Vec::<String>::new());
         assert_eq!(split_sites("www.phim-a.example\nphim-a.example/\nhttps://phim-a.example"), vec!["https://www.phim-a.example"]);

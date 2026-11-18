@@ -440,8 +440,23 @@ impl App {
 
     /// Mở trang gốc (từ menu): bỏ các trang đang mở.
     pub fn show_root(&self, p: Rc<dyn Page>) {
-        self.stack_pages.borrow_mut().clear();
+        let old: Vec<Rc<dyn Page>> = self.stack_pages.borrow_mut().drain(..).collect();
         self.push(p);
+        self.discard(old);
+    }
+
+    /// Trang vừa ra khỏi ngăn trang (mở trang gốc khác, thay trang, Back): huỷ cây ô của nó. Hàm bấm / hẹn giờ của các ô giữ Rc
+    /// tới chính trang (vòng tham chiếu) — không huỷ thì trang cũ (ảnh bìa, hẹn giờ mỗi giây của màn Truyền hình) nằm mãi trong
+    /// bộ nhớ, mỗi lần mở lại một mục menu thêm một bản. Huỷ ở lượt sau: hàm bấm đang chạy (nút trên trang cũ mở trang mới)
+    /// chạy xong đã.
+    fn discard(&self, old: Vec<Rc<dyn Page>>) {
+        let live: Vec<*const ()> = self.stack_pages.borrow().iter().map(|q| Rc::as_ptr(q) as *const ()).collect();
+        for p in old {
+            if live.contains(&(Rc::as_ptr(&p) as *const ())) {
+                continue;
+            }
+            ui::after(0, move || p.base().teardown());
+        }
     }
 
     pub fn push(&self, p: Rc<dyn Page>) {
@@ -463,12 +478,11 @@ impl App {
             self.push(p);
             return;
         }
-        if let Some(last) = self.stack_pages.borrow_mut().last_mut() {
-            *last = p.clone();
-        }
+        let old = self.stack_pages.borrow_mut().last_mut().map(|last| std::mem::replace(last, p.clone()));
         self.set_active_menu(&p.base().menu_key.borrow());
         self.host(&p);
         p.start();
+        self.discard(old.into_iter().collect());
     }
 
     pub fn back(&self) {
@@ -477,7 +491,8 @@ impl App {
             return;
         }
         if self.stack_pages.borrow().len() > 1 {
-            self.stack_pages.borrow_mut().pop();
+            let old = self.stack_pages.borrow_mut().pop();
+            self.discard(old.into_iter().collect());
             let p = self.current().unwrap();
             self.set_active_menu(&p.base().menu_key.borrow());
             self.host(&p);
