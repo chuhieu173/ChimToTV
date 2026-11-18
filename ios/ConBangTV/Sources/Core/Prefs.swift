@@ -430,6 +430,8 @@ enum Prefs {
                 guard t.contains("."), !t.hasPrefix(".") else { continue }
                 // Số bản kiểu «1.5», «2.21», «1.2.3» — không phải trang (địa chỉ IP đủ 4 phần vẫn nhận)
                 if t.allSatisfy({ ("0"..."9").contains($0) || $0 == "." }), t.filter({ $0 == "." }).count < 3 { continue }
+                // Chữ viết tắt trong câu («v.v.», «e.g.»): đuôi một chữ cái — không phải trang, bỏ qua không báo
+                if !plausibleHost(t) { continue }
                 guard let n = normalizeUrl(String(t)), let r = siteRoot(n) else {
                     invalid += 1
                     continue
@@ -438,6 +440,19 @@ enum Prefs {
             }
         }
         return (out, invalid)
+    }
+
+    /// Đuôi tên miền đọc được: từ 2 chữ cái trở lên (hoặc «xn--…»), hay địa chỉ IPv4. «v.v», «e.g», «tr.5» (chữ viết tắt trong
+    /// câu) → false. Cùng luật với lõi Rust prefs::plausible_host, Android SitePaste.plausibleHost, Windows Prefs.PlausibleHost.
+    static func plausibleHost<S: StringProtocol>(_ t: S) -> Bool {
+        var rest = Substring(t)
+        if let r = rest.range(of: "://") { rest = rest[r.upperBound...] }
+        var host = rest.prefix(while: { $0 != "/" && $0 != "?" && $0 != "#" })
+        if let at = host.lastIndex(of: "@") { host = host[host.index(after: at)...] }
+        host = host.prefix(while: { $0 != ":" })
+        if !host.isEmpty && host.allSatisfy({ ("0"..."9").contains($0) || $0 == "." }) { return true }
+        let tld = host.split(separator: ".", omittingEmptySubsequences: false).last ?? ""
+        return tld.lowercased().hasPrefix("xn--") || (tld.count >= 2 && tld.allSatisfy { $0.isLetter })
     }
 
     /// Các trang dán một lần (gốc trang, đã bỏ trùng, theo thứ tự dán).

@@ -5,6 +5,14 @@ struct SettingsView: View {
     @EnvironmentObject var app: AppModel
     @Environment(\.dismiss) private var dismiss
 
+    /// Chỉ phần «Người xem» (mở từ màn "Ai đang xem?" đang chặn cửa, người đang dùng có mã PIN): các mục còn lại là của người
+    /// đang dùng (xoá lịch sử, Xem riêng, hồ sơ trẻ em, trang phim…) — chưa nhập mã PIN thì không được đụng.
+    let profilesOnly: Bool
+
+    init(profilesOnly: Bool = false) {
+        self.profilesOnly = profilesOnly
+    }
+
     @State private var url = Site.hostOf(Prefs.baseUrl) ?? Prefs.baseUrl
     @State private var siteStatus = ""
     @State private var sites = Prefs.sites
@@ -132,7 +140,7 @@ struct SettingsView: View {
 
     private var header: some View {
         ZStack {
-            Text("Cài đặt").font(.headline).foregroundColor(Theme.text)
+            Text(profilesOnly ? "Người xem" : "Cài đặt").font(.headline).foregroundColor(Theme.text)
             HStack {
                 Spacer()
                 Button("Xong") { dismiss() }
@@ -151,6 +159,7 @@ struct SettingsView: View {
             ScrollViewReader { proxy in
             Form {
                 profileSection
+                if !profilesOnly {
                 homeSection
                 Section {
                     NavigationLink {
@@ -283,6 +292,7 @@ struct SettingsView: View {
                     Text("Côn Bằng TV \(version) — xem phim từ trang web trên iPad / iPhone bằng chạm / bàn phím.")
                         .foregroundColor(Theme.dim)
                 }
+                } // !profilesOnly
             }
             .navigationTitle("Cài đặt")
             .navigationBarTitleDisplayMode(.inline)

@@ -32,6 +32,14 @@ final class SitePasteTests: XCTestCase {
         // «bad..host» là tên sai; số bản, «.an.example», «localhost»: bỏ qua không báo
         XCTAssertEqual(Prefs.parseSites(text).invalid, 1)
         XCTAssertTrue(Prefs.splitSites("  \n# chỉ chú thích\nkhông có tên miền").isEmpty)
+        // «v.v.», «e.g.», «tr.5» trong câu: bỏ qua không báo; IP đủ 4 phần, xn--… vẫn nhận
+        // (tên miền punycode «xn--…» vẫn nhận — URL của Apple tự đổi sang chữ Unicode nên chỉ kiểm plausibleHost)
+        let abbr = "Các trang phim-a.example, phim-b.example v.v. (e.g. tr.5)\nhttp://10.0.0.5:8080/x"
+        XCTAssertEqual(Prefs.splitSites(abbr), ["https://phim-a.example", "https://phim-b.example", "http://10.0.0.5:8080"])
+        XCTAssertTrue(Prefs.plausibleHost("xn--fiq228c.xn--p1ai"))
+        XCTAssertEqual(Prefs.parseSites(abbr).invalid, 0)
+        XCTAssertTrue(Prefs.plausibleHost("https://phim.example:8443/a@b"))
+        XCTAssertFalse(Prefs.plausibleHost("v.v") || Prefs.plausibleHost("tr.5"))
         XCTAssertEqual(Prefs.siteKey("https://WWW.Phim-A.example/"), "phim-a.example")
         XCTAssertEqual(Prefs.siteKey("www.phim-a.example"), "phim-a.example")
         XCTAssertEqual(Prefs.siteKey("http://phim-a.example:8443/x"), "phim-a.example:8443")

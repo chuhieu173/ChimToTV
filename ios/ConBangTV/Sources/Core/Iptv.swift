@@ -1113,8 +1113,9 @@ enum IptvFetch {
         let req = try Http.request(url, headers: headers)
         do {
             return try await Download(file: to, progress: progress).run(req, config(direct: false))
-        } catch let e as URLError where !AppProxy.active && AppProxy.cfDictionary != nil {
-            Log.d("IPTV", "mạng của app lỗi với \(url) (\(e.code.rawValue)) — thử mạng của máy")
+        } catch where !(error is Http.HttpError) && !(error is AppError) && !AppProxy.active && AppProxy.cfDictionary != nil {
+            // Lỗi kết nối nào cũng vậy (không chỉ URLError: lỗi cổng nội bộ trả về là lỗi CFNetwork, không đổi được thành URLError)
+            Log.d("IPTV", "mạng của app lỗi với \(url) (\(error.localizedDescription)) — thử mạng của máy")
             return try await Download(file: to, progress: progress).run(req, config(direct: true))
         }
     }

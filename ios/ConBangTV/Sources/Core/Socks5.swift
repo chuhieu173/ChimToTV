@@ -602,11 +602,40 @@ final class Socks5Bridge {
             if let ip = ip { return try TcpSocket.connect(ip, port: port) }
             // DNS mã hoá (mặc định), hoặc Vượt chặn: DNS của máy chặn tên miền (trả 0.0.0.0…) → địa chỉ hỏi qua DNS mã hoá;
             // nil = DNS của máy
-            if let real = try Doh.forConnect(host, secure: dns, split: split) { return try TcpSocket.connect(real, port: port) }
+            if let real = try Doh.forConnectAll(host, secure: dns, split: split), !real.isEmpty {
+                if let s = Self.connectAny(real, port: port) { return s }
+                // DNS mã hoá: mọi địa chỉ không nhận kết nối → thử địa chỉ DNS của máy (CDN trả địa chỉ khác nhau theo máy chủ
+                // DNS; mạng chỉ có IPv6 / NAT64 thì DNS của máy mới trả địa chỉ dùng được)
+                if dns, let s = Self.fallbackDevice(host, tried: real, port: port) { return s }
+                throw SocksError(code: 5, message: "không kết nối thẳng được \(host):\(port)", viaProxy: false)
+            }
             return try TcpSocket.connect(host: host, port: port)
         } catch let e as SocksError {
             throw SocksError(code: e.code == 4 ? 4 : 5, message: e.message, viaProxy: false)
         }
+    }
+
+    /// Kết nối thẳng thử lần lượt các địa chỉ (tối đa 4; địa chỉ chưa phải cuối cùng chờ 4 giây, địa chỉ cuối 10 giây). nil =
+    /// không địa chỉ nào nhận.
+    private static func connectAny(_ addrs: [IPAddr], port: Int) -> TcpSocket? {
+        var list: [IPAddr] = []
+        for a in addrs where !list.contains(a) && list.count < 4 { list.append(a) }
+        for (k, a) in list.enumerated() {
+            if let s = try? TcpSocket.connect(a, port: port, timeout: k == list.count - 1 ? 10 : 4) {
+                if k > 0 { Log.d("proxy", "\(a.text):\(port) nhận (sau \(k) địa chỉ không trả lời)") }
+                return s
+            }
+        }
+        return nil
+    }
+
+    /// Địa chỉ của DNS mã hoá đều không nhận: thử địa chỉ DNS của máy (khác các địa chỉ đã thử, không phải địa chỉ chặn).
+    private static func fallbackDevice(_ host: String, tried: [IPAddr], port: Int) -> TcpSocket? {
+        guard let all = try? Socks5.resolveAll(host), !all.contains(where: Doh.blocked) else { return nil }
+        let rest = all.filter { !tried.contains($0) }
+        guard !rest.isEmpty else { return nil }
+        Log.d("proxy", "\(host): địa chỉ của DNS mã hoá không nhận — thử DNS của máy")
+        return connectAny(rest, port: port)
     }
 
     private func isSite(_ host: String) -> Bool {
