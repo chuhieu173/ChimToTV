@@ -54,6 +54,9 @@ object AppUse : Application.ActivityLifecycleCallbacks {
         return true
     }
 
+    /** Như idleReturn nhưng chỉ xem, không đánh dấu đã báo (màn chưa tới onResume — vd LiveActivity.onStart). */
+    fun isIdleReturn(a: Activity): Boolean = idleReturn?.get() === a
+
     /** a là màn hình hiện lên đầu tiên khi quay lại app (sau khi đã rời app — không tính lần mở đầu tiên). */
     fun returnedTo(a: Activity): Boolean {
         if (returned?.get() !== a) return false

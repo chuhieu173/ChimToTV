@@ -1,6 +1,7 @@
 package vn.chimto.tv
 
 import android.app.Activity
+import android.content.Intent
 import android.content.res.Configuration
 import android.os.Build
 import android.os.Bundle
@@ -133,6 +134,15 @@ abstract class BaseActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
+        // Quay lại app sau ≥ 30 phút mà màn hiện lên đầu tiên không phải màn chính (đang ở Truyền hình, trang phim, trình phát,
+        // Cài đặt…): về màn chính hỏi "Ai đang xem?" — chỉ màn chính hỏi, không thì vào thẳng hồ sơ có mã PIN / kênh phát tiếp
+        if (this !is MainActivity && this !is DisclaimerActivity && AppUse.idleReturn(this) && ProfileUi.mustAsk()) {
+            ProfileUi.mustPick = true
+            startActivity(Intent(this, MainActivity::class.java)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP))
+            finish()
+            return
+        }
         if (BuildConfig.DEBUG && this !is PlayerActivity) Screen.allowRotation(this) // thử xoay trên TV box (xem Screen)
         showTouchBack() // màn trước có thể vừa đổi giữa chạm / remote
         if (this is PlayerActivity) return

@@ -167,7 +167,9 @@ object IptvReminders {
         }
         for ((i, r) in due.withIndex()) {
             if (now / 1000.0 > r.optDouble("s") + 30 * 60) continue
-            val open = Intent(c, TvActivity::class.java).putExtra("play_key", r.optString("k")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            // Mở qua màn chính: qua màn miễn trừ trách nhiệm / «Ai đang xem?» (mã PIN) rồi mới mở kênh (MainActivity.pendingPlayKey)
+            val open = Intent(c, MainActivity::class.java).putExtra("play_key", r.optString("k"))
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
             val pi = PendingIntent.getActivity(c, 100 + i, open, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
             val b = if (Build.VERSION.SDK_INT >= 26) android.app.Notification.Builder(c, CHANNEL) else
                 @Suppress("DEPRECATION") android.app.Notification.Builder(c)

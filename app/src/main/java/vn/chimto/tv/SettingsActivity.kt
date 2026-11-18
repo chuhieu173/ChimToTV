@@ -17,6 +17,12 @@ class SettingsActivity : BaseActivity() {
 
         /** "profiles": mở Cài đặt ở mục Người xem (nút "Sửa người xem…" của màn "Ai đang xem?"). */
         const val EXTRA_SECTION = "section"
+
+        /**
+         * true: chỉ phần Người xem — mở từ màn "Ai đang xem?" đang chặn cửa mà người đang dùng có mã PIN: các mục còn lại là của
+         * người đó (xoá lịch sử, Xem riêng, hồ sơ trẻ em, trang phim…), chưa nhập mã PIN thì không được đụng.
+         */
+        const val EXTRA_PROFILES_ONLY = "profiles_only"
     }
 
     private lateinit var url: EditText
@@ -331,12 +337,23 @@ class SettingsActivity : BaseActivity() {
             "${getString(R.string.app_name)} $version — xem phim từ trang web trên tivi bằng remote / bàn phím."
         showSites()
         setupProxy()
+        if (intent.getBooleanExtra(EXTRA_PROFILES_ONLY, false)) profilesOnly()
         if (intent.getStringExtra(EXTRA_SECTION) == "profiles") {
             val i = Prefs.profiles.indexOfFirst { it.id == Prefs.profileId }.coerceAtLeast(0)
             profileRow.getChildAt(i)?.requestFocus()
         } else {
             url.requestFocus()
         }
+    }
+
+    /** Ẩn mọi phần sau mục Người xem (và nút Đồng bộ) — xem EXTRA_PROFILES_ONLY. */
+    private fun profilesOnly() {
+        val body = findViewById<LinearLayout>(R.id.settingsBody)
+        (body.getChildAt(0) as? TextView)?.text = "Người xem"
+        findViewById<View>(R.id.btnSync).visibility = View.GONE
+        // Mục Người xem: nhãn, hàng người xem (trong HorizontalScrollView), hàng nút, dòng giải thích — ẩn từ sau dòng đó
+        val end = body.indexOfChild(profileRow.parent as View) + 2
+        for (i in end + 1 until body.childCount) body.getChildAt(i).visibility = View.GONE
     }
 
     // ---- Người xem (xem Prefs.Profile, ProfileUi) ----

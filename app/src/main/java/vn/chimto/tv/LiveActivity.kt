@@ -314,6 +314,8 @@ class LiveActivity : BaseActivity() {
             mainHandler.removeCallbacks(ticker)
             mainHandler.post(ticker)
         }
+        // Quay lại app sau ≥ 30 phút phải hỏi "Ai đang xem?": onResume (BaseActivity) đưa về màn chính — đừng mở luồng
+        if (AppUse.isIdleReturn(this) && ProfileUi.mustAsk()) return
         if (pausedLive && !closed) {
             pausedLive = false
             reopens = 0

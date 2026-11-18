@@ -38,6 +38,16 @@ class SitePasteTest {
     }
 
     @Test
+    fun abbreviationsAreNotSites() {
+        // «v.v.», «e.g.», «tr.5» trong câu: đuôi một chữ cái / không phải chữ — bỏ qua không báo; IP đủ 4 phần, xn--… vẫn nhận
+        val r = SitePaste.split("Các trang a1.example, b2.example v.v. (e.g. tr.5)\nhttp://10.0.0.5:8080/x xn--fiq228c.xn--p1ai")
+        assertEquals(listOf("https://a1.example", "https://b2.example", "http://10.0.0.5:8080", "https://xn--fiq228c.xn--p1ai"), r.sites)
+        assertEquals(0, r.invalid)
+        assertTrue(SitePaste.plausibleHost("https://phim.example:8443/a@b"))
+        assertTrue(!SitePaste.plausibleHost("v.v") && !SitePaste.plausibleHost("e.g") && !SitePaste.plausibleHost("tr.5"))
+    }
+
+    @Test
     fun emptyAndCommentOnly() {
         val r = SitePaste.split("\n   \n# a1.example\nchữ không dấu chấm\n")
         assertTrue(r.sites.isEmpty())

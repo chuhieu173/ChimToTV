@@ -1,5 +1,6 @@
 package vn.chimto.tv
 
+import android.util.Log
 import java.io.DataInputStream
 import java.io.IOException
 import java.io.OutputStream
@@ -450,19 +451,16 @@ class Socks5Bridge(private val config: () -> RouteConfig?, private val siteHosts
             return Shadowsocks.connect(ss, host, ip, port) { h -> dns(c, h) }
         }
         // Đi thẳng: lỗi DNS như kết nối thẳng thường (không phải lỗi proxy)
-        val addr = ip ?: try {
-            dns(c, host)
+        val addrs = if (ip != null) listOf(ip) else try {
+            dnsAll(c, host)
         } catch (e: SocksError) {
             throw SocksError(e.code, e.message ?: "", viaProxy = false)
         }
-        val s = Socket()
-        try {
-            s.connect(InetSocketAddress(addr, port), 10_000)
-        } catch (e: IOException) {
-            s.close()
-            throw if (e is SocksError) SocksError(e.code, e.message ?: "", viaProxy = false)
-            else SocksError(5, "không kết nối thẳng được $host:$port", viaProxy = false)
-        }
+        val s = try {
+            connectAny(addrs, port) ?: if (ip == null && c.dns) fallbackDevice(host, addrs, port) else null
+        } catch (e: SocksError) {
+            throw SocksError(e.code, e.message ?: "", viaProxy = false)
+        } ?: throw SocksError(5, "không kết nối thẳng được $host:$port", viaProxy = false)
         s.tcpNoDelay = true
         s.keepAlive = true
         return Upstream(s)
@@ -473,22 +471,61 @@ class Socks5Bridge(private val config: () -> RouteConfig?, private val siteHosts
      * DNS mã hoá tắt mà đang Vượt chặn: DNS của thiết bị không trả lời hoặc trả địa chỉ chặn (0.0.0.0…) thì vẫn hỏi lại qua
      * DNS mã hoá — vd ảnh bìa CLB Phim Xưa (clbphimxua.com) bị bộ lọc DNS trong nhà chặn; chia nhỏ gói bắt tay thì không đủ.
      */
-    private fun dns(c: RouteConfig, host: String): InetAddress {
+    private fun dns(c: RouteConfig, host: String): InetAddress = dnsAll(c, host).first()
+
+    /** Như [dns] nhưng mọi địa chỉ nên thử theo thứ tự (IPv4 trước) — kết nối thẳng thử lần lượt (connectAny). */
+    private fun dnsAll(c: RouteConfig, host: String): List<InetAddress> {
         val name = host.lowercase().trimEnd('.')
-        if (name == "localhost") return Socks5.resolve(host)
-        if (c.dns) Doh.resolve(name)?.let { return it }
-        else if (!c.split) return Socks5.resolve(host)
+        if (name == "localhost") return listOf(Socks5.resolve(host))
+        if (c.dns) Doh.resolveAll(name)?.takeIf { it.isNotEmpty() }?.let { return it }
+        else if (!c.split) return ipv4First(Socks5.resolveAll(host))
         val all = try {
             if (BuildConfig.DEBUG && name in Socks5.debugDnsBlock) listOf(Socks5.debugDnsBlockIp) else Socks5.resolveAll(host)
         } catch (e: SocksError) {
-            if (!c.dns) Doh.resolve(name)?.let { return it }
+            if (!c.dns) Doh.resolveAll(name)?.takeIf { it.isNotEmpty() }?.let { return it }
             throw e
         }
-        val device = Socks5.pick(all)
+        val device = ipv4First(all)
         if (c.dns) return device
         // Địa chỉ chặn (0.0.0.0, 127.x…) hoặc đáng ngờ (đã trả cho trang khác — kiểu trang cảnh báo) → hỏi lại DNS mã hoá
         if (!Socks5.blockedAnswer(all) && !Socks5.sharedAnswer(name, all)) return device
-        return Doh.resolve(name) ?: device
+        return Doh.resolveAll(name)?.takeIf { it.isNotEmpty() } ?: device
+    }
+
+    /** IPv4 trước, giữ thứ tự (như Socks5.pick: nhiều mạng / TV box không có IPv6). */
+    private fun ipv4First(all: List<InetAddress>) = all.sortedBy { it !is Inet4Address }
+
+    /**
+     * Kết nối thẳng thử lần lượt các địa chỉ (tối đa 4; địa chỉ chưa phải cuối cùng chờ 4 giây, địa chỉ cuối 10 giây). null =
+     * không địa chỉ nào nhận.
+     */
+    private fun connectAny(addrs: List<InetAddress>, port: Int): Socket? {
+        val list = addrs.distinct().take(4)
+        for ((k, a) in list.withIndex()) {
+            val s = Socket()
+            try {
+                s.connect(InetSocketAddress(a, port), if (k == list.lastIndex) 10_000 else 4_000)
+                if (k > 0 && BuildConfig.DEBUG) Log.d("ChimToProxy", "${a.hostAddress}:$port nhận (sau ${k} địa chỉ không trả lời)")
+                return s
+            } catch (e: IOException) {
+                s.close()
+            }
+        }
+        return null
+    }
+
+    /**
+     * Mọi địa chỉ DNS mã hoá trả đều không nhận kết nối: thử địa chỉ DNS của thiết bị (khác các địa chỉ đã thử, không phải
+     * địa chỉ chặn 0.0.0.0 / 127.x) — CDN trả địa chỉ khác nhau theo máy chủ DNS (bản Android cũ: chỉ phần tải danh sách kênh
+     * có đường lui này).
+     */
+    private fun fallbackDevice(host: String, tried: List<InetAddress>, port: Int): Socket? {
+        val all = runCatching { Socks5.resolveAll(host) }.getOrNull() ?: return null
+        if (Socks5.blockedAnswer(all)) return null
+        val rest = ipv4First(all).filter { it !in tried }
+        if (rest.isEmpty()) return null
+        if (BuildConfig.DEBUG) Log.d("ChimToProxy", "$host: địa chỉ của DNS mã hoá không nhận — thử DNS của thiết bị")
+        return connectAny(rest, port)
     }
 
     private fun isSite(host: String): Boolean {

@@ -73,8 +73,8 @@ object Doh {
     private const val MAX_IDLE = 4
     private const val POPS_MS = 6 * 3_600_000L
 
-    /** Địa chỉ đã hỏi; addr null = tên miền không có (NXDOMAIN). */
-    private class Entry(val addr: InetAddress?, val until: Long)
+    /** Địa chỉ đã hỏi; addr null = tên miền không có (NXDOMAIN); all = mọi bản ghi A (addr là cái đầu). */
+    private class Entry(val addr: InetAddress?, val until: Long, val all: List<InetAddress> = listOfNotNull(addr))
 
     private val cache = ConcurrentHashMap<String, Entry>()
     private val downUntil = ConcurrentHashMap<String, Long>()
@@ -98,10 +98,16 @@ object Doh {
      * Địa chỉ IPv4 của host qua chuỗi DNS mã hoá (nhớ theo TTL, 30 giây – 10 phút). null = mọi máy chủ đều lỗi / không có
      * bản ghi A → bên gọi dùng DNS của thiết bị. Tên miền không có → SocksError 4.
      */
-    fun resolve(host: String, servers: List<Server> = this.servers): InetAddress? {
+    fun resolve(host: String, servers: List<Server> = this.servers): InetAddress? = resolveAll(host, servers)?.firstOrNull()
+
+    /**
+     * Như [resolve] nhưng trả mọi địa chỉ IPv4 máy chủ DNS trả (theo thứ tự): kết nối thẳng thử lần lượt — địa chỉ đầu của CDN /
+     * dịch vụ rút gọn link chết thì sang địa chỉ sau (trước đây chỉ giữ địa chỉ đầu, hỏng tới hết TTL).
+     */
+    fun resolveAll(host: String, servers: List<Server> = this.servers): List<InetAddress>? {
         val key = host.lowercase().trimEnd('.')
-        if (IPV4.matches(key) || key == "localhost") return InetAddress.getByName(key)
-        cache[key]?.takeIf { it.until > System.currentTimeMillis() }?.let { return it.addr ?: throw noDomain(key) }
+        if (IPV4.matches(key) || key == "localhost") return listOf(InetAddress.getByName(key))
+        cache[key]?.takeIf { it.until > System.currentTimeMillis() }?.let { return if (it.addr == null) throw noDomain(key) else it.all }
         // Tên miền sai («.cdn.x.com», «a..b.com», nhãn dài quá 63 byte — script quảng cáo viết ẩu): khỏi hỏi, để DNS của thiết bị
         // báo lỗi. Hỏi thì DnsWire.query ném lỗi và mọi máy chủ DNS mã hoá bị coi là hỏng, nghỉ 2 phút (như bản Rust)
         if (key.isEmpty() || key.length > 253 || key.split('.').any { it.isEmpty() || it.length > 63 }) return null
@@ -122,11 +128,11 @@ object Doh {
         }
     }
 
-    private val inflight = ConcurrentHashMap<String, FutureTask<InetAddress?>>()
+    private val inflight = ConcurrentHashMap<String, FutureTask<List<InetAddress>?>>()
 
     private fun noDomain(name: String) = SocksError(4, "không tìm thấy tên miền $name", viaProxy = false)
 
-    private fun lookup(key: String, servers: List<Server>): InetAddress? {
+    private fun lookup(key: String, servers: List<Server>): List<InetAddress>? {
         for (s in servers) {
             if ((downUntil[s.label] ?: 0L) > System.currentTimeMillis()) continue
             val ips = ipsFor(s)
@@ -150,11 +156,12 @@ object Doh {
                         if (BuildConfig.DEBUG) Log.d("ChimToDoh", "$key → ${answer.addr.hostAddress} bị ${s.label} chặn, hỏi máy chủ sau")
                         continue
                     }
-                    cache[key] = Entry(answer.addr, System.currentTimeMillis() + answer.ttl.coerceIn(30, 600) * 1000L)
+                    val all = answer.all.ifEmpty { listOf(answer.addr) }
+                    cache[key] = Entry(answer.addr, System.currentTimeMillis() + answer.ttl.coerceIn(30, 600) * 1000L, all)
                     if (BuildConfig.DEBUG) {
-                        Log.d("ChimToDoh", "$key → ${answer.addr.hostAddress} (${s.label} · $ip, ${System.currentTimeMillis() - t0} ms)")
+                        Log.d("ChimToDoh", "$key → ${all.joinToString { it.hostAddress ?: "" }} (${s.label} · $ip, ${System.currentTimeMillis() - t0} ms)")
                     }
-                    return answer.addr
+                    return all
                 }
                 Answer.NoDomain -> {
                     cache[key] = Entry(null, System.currentTimeMillis() + 30_000) // nhớ 30 giây: kết nối khác khỏi hỏi lại

@@ -34,6 +34,8 @@ object SitePaste {
                 if (t.isEmpty() || '.' !in t || t.startsWith('.')) continue
                 // Số bản kiểu «1.5», «2.21», «1.2.3» — không phải trang (địa chỉ IP đủ 4 phần vẫn nhận)
                 if (t.all { it.isDigit() || it == '.' } && t.count { it == '.' } < 3) continue
+                // Chữ viết tắt trong câu («v.v.», «e.g.»): đuôi một chữ cái — không phải trang, bỏ qua không báo
+                if (!plausibleHost(t)) continue
                 val site = Prefs.normalizeUrl(t)?.let(::origin)
                 if (site == null) {
                     invalid++
@@ -43,6 +45,18 @@ object SitePaste {
             }
         }
         return Split(out, invalid)
+    }
+
+    /**
+     * Đuôi tên miền đọc được: từ 2 chữ cái trở lên (hoặc «xn--…»), hay địa chỉ IPv4. «v.v», «e.g», «tr.5» (chữ viết tắt trong câu)
+     * → false. Cùng luật với lõi Rust `prefs::plausible_host`, Windows `Prefs.PlausibleHost`, iPad `Prefs.plausibleHost`.
+     */
+    fun plausibleHost(t: String): Boolean {
+        val host = t.substringAfter("://").substringBefore('/').substringBefore('?').substringBefore('#')
+            .substringAfterLast('@').substringBefore(':')
+        if (host.isNotEmpty() && host.all { it.isDigit() || it == '.' }) return true
+        val tld = host.substringAfterLast('.')
+        return tld.startsWith("xn--", ignoreCase = true) || (tld.length >= 2 && tld.all { it.isLetter() })
     }
 
     /** Gốc trang: scheme://host[:port], scheme và tên máy chủ chữ thường; không đọc được hoặc tên sai («bad..host») thì null. */

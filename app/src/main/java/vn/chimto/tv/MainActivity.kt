@@ -165,9 +165,12 @@ class MainActivity : BaseActivity() {
         }
 
         picker = ProfilePicker(this, ::onProfilePicked) {
-            startActivity(Intent(this, SettingsActivity::class.java).putExtra(SettingsActivity.EXTRA_SECTION, "profiles"))
+            // Màn chặn cửa, người đang dùng có mã PIN: chỉ quản lý người xem (không đụng cài đặt / dữ liệu của người đó)
+            startActivity(Intent(this, SettingsActivity::class.java).putExtra(SettingsActivity.EXTRA_SECTION, "profiles")
+                .putExtra(SettingsActivity.EXTRA_PROFILES_ONLY, picker.gate && Prefs.profile.locked))
         }
         PlayerActivity.pipListeners += pipChanged
+        takePlayKey(intent)
         // Lần đầu mở app (hoặc vừa cập nhật lên bản có màn này): miễn trừ trách nhiệm — «Đồng ý» mới vào app
         if (Disclaimer.needed()) {
             waitingDisclaimer = true
@@ -179,6 +182,31 @@ class MainActivity : BaseActivity() {
 
     /** Màn miễn trừ trách nhiệm đang chặn cửa (mở app lần đầu): đồng ý xong (onResume) mới vào. */
     private var waitingDisclaimer = false
+
+    /**
+     * Kênh mở từ thông báo nhắc giờ phát (app ở nền): thông báo mở màn chính, qua màn miễn trừ trách nhiệm / «Ai đang xem?»
+     * rồi mới mở kênh — mở thẳng màn Truyền hình thì qua mặt được mã PIN của người xem.
+     */
+    private var pendingPlayKey: String? = null
+
+    private fun takePlayKey(i: Intent?) {
+        val k = i?.getStringExtra("play_key") ?: return
+        i.removeExtra("play_key")
+        pendingPlayKey = k
+    }
+
+    private fun runPendingPlay() {
+        val k = pendingPlayKey ?: return
+        if (waitingDisclaimer || picker.shown || !mainStarted) return
+        pendingPlayKey = null
+        mainHandler.postDelayed({ if (!isFinishing) LiveActivity.playKey(this, k) }, 300)
+    }
+
+    override fun onNewIntent(intent: Intent?) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        takePlayKey(intent)
+    }
 
     private fun begin() {
         // Nhà nhiều người xem: hỏi "Ai đang xem?" trước khi tải (mỗi người một trang phim, lịch sử riêng)
@@ -347,8 +375,10 @@ class MainActivity : BaseActivity() {
         }
         if (!mainStarted) {
             startMain()
+            runPendingPlay()
             return
         }
+        runPendingPlay()
         showSiteLabel()
         val active = menuAdapter.active
         if (loadedProfile != Prefs.profileId ||
@@ -389,6 +419,7 @@ class MainActivity : BaseActivity() {
             else -> focusMenu()
         }
         if (changed) toast("Người xem: ${p.name}")
+        runPendingPlay()
     }
 
     /** Back ở màn "Ai đang xem?": xem tiếp bằng người đang dùng — trừ khi người đó có mã PIN và màn này đang chặn cửa. */
@@ -400,6 +431,7 @@ class MainActivity : BaseActivity() {
         }
         picker.hide()
         if (!mainStarted) startMain() else focusMenu()
+        runPendingPlay()
     }
 
     private fun focusMenu() {

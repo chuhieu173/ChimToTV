@@ -48,8 +48,21 @@ fun nowSec() = System.currentTimeMillis() / 1000.0
 /** Nhật ký của phần Truyền hình (logcat thẻ ChimToIptv). */
 internal object TvLog {
     fun i(s: String) {
-        android.util.Log.i("ChimToIptv", s)
+        android.util.Log.i("ChimToIptv", redact(s))
     }
+
+    private val QUERY_SECRET = Regex("""(?i)([?&](?:username|user|password|pass|pwd|token|key)=)[^&#\s]*""")
+    private val XTREAM_PATH = Regex("""(?i)(/(?:live|movie|series|timeshift)/)[^/\s]+/[^/\s]+/""")
+    private val USER_INFO = Regex("""(://)[^/\s@]+@""")
+
+    /**
+     * Che tài khoản trong link trước khi ghi nhật ký (logcat ai cắm adb / gửi báo lỗi cũng đọc được): tham số username / password
+     * / token… của link, đường dẫn Xtream `/live/<tên>/<mật khẩu>/…`, `user:pass@` trước tên máy chủ.
+     */
+    fun redact(s: String): String = s
+        .replace(QUERY_SECRET) { it.groupValues[1] + "***" }
+        .replace(XTREAM_PATH) { it.groupValues[1] + "***/***/" }
+        .replace(USER_INFO) { it.groupValues[1] + "***@" }
 }
 
 /** Danh sách kênh người xem đã thêm (địa chỉ hoặc tệp). [db] = tệp SQLite đang dùng của danh sách. */
