@@ -97,6 +97,10 @@ object DebugServer {
         try {
             when (path) {
                 "/info" -> json(out, onMain { info(app) })
+                // Truyền hình: trạng thái trình phát / danh sách (kênh, nguồn, đang phát, radio, lỗi)
+                "/tvstatus" -> text(out, 200, onMain {
+                    (top as? LiveActivity)?.debugStatus() ?: "danh sách: ${Iptv.activeList?.json()} · ${Iptv.status ?: ""} · màn ${top?.javaClass?.simpleName}"
+                } ?: "")
                 "/shot" -> {
                     val png = shot(q["scale"]?.toFloatOrNull() ?: 0.5f) ?: return text(out, 503, "không chụp được")
                     send(out, 200, "image/png", png)
@@ -150,9 +154,14 @@ object DebugServer {
                     val cls = when (q["s"]) {
                         "settings" -> SettingsActivity::class.java
                         "invite" -> InviteActivity::class.java
+                        // Truyền hình: /open?s=tv[&add_url=…&name=…][&use=<số>][&play=<khoá kênh>]
+                        "tv" -> TvActivity::class.java
+                        "tvsettings" -> TvSettingsActivity::class.java
                         else -> MainActivity::class.java
                     }
-                    onMain { (top ?: app).startActivity(Intent(top ?: app, cls).addFlags(if (top == null) Intent.FLAG_ACTIVITY_NEW_TASK else 0)) }
+                    val i = Intent(top ?: app, cls).addFlags(if (top == null) Intent.FLAG_ACTIVITY_NEW_TASK else 0)
+                    q.filterKeys { it != "s" }.forEach { (k, v) -> i.putExtra(k, v) }
+                    onMain { (top ?: app).startActivity(i) }
                     text(out, 200, "ok")
                 }
                 "/site" -> {

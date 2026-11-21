@@ -6,6 +6,8 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <!-- Tự cài bản cập nhật tải từ GitHub Releases (Android vẫn hỏi xác nhận) -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <!-- Nhắc giờ phát (Truyền hình) khi app ở nền — điện thoại Android 13+ hỏi người dùng -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <!-- Chạy được trên tivi (không cảm ứng) lẫn điện thoại / TV box -->
     <uses-feature android:name="android.software.leanback" android:required="false" />
@@ -81,6 +83,36 @@
             android:configChanges="keyboard|keyboardHidden|navigation|orientation|screenSize|screenLayout|smallestScreenSize|uiMode"
             android:screenOrientation="sensorLandscape"
             android:windowSoftInputMode="adjustPan|stateHidden" />
+
+        <!-- Truyền hình (IPTV): lưới kênh, trình phát trực tiếp (ExoPlayer), lịch phát sóng, cài đặt -->
+        <activity
+            android:name=".TvActivity"
+            android:configChanges="keyboard|keyboardHidden|navigation|orientation|screenSize|screenLayout|smallestScreenSize|uiMode"
+            android:launchMode="singleTop"
+            android:screenOrientation="sensorLandscape"
+            android:windowSoftInputMode="adjustNothing|stateHidden" />
+
+        <activity
+            android:name=".LiveActivity"
+            android:configChanges="keyboard|keyboardHidden|navigation|orientation|screenSize|screenLayout|smallestScreenSize|uiMode"
+            android:screenOrientation="sensorLandscape"
+            android:theme="@style/Theme.ChimTo.Player" />
+
+        <activity
+            android:name=".TvGuideActivity"
+            android:configChanges="keyboard|keyboardHidden|navigation|orientation|screenSize|screenLayout|smallestScreenSize|uiMode"
+            android:screenOrientation="sensorLandscape" />
+
+        <activity
+            android:name=".TvSettingsActivity"
+            android:configChanges="keyboard|keyboardHidden|navigation|orientation|screenSize|screenLayout|smallestScreenSize|uiMode"
+            android:screenOrientation="sensorLandscape"
+            android:windowSoftInputMode="adjustPan|stateHidden" />
+
+        <!-- Nhắc giờ phát / bóng lăn khi app ở nền (IptvReminders) -->
+        <receiver
+            android:name=".ReminderReceiver"
+            android:exported="false" />
 
         <!-- Kết quả phiên cài đặt (PackageInstaller): mở hộp xác nhận của hệ thống / báo lỗi -->
         <receiver

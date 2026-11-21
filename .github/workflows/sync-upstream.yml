@@ -53,7 +53,7 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
           git remote add upstream "https://github.com/${UPSTREAM_REPO}.git" 2>/dev/null || true
-          git fetch upstream "refs/tags/${TARGET_TAG}:refs/upstream-tag" --force
+          git fetch upstream "refs/tags/${TARGET_TAG}:refs/upstream-tag" --force --no-tags
 
           if ! git merge-base --is-ancestor refs/upstream-tag HEAD; then
             git merge refs/upstream-tag --no-edit -m "Đồng bộ bản phát hành ${TARGET_TAG} từ ${UPSTREAM_REPO}"

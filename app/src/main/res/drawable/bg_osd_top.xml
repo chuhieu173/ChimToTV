@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Thanh trên của trình phát truyền hình: tối dần lên trên -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android">
+    <gradient
+        android:angle="270"
+        android:endColor="#00000000"
+        android:startColor="#E6000000" />
+</shape>

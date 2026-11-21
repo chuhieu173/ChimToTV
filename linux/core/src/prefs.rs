@@ -59,6 +59,8 @@ const PROFILE_KEYS: &[&str] = &[
     "home_mix", "home_topics", "seen_eps", "kids", "watch_langs",
     // Các hàng trang chủ (bật / tắt, thứ tự) và hàng tự thêm
     "home_rows", "home_custom", "home_src_off",
+    // Truyền hình (iptv.rs): kênh yêu thích, kênh vừa xem
+    "iptv_favs", "iptv_recent",
 ];
 const PROFILE_PREFIXES: &[&str] = &["server_type@", "server_label@"];
 /// Người thêm sau bắt đầu với trang phim / server ưu tiên / cách xem của người đang dùng.
@@ -179,6 +181,10 @@ fn changed(s: &mut State) {
 
 /// Ghi ngay (lúc thoát app).
 pub fn flush() {
+    // Luồng ghi ngầm và lệnh ghi lúc thoát app có thể chạy cùng lúc: cùng ghi một tệp .tmp thì một bên đổi tên tệp bên kia đang
+    // ghi dở (app thoát đúng lúc đó → prefs.json hỏng, mất hết cài đặt), hoặc bản cũ đè bản mới — ghi lần lượt
+    static WRITING: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    let _w = WRITING.lock().unwrap_or_else(|e| e.into_inner());
     let (text, file) = {
         let mut s = st();
         s.dirty = false;
@@ -815,6 +821,167 @@ pub fn normalize_url(input: &str) -> Option<String> {
     Some(s)
 }
 
+/// Khoá so trùng trang: tên máy chữ thường (kèm cổng nếu có), bỏ «www.» đầu — «http://www.A.example/x» và «a.example» là một
+/// trang; http / https, dấu / cuối, đường dẫn không tính.
+pub fn site_key(url: &str) -> String {
+    let s = url.trim();
+    let lower = s.to_lowercase();
+    let full = if lower.starts_with("http://") || lower.starts_with("https://") { s.to_string() } else { format!("https://{s}") };
+    let host = match url::Url::parse(&full) {
+        Ok(u) => match (u.host_str(), u.port()) {
+            (Some(h), Some(p)) => format!("{}:{p}", h.to_lowercase()),
+            (Some(h), None) => h.to_lowercase(),
+            _ => lower.trim_end_matches('/').to_string(),
+        },
+        Err(_) => lower.trim_end_matches('/').to_string(),
+    };
+    host.strip_prefix("www.").map(str::to_string).unwrap_or(host)
+}
+
+/// Gốc trang: «https://phim.example/xem/1?x=2» → «https://phim.example» (giữ cổng nếu có).
+fn site_root(url: &str) -> Option<String> {
+    let u = url::Url::parse(url).ok()?;
+    let host = u.host_str()?;
+    // «bad..host», «a.example.» — trình đọc địa chỉ nhận, nhưng không phải tên miền dùng được
+    if host.split('.').any(str::is_empty) {
+        return None;
+    }
+    Some(match u.port() {
+        Some(p) => format!("{}://{host}:{p}", u.scheme()),
+        None => format!("{}://{host}", u.scheme()),
+    })
+}
+
+/// Một chữ trong đoạn dán: None = không giống tên miền (bỏ qua, không báo); Some(None) = giống tên miền nhưng sai;
+/// Some(Some(gốc trang)).
+fn site_token(raw: &str) -> Option<Option<String>> {
+    let wrap = |c: char| matches!(c, '"' | '\'' | '<' | '>' | ',' | ';' | '(' | ')' | '[' | ']');
+    let t = raw.trim_start_matches(wrap).trim_end_matches(|c: char| wrap(c) || c == '.');
+    if t.is_empty() || !t.contains('.') || t.starts_with('.') {
+        return None;
+    }
+    // Số bản kiểu «1.5», «2.21», «1.2.3» — không phải trang (địa chỉ IP đủ 4 phần vẫn nhận)
+    if t.chars().all(|c| c.is_ascii_digit() || c == '.') && t.matches('.').count() < 3 {
+        return None;
+    }
+    // Chữ viết tắt trong câu («v.v.», «e.g.»): đuôi một chữ cái — không phải trang, bỏ qua không báo
+    if !plausible_host(t) {
+        return None;
+    }
+    Some(normalize_url(t).and_then(|u| site_root(&u)))
+}
+
+/// Đuôi tên miền đọc được: từ 2 chữ cái trở lên (hoặc «xn--…»), hay địa chỉ IPv4. «v.v», «e.g», «tr.5» (chữ viết tắt trong câu)
+/// → false. Cùng luật với Android `SitePaste.plausibleHost`, Windows `Prefs.PlausibleHost`, iPad `Prefs.plausibleHost`.
+pub fn plausible_host(t: &str) -> bool {
+    let rest = t.split_once("://").map(|x| x.1).unwrap_or(t);
+    let host = rest.split(['/', '?', '#']).next().unwrap_or("");
+    let host = host.rsplit_once('@').map(|x| x.1).unwrap_or(host);
+    let host = host.split(':').next().unwrap_or("");
+    if !host.is_empty() && host.chars().all(|c| c.is_ascii_digit() || c == '.') {
+        return true;
+    }
+    let tld = host.rsplit('.').next().unwrap_or("");
+    tld.to_ascii_lowercase().starts_with("xn--") || (tld.chars().count() >= 2 && tld.chars().all(char::is_alphabetic))
+}
+
+/// Tách đoạn dán nhiều trang: tách theo dòng và khoảng trắng, bỏ dòng trống / dòng chú thích «#», bỏ chữ không có dấu chấm;
+/// mỗi trang chuẩn hoá như `normalize_url` rồi rút về gốc; trùng (theo `site_key`) chỉ giữ lần đầu. Trả (các trang, số tên sai).
+fn parse_sites(text: &str) -> (Vec<String>, usize) {
+    let mut out: Vec<String> = Vec::new();
+    let mut keys: HashSet<String> = HashSet::new();
+    let mut invalid = 0;
+    for line in text.lines() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        for tok in line.split_whitespace() {
+            match site_token(tok) {
+                None => {}
+                Some(None) => invalid += 1,
+                Some(Some(root)) => {
+                    if keys.insert(site_key(&root)) {
+                        out.push(root);
+                    }
+                }
+            }
+        }
+    }
+    (out, invalid)
+}
+
+/// Các trang trong đoạn dán (đã chuẩn hoá về gốc, bỏ trùng, giữ thứ tự dán).
+pub fn split_sites(text: &str) -> Vec<String> {
+    parse_sites(text).0
+}
+
+/// Kết quả thêm nhiều trang một lần.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct AddSites {
+    /// Trang mới đã thêm (theo thứ tự dán).
+    pub added: Vec<String>,
+    /// Số trang đã có sẵn trong danh sách (so theo `site_key`).
+    pub existing: usize,
+    /// Số chữ giống tên miền nhưng sai.
+    pub invalid: usize,
+}
+
+/// Gợi ý cạnh ô thêm trang nhiều dòng.
+pub const ADD_SITES_HINT: &str = "Tên miền, vd ten-trang.example — dán được nhiều trang, mỗi dòng một trang";
+
+impl AddSites {
+    /// Câu báo khi đã thêm: một trang «Đã thêm a.example vào danh sách trang phim.», nhiều trang «Đã thêm 3 trang: a, b, c
+    /// (bỏ qua 1 đã có).» — dài thì rút gọn.
+    pub fn added_text(&self) -> String {
+        let names: Vec<String> = self.added.iter().map(|u| crate::site::host_of(u).unwrap_or_else(|| u.clone())).collect();
+        let mut skip = Vec::new();
+        if self.existing > 0 {
+            skip.push(format!("bỏ qua {} đã có", self.existing));
+        }
+        if self.invalid > 0 {
+            skip.push(format!("{} tên miền không hợp lệ", self.invalid));
+        }
+        let tail = if skip.is_empty() { String::new() } else { format!(" ({})", skip.join("; ")) };
+        if names.len() == 1 {
+            return format!("Đã thêm {} vào danh sách trang phim{tail}.", names[0]);
+        }
+        let shown = if names.len() > 4 { format!("{}… (+{})", names[..3].join(", "), names.len() - 3) } else { names.join(", ") };
+        format!("Đã thêm {} trang: {shown}{tail}.", names.len())
+    }
+
+    /// Câu báo khi không có trang mới nào (ô vẫn giữ chữ để sửa).
+    pub fn none_text(&self) -> &'static str {
+        match self.existing {
+            0 => "Chưa có tên miền hợp lệ (vd ten-trang.example).",
+            1 => "Trang này đã có trong danh sách.",
+            _ => "Các trang này đã có trong danh sách.",
+        }
+    }
+}
+
+/// Thêm một lần nhiều trang (dán nhiều dòng) vào cuối danh sách; không đổi trang đang dùng.
+pub fn add_sites(text: &str) -> AddSites {
+    let (roots, invalid) = parse_sites(text);
+    let list = sites();
+    let have: HashSet<String> = list.iter().map(|s| site_key(s)).collect();
+    let mut added = Vec::new();
+    let mut existing = 0;
+    for r in roots {
+        if have.contains(&site_key(&r)) {
+            existing += 1;
+        } else {
+            added.push(r);
+        }
+    }
+    if !added.is_empty() {
+        let mut l = list;
+        l.extend(added.iter().cloned());
+        set_sites(l);
+    }
+    AddSites { added, existing, invalid }
+}
+
 // ---- Giao diện (riêng bản máy tính) ----
 
 /// Cỡ chữ / cỡ giao diện: 1.0 (máy tính), 1.25 / 1.5 (tivi ngồi xa).
@@ -1357,6 +1524,69 @@ mod tests {
         assert_eq!(normalize_url("kkphim.com").as_deref(), Some(KK_SITE));
         assert_eq!(normalize_url("bad host"), None);
         assert_eq!(normalize_url("localhost"), None);
+    }
+
+    #[test]
+    fn splits_sites() {
+        let text = "\
+# chú thích: phim-x.example không tính
+phim-a.example
+  https://www.phim-b.example/xem/1?x=2#t
+http://PHIM-A.example/
+\"phim-c.example:8080/abc\", <https://phim-d.example>;
+chữ thường không có dấu chấm
+bản 1.5 và 2.21 (phim-e.example).
+localhost bad..host .an.example
+kkphim.com
+";
+        assert_eq!(
+            split_sites(text),
+            vec![
+                "https://phim-a.example",
+                "https://www.phim-b.example",
+                "https://phim-c.example:8080",
+                "https://phim-d.example",
+                "https://phim-e.example",
+                KK_SITE,
+            ]
+        );
+        // «bad..host» là tên sai; «localhost», «.an.example», số bản: bỏ qua không báo
+        assert_eq!(parse_sites(text).1, 1);
+        // «v.v.», «e.g.», «tr.5» trong câu: bỏ qua không báo; IP đủ 4 phần, xn--… vẫn nhận
+        let abbr = "Các trang a1.example, b2.example v.v. (e.g. tr.5)\nhttp://10.0.0.5:8080/x xn--fiq228c.xn--p1ai";
+        assert_eq!(
+            parse_sites(abbr),
+            (
+                vec![
+                    "https://a1.example".to_string(),
+                    "https://b2.example".into(),
+                    "http://10.0.0.5:8080".into(),
+                    "https://xn--fiq228c.xn--p1ai".into()
+                ],
+                0
+            )
+        );
+        assert!(plausible_host("https://phim.example:8443/a@b") && !plausible_host("v.v") && !plausible_host("tr.5"));
+        assert_eq!(split_sites(""), Vec::<String>::new());
+        assert_eq!(split_sites("# chỉ có chú thích\n\n   \n"), Vec::<String>::new());
+        assert_eq!(split_sites("www.phim-a.example\nphim-a.example/\nhttps://phim-a.example"), vec!["https://www.phim-a.example"]);
+        assert_eq!(site_key("http://WWW.Phim-A.example/xem/"), "phim-a.example");
+        assert_eq!(site_key("phim-a.example"), "phim-a.example");
+        assert_eq!(site_key("https://phim-a.example:8443"), "phim-a.example:8443");
+        assert_eq!(site_key(KK_SITE), "kkphim.com");
+    }
+
+    #[test]
+    fn add_sites_texts() {
+        let one = AddSites { added: vec!["https://www.phim-a.example".into()], existing: 0, invalid: 0 };
+        assert_eq!(one.added_text(), "Đã thêm phim-a.example vào danh sách trang phim.");
+        let two = AddSites { added: vec!["https://a1.example".into(), "https://b2.example:8080".into()], existing: 1, invalid: 0 };
+        assert_eq!(two.added_text(), "Đã thêm 2 trang: a1.example, b2.example (bỏ qua 1 đã có).");
+        let six = AddSites { added: (1..=6).map(|i| format!("https://s{i}.example")).collect(), existing: 0, invalid: 2 };
+        assert_eq!(six.added_text(), "Đã thêm 6 trang: s1.example, s2.example, s3.example… (+3) (2 tên miền không hợp lệ).");
+        assert_eq!(AddSites::default().none_text(), "Chưa có tên miền hợp lệ (vd ten-trang.example).");
+        assert_eq!(AddSites { existing: 1, ..Default::default() }.none_text(), "Trang này đã có trong danh sách.");
+        assert_eq!(AddSites { existing: 3, invalid: 1, ..Default::default() }.none_text(), "Các trang này đã có trong danh sách.");
     }
 
     #[test]

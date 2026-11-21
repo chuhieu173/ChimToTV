@@ -510,6 +510,8 @@ final class PlayerModel: NSObject, ObservableObject, WKNavigationDelegate, WKUID
         let pip = Self.flag(o["pip"])
         if pip != inPip { pipChanged(pip) }
         WatchLimit.tick(playing: started && !s.paused && !s.waiting, now: now)
+        // Đã hết giờ xem mà phim lại chạy (nút ▶ của cửa sổ hình trong hình, màn hình khoá, AirPods): dừng lại ngay
+        if limitBlock != nil && !s.paused { cmd("pause") }
         checkLimit()
         // Màn hình khoá / Trung tâm điều khiển / AirPods bấm tập trước / sau (Media Session của trang, player-agent.js)
         let rs = Int(Self.num(o["rs"]))
@@ -1136,7 +1138,7 @@ final class PlayerModel: NSObject, ObservableObject, WKNavigationDelegate, WKUID
     /// Thu nhỏ phim (cửa sổ hình trong hình của iPad). Gọi thẳng trong khung có <video>: WebKit chỉ cho vào hình trong
     /// hình khi "người dùng vừa bấm" — evaluateJavaScript của app được tính là vậy, qua postMessage của trang bọc thì mất.
     func startPip() {
-        guard started, !inPip else { return }
+        guard started, !inPip, limitBlock == nil else { return }
         pipRequestedAt = nowMs()
         hidePanel()
         hideBar()

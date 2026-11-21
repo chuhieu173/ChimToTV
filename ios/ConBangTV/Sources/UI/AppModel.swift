@@ -17,7 +17,10 @@ struct GridFilm: Identifiable, Hashable {
     var topic: String? = nil
     var topicOn = false
     var row: String? = nil
+    /// Ô kênh của hàng Truyền hình (trang chủ)
+    var channel: IptvHomeItem? = nil
     var id: String {
+        if let c = channel { return "tv|\(row ?? "")|\(c.id)" }
         if let m = more { return "more:\(m)" }
         if let t = topic { return "chip:\(t)" }
         return film.url + (resume ? "#r" : "") + (follow ? "#f" : "")
@@ -41,7 +44,7 @@ struct GridSection: Identifiable, Hashable {
 final class AppModel: ObservableObject {
     static let shared = AppModel()
 
-    enum Kind: String { case home, search, history, follows, imdb, category, filter, site, web, clear, settings }
+    enum Kind: String { case home, search, history, follows, imdb, tv, category, filter, site, web, clear, settings }
 
     struct Entry: Identifiable, Hashable {
         let title: String
@@ -56,6 +59,7 @@ final class AppModel: ObservableObject {
             case .history: return "clock.arrow.circlepath"
             case .follows: return "bell"
             case .imdb: return "star"
+            case .tv: return "tv"
             case .category: return "film"
             case .filter: return "line.3.horizontal.decrease.circle"
             case .site: return "arrow.left.arrow.right"
@@ -157,6 +161,9 @@ final class AppModel: ObservableObject {
     /// Mở app phải chọn người xem: nhà có từ 2 người (và bật "hỏi khi mở app"), hoặc người đang dùng có mã PIN.
     var mustAskProfile: Bool { (Prefs.profiles.count >= 2 && Prefs.askProfile) || Prefs.profile.locked }
     var pickerClosable: Bool { !(pickerGate && Prefs.profile.locked) }
+    /// Đang chặn cửa (miễn trừ trách nhiệm / «Ai đang xem?» / chưa vào app): nhắc giờ phát và lối tắt truyền hình không
+    /// được mở trình phát hay đóng màn chặn — không thì qua mặt được mã PIN của người xem.
+    var gateUp: Bool { needsDisclaimer || askingProfile || !started }
 
     func startIfNeeded() {
         guard !started, !askingProfile, !needsDisclaimer else { return }
@@ -177,6 +184,33 @@ final class AppModel: ObservableObject {
         select(menu[0])
         WidgetFeed.update()
         runPendingPlay()
+        startReminders()
+    }
+
+    // MARK: - Nhắc giờ phát / bóng lăn (Truyền hình)
+
+    private var reminderTask: Task<Void, Never>?
+
+    /// Mỗi 15 giây khi app đang mở: nhắc tới giờ thì báo trong trình phát truyền hình đang mở, không thì hỏi «Xem ngay».
+    private func startReminders() {
+        reminderTask?.cancel()
+        reminderTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 15_000_000_000)
+                guard let me = self, !Task.isCancelled else { return }
+                // Màn chặn cửa đang hiện: để nhắc lại lần sau (chưa lấy ra khỏi danh sách)
+                if me.gateUp { continue }
+                guard let r = Iptv.dueReminder() else { continue }
+                let text = r.text ?? r.n
+                if let live = LiveModel.current {
+                    live.showNotice("🔔 \(text)", 12)
+                    continue
+                }
+                TvAlert.show(r.kick ? "Bóng lăn" : "Sắp phát", text, ["Xem ngay", "Đóng"]) { i in
+                    if i == 0 { Router.playLiveKey(r.k) }
+                }
+            }
+        }
     }
 
     // MARK: - Mở từ widget «Xem tiếp»
@@ -256,7 +290,15 @@ final class AppModel: ObservableObject {
         Prefs.deleteProfile(p.id)
         if wasCurrent {
             // Sang người không khoá; ai cũng có mã PIN thì hỏi "Ai đang xem?" (không tự vào hồ sơ có khoá)
-            if let open = Prefs.profiles.first(where: { !$0.locked }) { Prefs.switchProfile(open.id) } else { pendingGate = true }
+            if let open = Prefs.profiles.first(where: { !$0.locked }) {
+                Prefs.switchProfile(open.id)
+            } else if askingProfile {
+                // Xoá từ «Sửa người xem…» của màn "Ai đang xem?" (mở từ menu, được đóng): người còn lại đều có mã PIN →
+                // màn đó thành màn chặn cửa luôn, không thì bấm ✕ là vào hồ sơ có khoá mà không cần mã
+                pickerGate = true
+            } else {
+                pendingGate = true
+            }
             profileVersion += 1
         }
         refreshProfiles()
@@ -272,6 +314,7 @@ final class AppModel: ObservableObject {
     }
 
     func appReturned() {
+        if active?.kind == .home && moreFrom == nil { refreshTvHome() }
         // Trang chủ tổng hợp mở lâu (quay lại app sau 20 phút): làm mới
         if started, Prefs.homeMixOn, active?.kind == .home, moreFrom == nil, homeToken == token, feedAt > 0,
            nowMs() - feedAt > 20 * 60_000, detailFilm == nil {
@@ -279,8 +322,10 @@ final class AppModel: ObservableObject {
         }
         defer { leftAt = 0 }
         guard leftAt > 0, nowMs() - leftAt >= 30 * 60_000, started, !askingProfile, sheet == nil, mustAskProfile else { return }
-        // Phim đang mở / đang ở cửa sổ hình trong hình: vẫn đang xem — thôi
-        if Router.topController is PlayerController || PlayerModel.detachedModel != nil { return }
+        // Phim / truyền hình / radio đang mở (radio hay nghe lúc khoá màn hình) hoặc đang ở cửa sổ hình trong hình:
+        // vẫn đang xem — thôi
+        if Router.topController is PlayerController || Router.topController is LiveController
+            || LiveModel.current != nil || PlayerModel.detachedModel != nil { return }
         showPicker(gate: true)
     }
 
@@ -299,6 +344,8 @@ final class AppModel: ObservableObject {
             Entry(title: followsTitle(), kind: .follows),
         ]
         items.append(Entry(title: "Điểm IMDb cao", kind: .imdb))
+        // Truyền hình / radio: danh sách kênh M3U người xem tự thêm (UI/TvViews.swift, Core/Iptv.swift)
+        items.append(Entry(title: "Truyền hình · Radio", kind: .tv))
         items += categories.map { Entry(title: $0.title, kind: .category, url: $0.url) }
         // Trang kiểu PhimMoi / trang API (mephim): đủ thể loại / quốc gia của bộ lọc (menu trang chỉ có vài mục)
         if NextSite.isKnown(Prefs.baseUrl) || ApiSite.isKnown(Prefs.baseUrl) {
@@ -356,6 +403,13 @@ final class AppModel: ObservableObject {
             showFollows()
             checkFollows()
         case .imdb: showList("imdb:top") { try await ImdbTop.page(kids: Prefs.kids) }
+        case .tv:
+            // Khung chính vẽ TvContent (UI/TvViews.swift) thay cho lưới phim; ⌘R / chọn lại mục: tải lại danh sách kênh
+            token += 1
+            sections = []
+            nextUrl = nil
+            status = .none
+            if Iptv.activeList() != nil && TvModel.shared.hasList { TvModel.shared.rebuild() }
         case .category: if let u = e.url { showList(u) }
         default: break
         }
@@ -429,6 +483,7 @@ final class AppModel: ObservableObject {
     // MARK: - Nội dung
 
     func showHome() {
+        refreshTvHome()
         loadedMix = Prefs.homeMixOn
         loadedKids = Prefs.kids
         loadedRows = rowsSignature()
@@ -467,7 +522,7 @@ final class AppModel: ObservableObject {
                 } else {
                     status = .none
                     homeToken = t
-                    sections = headSections() + body
+                    sections = headSections() + tvSections() + body
                     checkFollows()
                 }
             } catch {
@@ -582,8 +637,14 @@ final class AppModel: ObservableObject {
                                                 topic: $0.id, topicOn: on.contains($0.id))
                                    }))
         }
-        // Thứ tự / bật tắt theo cài đặt hiện tại của người xem (bản lưu dựng trước khi đổi cũng xếp đúng ngay)
-        for r in HomeFeed.arrange(snap.rows) {
+        // Thứ tự / bật tắt theo cài đặt hiện tại của người xem (bản lưu dựng trước khi đổi cũng xếp đúng ngay); hàng Truyền hình
+        // (dựng tại chỗ) chen đúng chỗ của nó giữa các hàng phim
+        let prefs = HomeFeed.rowPrefs()
+        var pos: [String: Int] = [:]
+        for (i, p) in prefs.enumerated() { pos[p.id] = i }
+        var keyed: [(at: Int, s: GridSection)] = []
+        for (r, slot) in HomeFeed.arrangeSlots(snap.rows, prefs) {
+            let at = slot == "topics" ? -1 : pos[slot] ?? Int.max
             let n = r.cards.count
             if strips {
                 // Dải vuốt ngang: tới stripMax phim; còn nữa (hoặc nguồn có trang sau) thì ô «Xem thêm» cuối dải
@@ -592,7 +653,7 @@ final class AppModel: ObservableObject {
                     items.append(GridFilm(film: Film(url: "more:\(r.id)", title: r.title, poster: nil, badge: r.more == nil ? "\(n) phim" : nil),
                                           more: r.id))
                 }
-                out.append(GridSection(id: "feed-\(r.id)", title: r.title, items: items, strip: true, row: r.id))
+                keyed.append((at, GridSection(id: "feed-\(r.id)", title: r.title, items: items, strip: true, row: r.id)))
                 continue
             }
             var items = (n > cols ? Array(r.cards.prefix(cols - 1)) : r.cards).map { GridFilm(film: $0.film, chip: $0.chip, links: $0.links, row: r.id) }
@@ -601,9 +662,71 @@ final class AppModel: ObservableObject {
                 items.append(GridFilm(film: Film(url: "more:\(r.id)", title: r.title, poster: nil, badge: r.more == nil ? "\(n) phim" : nil),
                                       more: r.id))
             }
-            out.append(GridSection(id: "feed-\(r.id)", title: r.title, items: items, row: r.id))
+            keyed.append((at, GridSection(id: "feed-\(r.id)", title: r.title, items: items, row: r.id)))
         }
+        for s in tvSections(prefs) { keyed.append((pos[s.row ?? ""] ?? Int.max, s)) }
+        out += keyed.enumerated().sorted { ($0.element.at, $0.offset) < ($1.element.at, $1.offset) }.map { $0.element.s }
         return out
+    }
+
+    // MARK: - Hàng Truyền hình trên trang chủ (Kênh vừa xem, Kênh yêu thích, Trận đang / sắp đá, Radio)
+
+    private var tvHome = IptvHome()
+    private var tvTask: Task<Void, Never>?
+
+    /// Đọc lại dữ liệu các hàng Truyền hình (danh sách đang dùng, vừa xem / yêu thích, lịch phát sóng — ngoài luồng chính; danh sách
+    /// lớn đọc lần đầu mất vài giây, trang chủ không chờ) rồi xếp lại trang chủ nếu khác.
+    func refreshTvHome() {
+        tvTask?.cancel()
+        tvTask = Task { [weak self] in
+            let h = await Iptv.home()
+            guard let self = self, !Task.isCancelled, h != self.tvHome else { return }
+            self.tvHome = h
+            self.refreshHead()
+        }
+    }
+
+    /// Các hàng Truyền hình đang bật và có kênh, theo thứ tự cài đặt (dải vuốt ngang, ô kênh).
+    private func tvSections(_ prefs: [(id: String, on: Bool)] = HomeFeed.rowPrefs()) -> [GridSection] {
+        prefs.compactMap { p -> GridSection? in
+            guard p.on, HomeFeed.isTv(p.id), !(Prefs.kids && HomeFeed.adultRows.contains(p.id)) else { return nil }
+            let items = tvHome.items(p.id)
+            guard !items.isEmpty else { return nil }
+            return GridSection(id: "tvrow-\(p.id)", title: HomeFeed.tvTitle(p.id),
+                               items: items.map { GridFilm(film: Film(url: "tv:\(p.id):\($0.id)", title: $0.n, poster: nil, badge: nil),
+                                                           row: p.id, channel: $0) },
+                               strip: true, row: p.id)
+        }
+    }
+
+    /// Ô kênh của hàng Truyền hình: phát luôn (kênh của danh sách khác thì đổi sang danh sách đó; hàng yêu thích: ↑↓ trong trình
+    /// phát đi trong yêu thích).
+    func openTv(_ c: IptvHomeItem, row: String) {
+        if row == "tv-favs", c.index >= 0, c.list == Iptv.activeList()?.id {
+            Router.playLive(IptvFilter(favs: true), c.index)
+            return
+        }
+        if let l = c.list, l != Iptv.activeList()?.id, Iptv.lists().contains(where: { $0.id == l }) {
+            TvModel.shared.useList(l)
+        }
+        Router.playLiveKey(c.k)
+    }
+
+    /// «Xem tất cả ›» của hàng Truyền hình: mở mục Truyền hình (hàng yêu thích: chọn sẵn Yêu thích).
+    func openTvPage(_ row: String) {
+        Router.tv {
+            if row == "tv-favs" { TvModel.shared.choose(group: nil, favs: true) }
+        }
+    }
+
+    /// Loại hàng (id trong cài đặt) của các hàng đang hiện trên trang chủ, theo thứ tự trên trang.
+    private func shownSlots() -> [String] {
+        let arranged = feedSnap.map { HomeFeed.arrangeSlots($0.rows) } ?? []
+        return sections.compactMap { s -> String? in
+            guard let r = s.row else { return nil }
+            if HomeFeed.headRows.contains(r) || HomeFeed.isTv(r) { return r }
+            return arranged.first { $0.row.id == r }?.slot
+        }
     }
 
     /// Số phim tối đa một dải vuốt ngang (còn lại xem ở «Xem thêm»).
@@ -958,11 +1081,16 @@ final class AppModel: ObservableObject {
         if HomeFeed.headRows.contains(rowId) {
             return RowInfo(title: rowId == "new-eps" ? "Có tập mới" : "Xem tiếp", slot: rowId, up: nil, down: nil)
         }
+        let prefs = HomeFeed.rowPrefs()
+        let shown = shownSlots()
+        if HomeFeed.isTv(rowId) {
+            guard shown.contains(rowId) else { return nil }
+            return RowInfo(title: HomeFeed.tvTitle(rowId), slot: rowId,
+                           up: HomeFeed.moveShown(prefs, shown, rowId, up: true), down: HomeFeed.moveShown(prefs, shown, rowId, up: false))
+        }
         guard Prefs.homeMixOn, let snap = feedSnap else { return nil }
         let arranged = HomeFeed.arrangeSlots(snap.rows)
         guard let r = arranged.first(where: { $0.row.id == rowId }), r.slot != "topics" else { return nil }
-        let shown = arranged.map { $0.slot }
-        let prefs = HomeFeed.rowPrefs()
         return RowInfo(title: r.row.title, slot: r.slot,
                        up: HomeFeed.moveShown(prefs, shown, r.slot, up: true), down: HomeFeed.moveShown(prefs, shown, r.slot, up: false))
     }
@@ -995,10 +1123,16 @@ final class AppModel: ObservableObject {
     }
 
     func refreshHead() {
-        guard homeToken == token, active?.kind == .home else { return }
-        let body = sections.filter { !$0.id.hasPrefix("head-") }
-        let head = headSections()
-        if head + body != sections { sections = head + body }
+        guard homeToken == token, active?.kind == .home, moreFrom == nil else { return }
+        if Prefs.homeMixOn, let snap = feedSnap {
+            // Trang chủ tổng hợp: hàng Truyền hình nằm giữa các hàng phim (theo cài đặt) — xếp lại cả trang từ lần tải gần nhất
+            let next = headSections() + feedSections(snap)
+            if next != sections { sections = next }
+            return
+        }
+        let body = sections.filter { !$0.id.hasPrefix("head-") && !$0.id.hasPrefix("tvrow-") }
+        let next = headSections() + tvSections() + body
+        if next != sections { sections = next }
     }
 
     /// vd "Tập 166 mới", "+3 · Tập 168", hoặc tập mới nhất khi đã xem hết.
@@ -1055,7 +1189,9 @@ final class AppModel: ObservableObject {
     // MARK: - Mở phim
 
     func open(_ item: GridFilm) {
-        if let k = item.more {
+        if let c = item.channel {
+            openTv(c, row: item.row ?? "")
+        } else if let k = item.more {
             openMore(k)
         } else if let t = item.topic {
             toggleTopic(t)

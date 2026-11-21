@@ -170,11 +170,13 @@ struct State {
     listener: Option<tokio::task::JoinHandle<()>>,
     pair_code: Option<String>,
     pair_tries: u32,
+    /// Số lần đoán sai từ lúc mở trang Đồng bộ (cả các mã đã đổi) — quá MAX_PAIR_FAILS thì thôi cho ghép.
+    pair_fails: u32,
     found: Vec<SyncFound>,
     soon: Option<tokio::task::JoinHandle<()>>,
 }
 
-static STATE: Mutex<State> = Mutex::new(State { listener: None, pair_code: None, pair_tries: 0, found: Vec::new(), soon: None });
+static STATE: Mutex<State> = Mutex::new(State { listener: None, pair_code: None, pair_tries: 0, pair_fails: 0, found: Vec::new(), soon: None });
 static BUSY: AtomicBool = AtomicBool::new(false);
 static BROWSING: AtomicBool = AtomicBool::new(false);
 /// Gộp lần lượt (máy kia gọi tới đúng lúc máy này đang gọi đi).
@@ -389,6 +391,9 @@ fn bind(port: u16) -> std::io::Result<std::net::TcpListener> {
         if v6 {
             s.set_only_v6(false)?;
         }
+        // Windows: SO_REUSEADDR cho socket thứ hai nghe chồng lên cổng đang nghe (mở 2 cửa sổ app → đồng bộ rơi ngẫu nhiên vào
+        // một trong hai, không báo «cổng đang bận»); Windows vốn cho nghe lại cổng đang TIME_WAIT nên khỏi đặt
+        #[cfg(not(windows))]
         s.set_reuse_address(true)?;
         let addr: SocketAddr =
             if v6 { (Ipv6Addr::UNSPECIFIED, port).into() } else { (Ipv4Addr::UNSPECIFIED, port).into() };
@@ -446,6 +451,10 @@ fn start_listener() {
     emit(SyncEvent::StateChanged);
 }
 
+/// Mã 4 số chỉ có 10 000 khả năng, đổi mã sau 5 lần sai vẫn để máy lạ trong mạng đoán hết trong vài giây: sai tổng cộng
+/// chừng này lần (kể cả qua các lần đổi mã) thì đóng ghép — mở lại trang Đồng bộ để có mã mới.
+pub const MAX_PAIR_FAILS: u32 = 20;
+
 fn new_code() -> String {
     use rand::Rng;
     format!("{:04}", rand::thread_rng().gen_range(0..10000))
@@ -457,6 +466,7 @@ pub fn open_pairing() {
         let mut s = state();
         s.pair_code = Some(new_code());
         s.pair_tries = 0;
+        s.pair_fails = 0;
     }
     start();
     emit(SyncEvent::StateChanged);
@@ -477,6 +487,7 @@ pub fn set_pair_code(code: Option<&str>) {
     let mut s = state();
     s.pair_code = code.map(|c| c.to_string());
     s.pair_tries = 0;
+    s.pair_fails = 0;
 }
 
 // ---- Máy chủ (máy kia gọi tới) ----
@@ -575,9 +586,15 @@ fn pair_request(r: &http1::Message) -> Vec<u8> {
     if json::str(o.as_ref(), "code") != code {
         {
             let mut s = state();
-            // Đoán sai nhiều lần: đổi mã
             s.pair_tries += 1;
-            if s.pair_tries >= 5 {
+            s.pair_fails += 1;
+            if s.pair_fails >= MAX_PAIR_FAILS {
+                // Sai quá nhiều (dò mã): thôi cho ghép tới khi mở lại trang Đồng bộ
+                s.pair_code = None;
+                s.pair_tries = 0;
+                crate::log::d("sync", "nhập sai mã ghép quá nhiều lần — đóng ghép");
+            } else if s.pair_tries >= 5 {
+                // Đoán sai nhiều lần: đổi mã
                 s.pair_code = Some(new_code());
                 s.pair_tries = 0;
             }

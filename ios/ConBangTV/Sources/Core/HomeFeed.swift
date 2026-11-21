@@ -89,6 +89,10 @@ enum HomeFeed {
     static let rows: [(id: String, label: String)] = [
         ("new-eps", "Có tập mới"),
         ("continue", "Xem tiếp"),
+        ("tv-recent", "Kênh vừa xem (Truyền hình)"),
+        ("tv-favs", "Kênh yêu thích (Truyền hình)"),
+        ("tv-live", "Trận đang / sắp đá (Truyền hình)"),
+        ("tv-radio", "Radio (Truyền hình)"),
         ("similar", "Giống «phim vừa xem»"),
         ("interest", "Vì … hay xem <thể loại> (sở thích 1)"),
         ("dominant", "Loại phim hay xem · mới cập nhật"),
@@ -101,9 +105,16 @@ enum HomeFeed {
         ("movies", "Phim lẻ mới"),
     ]
     static let headRows: Set<String> = ["new-eps", "continue"]
+    /// Hàng Truyền hình (17/11/2026): dựng tại chỗ từ danh sách kênh đang dùng (AppModel.tvSections), không qua tải mạng của
+    /// trang chủ tổng hợp; hàng không có kênh thì ẩn.
+    static let tvRows: [(id: String, title: String)] = [
+        ("tv-recent", "Kênh vừa xem"), ("tv-favs", "Kênh yêu thích"), ("tv-live", "Trận đang / sắp đá"), ("tv-radio", "Radio"),
+    ]
+    static func isTv(_ id: String) -> Bool { id.hasPrefix("tv-") }
+    static func tvTitle(_ id: String) -> String { tvRows.first { $0.id == id }?.title ?? id }
     static let kidsRows: Set<String> = ["kids-young", "kids-family", "kids-dub"]
     /// Hàng hồ sơ trẻ em không có (chỉ hoạt hình hợp trẻ em).
-    static let adultRows: Set<String> = ["dominant", "dub", "newest", "movies"]
+    static let adultRows: Set<String> = ["dominant", "dub", "newest", "movies", "tv-live", "tv-radio"]
     /// Tối đa số hàng tự thêm.
     static let customMax = 6
     /// Chủ đề hợp hồ sơ trẻ em (chỉ hoạt hình).
@@ -126,9 +137,10 @@ enum HomeFeed {
         return parts.joined(separator: " · ")
     }
 
-    /// Thứ tự mặc định: «Có tập mới», «Xem tiếp», các hàng tự thêm (theo lúc thêm), rồi các hàng app tự chọn.
+    /// Thứ tự mặc định: «Có tập mới», «Xem tiếp», các hàng Truyền hình, các hàng tự thêm (theo lúc thêm), rồi các hàng app tự chọn.
     static func rowDefaults(_ custom: [CustomRow] = Prefs.homeCustom) -> [String] {
-        rows.prefix(2).map { $0.id } + custom.map { $0.key } + rows.dropFirst(2).map { $0.id }
+        let tv = tvRows.map { $0.id }
+        return rows.prefix(2).map { $0.id } + tv + custom.map { $0.key } + rows.dropFirst(2).map { $0.id }.filter { !tv.contains($0) }
     }
 
     /// Ghép thứ tự đã lưu ("id" bật, "-id" tắt) với các hàng mặc định: bỏ id lạ / trùng, hàng mặc định chưa có (hàng mới ở bản
@@ -915,7 +927,8 @@ enum HomeFeed {
     }
 
     /// 108.0 → "108", 10.5 → "10.5".
-    static func num(_ d: Double) -> String { d == d.rounded() ? String(Int64(d)) : String(d) }
+    /// Số quá lớn (nhãn tập sai kiểu «Tập 99999999999999999999») thì Int64(d) làm app văng — giữ dạng Double.
+    static func num(_ d: Double) -> String { d == d.rounded() && abs(d) < 1e15 ? String(Int64(d)) : String(d) }
 
     // MARK: - Trang chủ lần trước (mở app là hiện ngay)
 

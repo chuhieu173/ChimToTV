@@ -171,7 +171,9 @@ object Prefs {
         "history", "positions", "pos_film", "follows", "last_follow_check", "private_mode",
         // Đồng bộ trong nhà: lúc lưu chỗ xem, lúc xoá phim khỏi lịch sử / bỏ theo dõi
         "pos_time", "hist_del", "follow_del",
-        "base_url", "seek_step", "auto_next", "video_fill",
+        // Chất lượng video, ngôn ngữ phụ đề hay chọn (k("video_quality") / k("sub_lang")): xoá người xem thì xoá theo — người thêm
+        // sau dùng lại mã đó không nhận lựa chọn của người cũ (như bản Windows / Linux)
+        "base_url", "seek_step", "auto_next", "video_fill", "video_quality", "sub_lang",
         // Giới hạn giờ xem (WatchLimit)
         "limit_min", "bedtime", "watch_day", "watch_sec", "watch_extra", "unblock_until",
         // Trang chủ tổng hợp (HomeFeed): kiểu trang chủ, chủ đề đã chọn, tập mới nhất đã thấy của từng phim, hồ sơ trẻ em,
@@ -179,6 +181,8 @@ object Prefs {
         "home_mix", "home_topics", "seen_eps", "kids", "watch_langs",
         // Các hàng trang chủ người xem bật / tắt, sắp thứ tự (HomeFeed.rowPrefs); hàng tự thêm (HomeFeed.CustomRow); nguồn tắt
         "home_rows", "home_custom", "home_src_off",
+        // Truyền hình (Iptv.kt): kênh yêu thích, kênh vừa xem
+        "iptv_favs", "iptv_recent",
     )
     private val PROFILE_PREFIXES = listOf("server_type@", "server_label@")
 
@@ -380,6 +384,27 @@ object Prefs {
     /** Thêm trang vào danh sách (không đổi trang đang dùng); đã có thì thôi. */
     fun addSite(url: String) {
         if (url !in sites) sites = sites + url
+    }
+
+    /** Tách nhiều trang dán một lần (xem [SitePaste.split]). */
+    fun splitSites(text: String): SitePaste.Split = SitePaste.split(text)
+
+    /**
+     * Thêm một lần nhiều trang (mỗi dòng / mỗi chữ một tên miền): trang đã có (cùng tên máy chủ, không tính www. / http / https)
+     * thì bỏ qua; thêm qua [sites] (đồng bộ trong nhà ghi dấu thêm); KHÔNG đổi trang đang dùng.
+     */
+    fun addSites(text: String): SitePaste.Added {
+        val split = SitePaste.split(text)
+        val cur = sites
+        val keys = cur.map(SitePaste::key).toSet()
+        var existing = 0
+        val added = split.sites.filter { s ->
+            val fresh = SitePaste.key(s) !in keys
+            if (!fresh) existing++
+            fresh
+        }
+        if (added.isNotEmpty()) sites = cur + added
+        return SitePaste.Added(added, existing, split.invalid)
     }
 
     /** Trang mẫu không còn trong danh sách (người xem đã xoá) — để thêm lại nhanh. */
@@ -1018,4 +1043,18 @@ object Prefs {
             .putString("sites_add", stampsJson(s.add)).putString("sites_del", stampsJson(s.del)).commit()
         return true
     }
+
+    // ---- Truyền hình (IPTV, Iptv.kt) — cùng tên khoá với bản Legacy ----
+
+    /** Giá trị chuỗi của khoá IPTV; [own] = khoá riêng của người xem đang dùng (iptv_favs, iptv_recent). */
+    fun iptvGet(key: String, own: Boolean = false): String? = sp.getString(if (own) k(key) else key, null)
+
+    fun iptvSet(key: String, value: String?, own: Boolean = false) {
+        val kk = if (own) k(key) else key
+        sp.edit().apply { if (value == null) remove(kk) else putString(kk, value) }.apply()
+    }
+
+    fun iptvFlag(key: String, default: Boolean): Boolean = sp.getBoolean(key, default)
+
+    fun setIptvFlag(key: String, on: Boolean) = sp.edit().putBoolean(key, on).apply()
 }

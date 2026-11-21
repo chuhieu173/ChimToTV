@@ -11,7 +11,8 @@ import WebKit
 ///   GET  /state                    trạng thái màn chính, trình phát, trình duyệt
 ///   GET  /ui                       cây trợ năng (nhãn, khung) của màn hình — như uiautomator dump
 ///   POST /press?label=…&i=0        bấm phần tử có nhãn (trợ năng)
-///   POST /type?text=…              gõ chữ vào ô đang nhập
+///   POST /type?text=…              gõ chữ vào ô đang nhập ("\n" = xuống dòng); /type?back=N xoá lùi N ký tự
+///   GET  /focus?i=N&end=1          liệt kê ô nhập chữ đang hiện; i=N đặt con trỏ vào ô thứ N (bàn phím hiện); off=1 ẩn bàn phím
 ///   POST /go?to=menu&title=… | film&url=… | play&film=…&ep=… | resume&film=… | back | search&q=… | site&url=…
 ///            | settings | sites | browse&url=… | home | follows | update
 ///   POST /player?do=toggle|play|pause|seek&s=|seekTo&s=|next|prev|menu|hide|close|reload|server&type=|group&name=
@@ -55,9 +56,22 @@ final class DebugServer {
         #endif
     }
 
+    /// Khung bàn phím trên màn hình (toạ độ màn hình; .zero = bàn phím ẩn) — /focus báo ô nhập có bị bàn phím che không.
+    static var keyboardFrame = CGRect.zero
+    private var keyboardObserver: NSObjectProtocol?
+
     func start() {
         guard listener == nil, let p = NWEndpoint.Port(rawValue: port) else { return }
         enableAccessibilityOnSimulator()
+        if keyboardObserver == nil {
+            keyboardObserver = NotificationCenter.default.addObserver(forName: UIResponder.keyboardWillChangeFrameNotification,
+                                                                      object: nil, queue: .main) { n in
+                Self.keyboardFrame = (n.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect) ?? .zero
+            }
+            _ = NotificationCenter.default.addObserver(forName: UIResponder.keyboardWillHideNotification, object: nil, queue: .main) { _ in
+                Self.keyboardFrame = .zero
+            }
+        }
         do {
             let params = NWParameters.tcp
             params.allowLocalEndpointReuse = true
@@ -267,6 +281,8 @@ enum DebugRoutes {
             let label = q["label"] ?? ""
             let (ok, hit) = press(label: label, index: Int(q["i"] ?? "0") ?? 0, partial: q["partial"] == "1")
             return .json(["ok": ok, "label": label, "hit": hit ?? ""])
+        case "/scrollinfo":
+            return .json(scrollInfo())
         case "/scroll":
             // Cuộn khung cuộn lớn nhất đang hiện: dir=top|bottom|up|down. Dải vuốt ngang ở độ cao y (điểm trên màn hình):
             // dir=left|right|start|end&y=…
@@ -276,9 +292,25 @@ enum DebugRoutes {
             }
             return .json(["ok": scroll(dir)])
         case "/type":
+            // back=N: xoá lùi N ký tự (như phím ⌫); không thì chèn chữ vào ô đang gõ (như bàn phím — kể cả "\n" xuống dòng)
+            if let n = Int(q["back"] ?? "") {
+                var ok = true
+                for _ in 0..<max(0, n) {
+                    ok = UIApplication.shared.sendAction(#selector(UIKeyInput.deleteBackward), to: nil, from: nil, for: nil) && ok
+                }
+                return .json(["ok": ok])
+            }
             let text = q["text"] ?? r.text
             let ok = UIApplication.shared.sendAction(#selector(UIKeyInput.insertText(_:)), to: nil, from: text, for: nil)
             return .json(["ok": ok])
+        case "/focus":
+            // Các ô nhập chữ đang hiện (UITextField / UITextView — ô nhiều dòng SwiftUI TextEditor không có nhãn để /press):
+            // i=N đặt con trỏ vào ô thứ N (bàn phím hiện như khi chạm tay), end=1 thì con trỏ về cuối chữ; off=1 ẩn bàn phím
+            if q["off"] == "1" {
+                keyWindow?.endEditing(true)
+                return .json(["ok": true])
+            }
+            return .json(focusInput(Int(q["i"] ?? ""), end: q["end"] == "1"))
         case "/orient":
             // Ép xoay màn hình (thử iPhone dọc / ngang khi không cầm máy): to=portrait|landscape|landscapeLeft
             let to = q["to"] ?? "portrait"
@@ -335,6 +367,58 @@ enum DebugRoutes {
             return .json(["ok": true, "title": info?.title ?? "", "slot": info?.slot ?? "", "up": info?.up != nil, "down": info?.down != nil,
                           "rows": Prefs.homeRows, "srcOff": Prefs.homeSrcOff.sorted(),
                           "sections": app.sections.map { $0.title ?? $0.id }])
+        case "/tv":
+            // Truyền hình: /tv (mở màn), /tv?add=<địa chỉ>&name=… (thêm + tải), /tv?use=<số>, /tv?play=<khoá kênh>,
+            // /tv?refresh=1 (tải lại), /tv?reparse=1 (quên dấu tệp, đọc lại), /tv?do=close|next|prev|panel|source|guide|toggle
+            if let u = q["add"] {
+                let l = Iptv.addList(u, name: q["name"])
+                Task { try? await Iptv.refresh(force: true) }
+                return .json(["ok": true, "id": l.id])
+            }
+            if let n = q["use"].flatMap(Int.init), n >= 0, n < Iptv.lists().count {
+                TvModel.shared.useList(Iptv.lists()[n].id)
+            }
+            if q["reparse"] == "1" { Iptv.forgetSignature() }
+            if q["refresh"] == "1" || q["reparse"] == "1" { Task { try? await Iptv.refresh(force: true) } }
+            if let n = q["at"].flatMap(Int.init) {
+                // Kênh thứ n (từ 0) của bộ lọc đang chọn trên màn Truyền hình
+                Router.playLive(TvModel.shared.filter, n)
+            } else if let k = q["play"] {
+                Router.playLiveKey(k)
+            } else if let d = q["do"], let l = LiveModel.current {
+                switch d {
+                case "close": l.close()
+                case "next": l.step(1)
+                case "prev": l.step(-1)
+                case "panel": l.togglePanel()
+                case "source": l.nextSource()
+                case "guide": l.openGuide()
+                case "toggle": l.togglePlay()
+                case "controls": l.tapped()
+                default: break
+                }
+            } else if LiveModel.current == nil && q["refresh"] == nil && q["reparse"] == nil && q["use"] == nil && q["at"] == nil {
+                Router.tv()
+            }
+            return .json(["ok": true])
+        case "/tvstatus":
+            if let l = LiveModel.current { return .json(l.debugState()) }
+            let s = Iptv.status()
+            var o: [String: Any] = ["loading": s.loading, "guideLoading": s.guideLoading, "status": s.status ?? "", "version": s.version]
+            if let a = s.active {
+                let active: [String: Any] = ["id": a.id, "name": a.name, "count": a.count, "updated": a.updated, "err": a.err ?? "",
+                                             "epg": a.epg ?? ""]
+                o["active"] = active
+            }
+            o["lists"] = Iptv.lists().map { $0.name }
+            o["loaded"] = s.loaded ?? ""
+            o["guide"] = Iptv.guide()?.prog.count ?? 0
+            let tv = TvModel.shared
+            o["items"] = tv.items.count
+            o["total"] = tv.total
+            o["filter"] = "\(tv.filter)"
+            o["first"] = tv.items.prefix(5).map { "\($0.num) \($0.n) | \($0.now?.t ?? $0.matchLine ?? $0.g)" }
+            return .json(o)
         case "/player":
             return player(q)
         case "/eval":
@@ -722,6 +806,49 @@ enum DebugRoutes {
         }
     }
 
+    /// Ô nhập chữ đang hiện trong cửa sổ chính (theo thứ tự trên → dưới); `index` có thì đặt con trỏ vào ô đó.
+    private static func focusInput(_ index: Int?, end: Bool) -> [String: Any] {
+        guard let w = keyWindow else { return ["ok": false] }
+        var inputs: [UIView] = []
+        func find(_ v: UIView) {
+            if v.isHidden || v.alpha < 0.02 { return }
+            if v is UITextField || (v is UITextView && (v as? UITextView)?.isEditable == true) {
+                inputs.append(v)
+                return
+            }
+            for s in v.subviews { find(s) }
+        }
+        find(w)
+        inputs.sort { $0.convert($0.bounds, to: w).minY < $1.convert($1.bounds, to: w).minY }
+        var focused = false
+        if let i = index, let v = inputs[safe: i] {
+            focused = v.becomeFirstResponder()
+            if end, let t = v as? UITextInput {
+                t.selectedTextRange = t.textRange(from: t.endOfDocument, to: t.endOfDocument)
+            }
+        }
+        // Bàn phím (toạ độ màn hình → cửa sổ); «covered» = phần dưới của ô / con trỏ nằm dưới mép trên bàn phím
+        let screenKb: CGRect = DebugServer.keyboardFrame
+        let kb: CGRect = screenKb == CGRect.zero ? CGRect.zero : w.convert(screenKb, from: w.screen.coordinateSpace)
+        let hasKb = kb != CGRect.zero
+        let list: [[String: Any]] = inputs.map { v in
+            let f = v.convert(v.bounds, to: w)
+            let text = (v as? UITextField)?.text ?? (v as? UITextView)?.text ?? ""
+            var o: [String: Any] = ["type": String(describing: type(of: v)), "frame": [Int(f.minX), Int(f.minY), Int(f.width), Int(f.height)],
+                                    "text": text, "first": v.isFirstResponder]
+            if let t = v as? UITextInput, let end = t.selectedTextRange?.end {
+                let c = (v as UIView).convert(t.caretRect(for: end), to: w)
+                o["caret"] = [Int(c.minX), Int(c.minY), Int(c.height)]
+                if hasKb { o["caretCovered"] = c.maxY > kb.minY }
+            }
+            if hasKb { o["covered"] = f.maxY > kb.minY }
+            return o
+        }
+        let kbList: [Int] = hasKb ? [Int(kb.minX), Int(kb.minY), Int(kb.width), Int(kb.height)] : []
+        let ok: Bool = index == nil || focused
+        return ["ok": ok, "inputs": list, "keyboard": kbList]
+    }
+
     /// Duyệt cây trợ năng (gồm nút SwiftUI) — nhãn, giá trị, khung trên màn hình.
     private static func walk(_ o: NSObject, _ depth: Int, _ visit: (NSObject) -> Void) {
         if depth > 80 { return }
@@ -784,6 +911,37 @@ enum DebugRoutes {
             return (true, hit)
         }
         return (false, hit)
+    }
+
+    /// Mọi khung cuộn đang hiện: vị trí, cỡ nội dung, lề, có cuộn / chạm được không (tìm lỗi «không cuộn về đầu được»).
+    static func scrollInfo() -> [[String: Any]] {
+        guard let w = keyWindow else { return [] }
+        var out: [[String: Any]] = []
+        func find(_ v: UIView, _ depth: Int) {
+            if v.isHidden || v.alpha < 0.02 { return }
+            if let s = v as? UIScrollView, !(s is UITextView), s.bounds.height > 60 {
+                var o: [String: Any] = [:]
+                o["type"] = String(describing: type(of: s))
+                o["frame"] = [Int(s.frame.minX), Int(s.frame.minY), Int(s.bounds.width), Int(s.bounds.height)]
+                o["offset"] = [Double(s.contentOffset.x), Double(s.contentOffset.y)]
+                o["size"] = [Double(s.contentSize.width), Double(s.contentSize.height)]
+                let i = s.adjustedContentInset
+                o["inset"] = [Double(i.top), Double(i.left), Double(i.bottom), Double(i.right)]
+                o["raw"] = [Double(s.contentInset.top), Double(s.contentInset.bottom)]
+                o["scroll"] = s.isScrollEnabled
+                o["touch"] = s.isUserInteractionEnabled
+                o["pan"] = s.panGestureRecognizer.isEnabled
+                o["tracking"] = s.isTracking
+                o["decel"] = s.isDecelerating
+                o["bounce"] = s.alwaysBounceVertical
+                o["depth"] = depth
+                o["gestures"] = (s.gestureRecognizers ?? []).map { String(describing: type(of: $0)) }
+                out.append(o)
+            }
+            v.subviews.forEach { find($0, depth + 1) }
+        }
+        find(w, 0)
+        return out
     }
 
     private static func scroll(_ dir: String) -> Bool {

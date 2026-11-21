@@ -13,6 +13,7 @@ mod hooks;
 mod images;
 mod keynav;
 mod limits;
+mod live;
 mod menu;
 mod mpv;
 mod native;

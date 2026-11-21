@@ -136,8 +136,8 @@ fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
     m.lock().unwrap_or_else(|e| e.into_inner())
 }
 
-/// Tên miền → (địa chỉ; None = tên miền không có (NXDOMAIN), hạn nhớ (ms)).
-type AddrCache = HashMap<String, (Option<Ipv4Addr>, i64)>;
+/// Tên miền → (mọi bản ghi A theo thứ tự máy chủ trả; None = tên miền không có (NXDOMAIN), hạn nhớ (ms)).
+type AddrCache = HashMap<String, (Option<Vec<Ipv4Addr>>, i64)>;
 
 /// Địa chỉ đã hỏi.
 static CACHE: LazyLock<Mutex<AddrCache>> = LazyLock::new(Default::default);
@@ -183,7 +183,13 @@ pub async fn resolve(host: &str) -> Result<Option<IpAddr>> {
     resolve_with(host, servers()).await
 }
 
-type Job = Shared<BoxFuture<'static, Result<Option<IpAddr>>>>;
+/// Như `resolve` nhưng mọi địa chỉ IPv4 máy chủ DNS trả (theo thứ tự): kết nối thẳng thử lần lượt — địa chỉ đầu của CDN / dịch
+/// vụ rút gọn link chết thì sang địa chỉ sau (trước đây chỉ giữ địa chỉ đầu, hỏng tới hết TTL).
+pub async fn resolve_all(host: &str) -> Result<Option<Vec<IpAddr>>> {
+    resolve_all_with(host, servers()).await
+}
+
+type Job = Shared<BoxFuture<'static, Result<Option<Vec<IpAddr>>>>>;
 
 /// Đang hỏi: tên miền → (số việc, việc). Nhiều kết nối cùng lúc tới một tên miền (ảnh bìa, API…): chỉ hỏi một lần, các kết
 /// nối kia chờ kết quả đó.
@@ -192,6 +198,11 @@ static JOB_ID: AtomicU64 = AtomicU64::new(1);
 
 /// Như `resolve`, với chuỗi máy chủ riêng (test).
 pub async fn resolve_with(host: &str, servers: Arc<Vec<Server>>) -> Result<Option<IpAddr>> {
+    Ok(resolve_all_with(host, servers).await?.and_then(|v| v.first().copied()))
+}
+
+/// Như `resolve_all`, với chuỗi máy chủ riêng (test).
+pub async fn resolve_all_with(host: &str, servers: Arc<Vec<Server>>) -> Result<Option<Vec<IpAddr>>> {
     let name = clean(host);
     if name.parse::<IpAddr>().is_ok() || name == "localhost" {
         return Ok(None);
@@ -225,19 +236,19 @@ pub async fn resolve_with(host: &str, servers: Arc<Vec<Server>>) -> Result<Optio
     job.await
 }
 
-fn cached(name: &str) -> Option<Result<Option<IpAddr>>> {
+fn cached(name: &str) -> Option<Result<Option<Vec<IpAddr>>>> {
     let c = lock(&CACHE);
     let (addr, until) = c.get(name)?;
     if *until <= now_ms() {
         return None;
     }
     Some(match addr {
-        Some(a) => Ok(Some(IpAddr::V4(*a))),
+        Some(all) => Ok(Some(all.iter().map(|a| IpAddr::V4(*a)).collect())),
         None => Err(no_domain(name)),
     })
 }
 
-async fn lookup(name: &str, servers: &[Server]) -> Result<Option<IpAddr>> {
+async fn lookup(name: &str, servers: &[Server]) -> Result<Option<Vec<IpAddr>>> {
     // Tên miền sai (nhãn rỗng / dài quá 63 byte…): khỏi hỏi, để DNS của máy báo lỗi — không coi máy chủ nào là lỗi
     if dns_wire::query(name, 0).is_err() {
         return Ok(None);
@@ -273,13 +284,14 @@ async fn lookup(name: &str, servers: &[Server]) -> Result<Option<IpAddr>> {
                     crate::log::d("dns", &format!("{name} bị {} chặn ({:?}), hỏi máy chủ sau", s.label, all));
                 }
             }
-            Answer::Found { addr, ttl, .. } => {
+            Answer::Found { addr, ttl, all } => {
                 let keep = (ttl as i64).clamp(30, 600) * 1000;
-                lock(&CACHE).insert(name.to_string(), (Some(addr), now_ms() + keep));
+                let all = if all.is_empty() { vec![addr] } else { all };
+                lock(&CACHE).insert(name.to_string(), (Some(all.clone()), now_ms() + keep));
                 if cfg!(debug_assertions) {
-                    crate::log::d("dns", &format!("{name} → {addr} ({} · {ip}, {} ms)", s.label, now_ms() - t0));
+                    crate::log::d("dns", &format!("{name} → {all:?} ({} · {ip}, {} ms)", s.label, now_ms() - t0));
                 }
-                return Ok(Some(IpAddr::V4(addr)));
+                return Ok(Some(all.into_iter().map(IpAddr::V4).collect()));
             }
             Answer::NoDomain => {
                 // nhớ 30 giây: kết nối khác khỏi hỏi lại
@@ -617,6 +629,17 @@ pub async fn for_connect(host: &str) -> Result<Option<IpAddr>> {
         resolve(host).await
     } else if crate::unblock::level() > 0 {
         unblocked(host).await
+    } else {
+        Ok(None)
+    }
+}
+
+/// Như `for_connect` nhưng mọi địa chỉ nên thử (kết nối thẳng thử lần lượt). Ok(None) = dùng DNS của máy.
+pub async fn for_connect_all(host: &str) -> Result<Option<Vec<IpAddr>>> {
+    if crate::prefs::secure_dns() {
+        resolve_all(host).await
+    } else if crate::unblock::level() > 0 {
+        Ok(unblocked(host).await?.map(|ip| vec![ip]))
     } else {
         Ok(None)
     }
@@ -971,8 +994,10 @@ mod tests {
             Err(Error::Socks(4, m)) => assert!(m.contains("khong-co.test")),
             r => panic!("{r:?}"),
         }
-        lock(&CACHE).insert("co.test".into(), (Some(Ipv4Addr::new(203, 0, 113, 5)), now_ms() + 30_000));
+        lock(&CACHE).insert("co.test".into(), (Some(vec![Ipv4Addr::new(203, 0, 113, 5), Ipv4Addr::new(203, 0, 113, 6)]), now_ms() + 30_000));
         assert_eq!(resolve("CO.test.").await.unwrap(), Some(ip("203.0.113.5")));
+        // Mọi địa chỉ theo thứ tự (kết nối thẳng thử lần lượt)
+        assert_eq!(resolve_all("co.test").await.unwrap(), Some(vec![ip("203.0.113.5"), ip("203.0.113.6")]));
     }
 
     const RN: &str = "\r\n";

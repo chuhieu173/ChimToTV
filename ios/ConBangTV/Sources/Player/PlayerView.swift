@@ -337,8 +337,19 @@ final class SystemLevels {
 
 /// Màn «Hết giờ xem» (WatchLimit): người lớn nhập mã PIN phụ huynh rồi chọn cho xem thêm bao lâu (nút ngay trong
 /// khung — hộp chọn xổ lên của iPad không hiện được trong lớp phủ trình phát), hoặc thoát trình phát.
-private struct LimitOverlay: View {
-    @ObservedObject var m: PlayerModel
+/// Trình phát có màn «Hết giờ xem» (phim, truyền hình).
+@MainActor
+protocol LimitHost: ObservableObject {
+    var limitBlock: WatchLimit.Block? { get }
+    var limitText: String { get }
+    func grantLimit(_ minutes: Int?)
+    func close()
+}
+
+extension PlayerModel: LimitHost {}
+
+struct LimitOverlay<M: LimitHost>: View {
+    @ObservedObject var m: M
     @State private var askPin = false
     @State private var choose = false
     /// iPhone nằm ngang: màn thấp — bỏ biểu tượng, cho cuộn.

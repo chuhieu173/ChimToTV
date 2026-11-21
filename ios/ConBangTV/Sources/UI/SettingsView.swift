@@ -5,6 +5,14 @@ struct SettingsView: View {
     @EnvironmentObject var app: AppModel
     @Environment(\.dismiss) private var dismiss
 
+    /// Chỉ phần «Người xem» (mở từ màn "Ai đang xem?" đang chặn cửa, người đang dùng có mã PIN): các mục còn lại là của người
+    /// đang dùng (xoá lịch sử, Xem riêng, hồ sơ trẻ em, trang phim…) — chưa nhập mã PIN thì không được đụng.
+    let profilesOnly: Bool
+
+    init(profilesOnly: Bool = false) {
+        self.profilesOnly = profilesOnly
+    }
+
     @State private var url = Site.hostOf(Prefs.baseUrl) ?? Prefs.baseUrl
     @State private var siteStatus = ""
     @State private var sites = Prefs.sites
@@ -132,7 +140,7 @@ struct SettingsView: View {
 
     private var header: some View {
         ZStack {
-            Text("Cài đặt").font(.headline).foregroundColor(Theme.text)
+            Text(profilesOnly ? "Người xem" : "Cài đặt").font(.headline).foregroundColor(Theme.text)
             HStack {
                 Spacer()
                 Button("Xong") { dismiss() }
@@ -148,8 +156,10 @@ struct SettingsView: View {
 
     var body: some View {
         NavigationView {
+            ScrollViewReader { proxy in
             Form {
                 profileSection
+                if !profilesOnly {
                 homeSection
                 Section {
                     NavigationLink {
@@ -161,7 +171,7 @@ struct SettingsView: View {
                     Text("Xem dở trên TV thì mở iPad xem tiếp đúng chỗ, và ngược lại — ghép máy bằng mã 4 số.")
                 }
                 displaySection
-                siteSection
+                siteSection(proxy)
                 Section {
                     ForEach(sites, id: \.self) { s in
                         Button {
@@ -282,6 +292,7 @@ struct SettingsView: View {
                     Text("Côn Bằng TV \(version) — xem phim từ trang web trên iPad / iPhone bằng chạm / bàn phím.")
                         .foregroundColor(Theme.dim)
                 }
+                } // !profilesOnly
             }
             .navigationTitle("Cài đặt")
             .navigationBarTitleDisplayMode(.inline)
@@ -308,6 +319,7 @@ struct SettingsView: View {
                 }
                 .environmentObject(app)
                 .preferredColorScheme(.dark)
+            }
             }
         }
         .navigationViewStyle(.stack)
@@ -367,12 +379,11 @@ struct SettingsView: View {
         }
     }
 
-    private var siteSection: some View {
+    private func siteSection(_ proxy: ScrollViewProxy) -> some View {
         Section {
-            TextField("Tên miền, vd yanhh3d.ee", text: $url)
-                .keyboardType(.URL)
-                .textInputAutocapitalization(.never)
-                .disableAutocorrection(true)
+            // Nhiều dòng: dán được nhiều trang, mỗi dòng một trang (Lưu = thêm cả loạt vào danh sách). Chọn ô → cuộn ô + hàng nút
+            // lên trên bàn phím (TextEditor trong Form không tự cuộn)
+            SitePasteEditor(text: $url) { revealSitePaste(proxy, afterKeyboard: $0) }
             // Màn hẹp (iPhone): cuộn ngang thay vì gãy chữ trong nút
             ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 12) {
@@ -389,23 +400,49 @@ struct SettingsView: View {
             }
             if !siteStatus.isEmpty { Text(siteStatus).foregroundColor(Theme.dim) }
         } header: { Text("Địa chỉ trang phim") } footer: {
-            Text("Nhập tên miền rồi nhấn Lưu để thêm trang mới hoặc cập nhật khi trang đổi tên miền (vd .ee → .xyz). Hỗ trợ các trang kiểu yanhh3d, theme HaLim (hoathinh3d, hhkungfu…), kiểu PhimMoi (phimmois), mephim.ddns.net, KKPhim (kkphim.com), NguonC (phim.nguonc.com), VSMOV (vsmov.com) và CLB Phim Xưa (sc.k-20.xyz). Nếu tên miền cũ tự chuyển hướng, app tự cập nhật.")
+            Text("Nhập tên miền rồi nhấn Lưu để thêm trang mới hoặc cập nhật khi trang đổi tên miền (vd .ee → .xyz). Dán nhiều tên miền (mỗi dòng một trang) rồi nhấn Lưu để thêm cả loạt vào danh sách — trang đang dùng giữ nguyên. Hỗ trợ các trang kiểu yanhh3d, theme HaLim (hoathinh3d, hhkungfu…), kiểu PhimMoi (phimmois), mephim.ddns.net, KKPhim (kkphim.com), NguonC (phim.nguonc.com), VSMOV (vsmov.com) và CLB Phim Xưa (sc.k-20.xyz). Nếu tên miền cũ tự chuyển hướng, app tự cập nhật.")
         }
     }
 
     private func save() {
+        // Dán nhiều trang: thêm cả loạt vào danh sách (một trang mới thì như trước: dùng trang đó)
+        if SitePaste.tokenCount(url) > 1 {
+            let r = Prefs.addSites(url)
+            if r.added.isEmpty {
+                siteStatus = SitePaste.noneText(r)
+                return
+            }
+            if r.added.count == 1 {
+                url = Site.hostOf(r.added[0]) ?? r.added[0]
+                use(r.added[0], note: SitePaste.skipNote(r))
+                return
+            }
+            sites = Prefs.sites
+            url = Site.hostOf(base) ?? base
+            siteStatus = SitePaste.addedText(r)
+            return
+        }
         guard let n = Prefs.normalizeUrl(url) else {
             siteStatus = "Link không hợp lệ. Ví dụ đúng: yanhh3d.ee"
             return
         }
+        use(n)
+    }
+
+    /// Dùng trang `n` (thêm vào danh sách nếu chưa có).
+    private func use(_ n: String, note: String = "") {
         Prefs.baseUrl = n
         base = n
         sites = Prefs.sites
         serverLabel = Prefs.serverLabel(Site.hostOf(n))
-        siteStatus = "Đã lưu: \(Site.hostOf(n) ?? n)"
+        siteStatus = "Đã lưu: \(Site.hostOf(n) ?? n)\(note)"
     }
 
     private func check() {
+        if SitePaste.tokenCount(url) > 1 {
+            siteStatus = "Kiểm tra từng trang một — dán nhiều trang thì nhấn Lưu để thêm cả loạt vào danh sách."
+            return
+        }
         guard let b = Prefs.normalizeUrl(url) else {
             siteStatus = "Link không hợp lệ."
             return

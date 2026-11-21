@@ -91,6 +91,13 @@ final class SiteTests: XCTestCase {
         XCTAssertTrue(n?[4] is NSNull)
         XCTAssertEqual((v?["o"] as? [String: Any])?["k"] as? String, "v")
         XCTAssertNil(JSONScan.value(#"{"a":"#, at: 0))
+        // Lồng sâu vừa phải vẫn đọc được; `[[[[…` quá sâu (trang lạ) → nil thay vì tràn ngăn xếp làm app văng
+        XCTAssertNotNil(JSONScan.value(String(repeating: "[", count: 200) + "1" + String(repeating: "]", count: 200), at: 0))
+        XCTAssertNil(JSONScan.value(String(repeating: "[", count: 100_000) + "1" + String(repeating: "]", count: 100_000), at: 0))
+        // Số quá lớn trong JSON / nhãn tập: không làm app văng
+        XCTAssertEqual(J.int(["y": 1e20], "y", 7), 7)
+        XCTAssertEqual(HomeFeed.num(1e20), "1e+20")
+        XCTAssertEqual(HomeFeed.num(108), "108")
     }
 
     func testUpdateSummaryAndVersions() {

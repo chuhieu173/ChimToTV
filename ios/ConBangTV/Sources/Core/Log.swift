@@ -11,8 +11,23 @@ enum Log {
         return f
     }()
 
+    private static let querySecret = try! NSRegularExpression(pattern: #"(?i)([?&](?:username|user|password|pass|pwd|token|key)=)[^&#\s]*"#)
+    private static let xtreamPath = try! NSRegularExpression(pattern: #"(?i)(/(?:live|movie|series|timeshift)/)[^/\s]+/[^/\s]+/"#)
+    private static let userInfo = try! NSRegularExpression(pattern: #"(://)[^/\s@]+@"#)
+
+    /// Che tài khoản trong link trước khi ghi nhật ký: tham số username / password / token… của link, đường dẫn Xtream
+    /// `/live/<tên>/<mật khẩu>/…`, `user:pass@` trước tên máy chủ (như TvLog của bản Android, log::redact của lõi Rust).
+    static func redact(_ s: String) -> String {
+        guard s.contains("://") || s.contains("=") else { return s }
+        var out = s
+        for (rx, tpl) in [(querySecret, "$1***"), (xtreamPath, "$1***/***/"), (userInfo, "$1***@")] {
+            out = rx.stringByReplacingMatches(in: out, range: NSRange(out.startIndex..., in: out), withTemplate: tpl)
+        }
+        return out
+    }
+
     static func d(_ tag: String, _ message: String) {
-        let line = "\(fmt.string(from: Date())) \(tag): \(message)"
+        let line = "\(fmt.string(from: Date())) \(tag): \(redact(message))"
         lock.lock()
         seq += 1
         lines.append((seq, line))

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Icon thích ứng (Android 8+): 2 lớp xuất từ design/logo.html -->
+<!-- Icon thích ứng (Android 8+): đĩa kính tròn xuất từ design/logo.html (phương án D), nền trong suốt như icon bản Legacy -->
 <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
-    <background android:drawable="@mipmap/ic_launcher_background" />
+    <background android:drawable="@android:color/transparent" />
     <foreground android:drawable="@mipmap/ic_launcher_foreground" />
 </adaptive-icon>

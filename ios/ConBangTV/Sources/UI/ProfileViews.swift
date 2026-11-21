@@ -73,7 +73,7 @@ struct ProfilePickerView: View {
                 }
                 .padding(.vertical, narrow ? 14 : 26)
                 Button { settings = true } label: {
-                    Label("Sửa người xem…", systemImage: "pencil")
+                    Label(app.pickerClosable ? "Sửa người xem…" : "Quản lý người xem…", systemImage: "pencil")
                         .appFont(16, .medium)
                         .foregroundColor(Theme.text)
                         .padding(.horizontal, 18)
@@ -118,7 +118,8 @@ struct ProfilePickerView: View {
         .preferredColorScheme(.dark)
         .sheet(isPresented: $adding) { ProfileEditView(editing: nil).environmentObject(app) }
         .sheet(isPresented: $settings, onDismiss: { app.refreshProfiles() }) {
-            SettingsView().environmentObject(app).preferredColorScheme(.dark)
+            // Màn chặn cửa, người đang dùng có mã PIN: chỉ quản lý người xem (không đụng cài đặt / dữ liệu của người đó)
+            SettingsView(profilesOnly: !app.pickerClosable).environmentObject(app).preferredColorScheme(.dark)
         }
     }
 

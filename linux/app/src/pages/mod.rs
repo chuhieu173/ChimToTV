@@ -13,12 +13,14 @@ pub mod history;
 pub mod home;
 pub mod home_mix;
 pub mod home_rows;
+pub mod home_tv;
 pub mod invite;
 pub mod lists;
 pub mod profiles_page;
 pub mod proxy;
 pub mod settings;
 pub mod sites;
+pub mod tv;
 pub mod sync_page;
 
 pub struct PageBase {
@@ -32,6 +34,14 @@ pub struct PageBase {
     /// Ô dùng lại qua các lần dựng (ô chữ, lưới kết quả…) — xem keep().
     kept: RefCell<Vec<gtk::Widget>>,
     token: Cell<u64>,
+}
+
+/// Bản debug: ghi khi một trang được giải phóng (kiểm App::discard — trang rời ngăn trang phải được giải phóng, không nằm mãi).
+#[cfg(debug_assertions)]
+impl Drop for PageBase {
+    fn drop(&mut self) {
+        cbtv::log::d("page", &format!("giải phóng trang «{}»", self.menu_key.borrow()));
+    }
 }
 
 impl PageBase {
@@ -58,6 +68,28 @@ impl PageBase {
         if !k.contains(&w) {
             k.push(w);
         }
+    }
+
+    /// Trang đã ra khỏi ngăn trang (App::discard): huỷ từng ô (cả ô giữ lại đang không gắn vào trang), từ lá lên gốc — huỷ ô
+    /// thì GTK gỡ các hàm bấm / phím đã gắn vào ô, các hàm đó giữ Rc tới chính trang (vòng tham chiếu, trang không bao giờ được
+    /// giải phóng). Huỷ riêng gốc (scroller) không đủ: GTK3 không huỷ lan xuống thân trang mà Rust còn giữ.
+    pub fn teardown(&self) {
+        fn destroy_tree(w: &gtk::Widget) {
+            if let Some(c) = w.downcast_ref::<gtk::Container>() {
+                for ch in c.children() {
+                    destroy_tree(&ch);
+                }
+            }
+            // SAFETY: trang đã ra khỏi cửa sổ, không còn ai gắn / dùng cây ô này
+            unsafe { w.destroy() };
+        }
+        let kept: Vec<gtk::Widget> = self.kept.borrow_mut().drain(..).collect();
+        for w in &kept {
+            destroy_tree(w);
+        }
+        destroy_tree(self.scroller.upcast_ref());
+        destroy_tree(self.body.upcast_ref());
+        self.last_focus.borrow_mut().take();
     }
 
     pub fn clear(&self) {

@@ -200,6 +200,13 @@ public static class Ui
 
     public static void OpenBrowser(string url)
     {
+        // Chỉ mở trang web: link tập / phim lấy từ trang phim người dùng thêm — trang lạ trả `file:` / `search-ms:` / `ms-…:` thì
+        // ShellExecute mở tệp / chạy trình xử lý giao thức đó thay vì trình duyệt
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var u) || (u.Scheme != Uri.UriSchemeHttp && u.Scheme != Uri.UriSchemeHttps))
+        {
+            Log.D("ui", "Không mở link không phải http(s): " + url);
+            return;
+        }
         try
         {
             Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });

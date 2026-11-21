@@ -129,6 +129,12 @@ fun EditText.leaveWithUpDown() {
     }
 }
 
+/** Báo lỗi ngay dưới ô nhập và đưa con trỏ về ô: Android chỉ hiện chữ báo khi ô đang có con trỏ (đứng ở nút thì chỉ thấy dấu !). */
+fun EditText.showError(msg: String) {
+    requestFocus()
+    error = msg
+}
+
 fun formatTime(seconds: Double): String {
     val s = seconds.coerceAtLeast(0.0).toLong()
     val h = s / 3600

@@ -9,6 +9,8 @@ App Android TV xem phim hoạt hình 3D (và phim bộ / phim lẻ ở phimmois.
 (trước đây tên là ChimTo TV — vẫn cùng một app, cài đè và tự cập nhật bình thường). Từ 2.4 dùng tốt cả trên điện thoại
 Android, cầm dọc hay ngang — xem [Điện thoại Android](#điện-thoại-android-từ-24).
 Dữ liệu (danh sách phim, tập, server) đọc trực tiếp từ trang, nên trang đổi tên miền chỉ cần sửa link trong **Cài đặt**.
+Từ 2.20 (iPad / iPhone / Mac 1.20, Windows 1.18, Linux 1.4) có thêm mục **Truyền hình · Radio** — xem kênh / nghe đài từ danh sách
+M3U bạn tự thêm, xem [Truyền hình · Radio](#truyền-hình--radio-từ-220--ipad--iphone--mac-120--windows-118--linux-14).
 
 **Bản mới nhất:** [tải APK trên GitHub Releases](https://github.com/conbangtv/ChimToTV/releases/latest) ·
 [nhật ký phiên bản](CHANGELOG.md). Từ bản 1.3 app tự cập nhật.
@@ -17,19 +19,19 @@ Dữ liệu (danh sách phim, tập, server) đọc trực tiếp từ trang, n�
 [Cài trên Android TV bằng Downloader](#cài-trên-android-tv-bằng-downloader).
 
 **Bản iPad / iPhone** (iOS / iPadOS 15+, cài bằng TrollStore): [tải bản mới nhất](https://github.com/conbangtv/ChimToTV/releases/download/conbangtv_ios/ConBangTV-iPad.ipa)
-(link cố định) · [release `ios-v1.19`](https://github.com/conbangtv/ChimToTV/releases/tag/ios-v1.19)
+(link cố định) · [release `ios-v1.21`](https://github.com/conbangtv/ChimToTV/releases/tag/ios-v1.21)
 — xem mục [Bản iPad](#bản-ipad). TV và iPad / iPhone đồng bộ được với nhau — xem [Đồng bộ trong nhà](#đồng-bộ-trong-nhà-từ-22).
 
 **Bản Windows** (Windows 10 / 11, một tệp `.exe` chạy ngay): [tải bản mới nhất](https://github.com/conbangtv/ChimToTV/releases/download/conbangtv_windows/ConBangTV-Windows.exe)
-(link cố định) · [release `win-v1.17`](https://github.com/conbangtv/ChimToTV/releases/tag/win-v1.17)
+(link cố định) · [release `win-v1.19`](https://github.com/conbangtv/ChimToTV/releases/tag/win-v1.19)
 — xem mục [Bản Windows](#bản-windows). Đồng bộ được với TV và iPad / iPhone.
 
 **Bản Mac** (macOS 12+, máy Intel và chip Apple): [tải bản mới nhất](https://github.com/conbangtv/ChimToTV/releases/download/conbangtv_macos/ConBangTV-Mac.zip)
-(link cố định) · [release `mac-v1.19`](https://github.com/conbangtv/ChimToTV/releases/tag/mac-v1.19)
+(link cố định) · [release `mac-v1.21`](https://github.com/conbangtv/ChimToTV/releases/tag/mac-v1.21)
 — xem mục [Bản Mac](#bản-mac) (lần đầu mở: Cài đặt hệ thống → Quyền riêng tư & Bảo mật → Vẫn mở).
 
 **Bản Linux** (Ubuntu 22.04+ / Linux Mint 21+ / Debian 12+, máy 64-bit, tệp `.deb`): [tải bản mới nhất](https://github.com/conbangtv/ChimToTV/releases/download/conbangtv_linux/ConBangTV-Linux.deb)
-(link cố định) · [release `linux-v1.3`](https://github.com/conbangtv/ChimToTV/releases/tag/linux-v1.3)
+(link cố định) · [release `linux-v1.5`](https://github.com/conbangtv/ChimToTV/releases/tag/linux-v1.5)
 — xem mục [Bản Linux](#bản-linux). Đồng bộ được với TV, iPad / iPhone, Windows và Mac.
 
 **Mã nguồn mở:** giấy phép GPL-3.0 — xem [Giấy phép](#giấy-phép).
@@ -152,6 +154,33 @@ không gọi IMDb. Phim dưới 100 lượt chấm coi như chưa có điểm.
 - **Danh mục KKPhim** (Phim bộ, Phim lẻ, thể loại, quốc gia…): nút «Mới cập nhật» / «Điểm IMDb cao» ở đầu mục — «Điểm IMDb cao» xếp
   ≈ 320 phim mới cập nhật của mục theo điểm (từ 1.000 lượt chấm).
 
+## Truyền hình · Radio (từ 2.20 / iPad · iPhone · Mac 1.20 / Windows 1.18 / Linux 1.4)
+
+Mục **Truyền hình · Radio** trong menu: xem kênh truyền hình và nghe radio từ **danh sách M3U / M3U8 mà bạn có quyền xem** — app
+**không kèm sẵn kênh nào**. Cách dùng và dữ liệu giống bản Legacy (iOS 6); giao diện theo kiểu của từng bản.
+
+- **Thêm danh sách:** dán địa chỉ (http / https) — **dán được nhiều địa chỉ một lần, mỗi dòng một danh sách** (từ 2.21 / 1.21 / 1.19 / 1.5; địa chỉ đã có tự bỏ qua) — hoặc thêm tệp `.m3u` — tivi: «Thêm danh sách kênh» → «Gửi từ điện thoại / máy
+  tính (cùng Wi-Fi)», quét mã QR rồi gửi tệp hoặc dán nội dung (trang tải lên ở cổng 8795 của tivi); iPad / máy tính: chọn tệp. Có
+  thể thêm nhiều danh sách và đổi qua lại; danh sách theo địa chỉ tự tải lại khi cũ (danh sách thể thao tải lại thường hơn).
+- App đọc nhóm (`group-title`, `#EXTGRP`), logo, số kênh (`tvg-chno`), Referer / User-Agent riêng của luồng (`#EXTVLCOPT`,
+  `địa-chỉ|Referer=…&User-Agent=…`). Kênh trùng tên trong một nhóm gộp thành nhiều nguồn (HLS trước, FLV sau, ảnh «mất tín hiệu»
+  cuối). Nhận ra đài radio, kênh thiếu nhi (hồ sơ trẻ em chỉ thấy kênh thiếu nhi) và phim (VOD); bỏ mã nước đầu tên («|UK| …»).
+- **Lịch phát sóng (XMLTV, cả `.xml.gz`):** theo `url-tvg` ghi trong danh sách, hoặc địa chỉ đặt trong Cài đặt của mục Truyền hình.
+  Thẻ kênh có chương trình đang phát, thanh tiến độ và chương trình kế; màn lịch hôm qua / hôm nay / ngày mai; **nhắc giờ phát**
+  (5 phút trước, khi app đang mở; tivi có thêm thông báo).
+- **Kênh trận đấu:** giờ bóng lăn đọc từ tên kênh (giờ Việt Nam) → nhãn ĐANG ĐÁ / SẮP ĐÁ, trận đang đá và sắp đá xếp trước;
+  «Nhắc lúc bóng lăn»; trận đang đá mà kênh chưa phát hình thì app tự thử lại 20 giây một lần.
+- **Yêu thích**, **Kênh vừa xem** (tivi: thêm một hàng ở trang chủ), tìm theo tên hoặc số kênh — riêng theo từng người xem. Nhắc giờ
+  không hiện đè lên màn «Ai đang xem?» / miễn trừ trách nhiệm.
+- **Trình phát:** nguồn lỗi tự chuyển sang nguồn sau (cả kênh lỗi thì tải lại danh sách một lần); tạm dừng thì xem lùi được (nhãn
+  «CHẬM», nút «Về trực tiếp»); radio hiện logo đài, tên bài đang phát (ICY) và định dạng / bitrate. Tivi phát bằng Media3 ExoPlayer,
+  Windows / Linux bằng mpv, iPad / iPhone / Mac bằng AVPlayer (không phát được luồng FLV → tự chuyển nguồn khác).
+- **Trên trang chủ** (từ 2.21 / iPad · iPhone · Mac 1.21 / Windows 1.19 / Linux 1.5): 4 hàng «Kênh vừa xem», «Kênh yêu thích», «Trận đang / sắp đá», «Radio» — dải thẻ kênh, bấm là phát; mặc định ngay sau «Xem tiếp», bật / tắt / đổi thứ tự trong Cài đặt → Trang chủ → «Các hàng trên trang chủ…» hoặc sửa nhanh trên hàng (tivi: Menu / giữ OK; iPad: giữ tay; máy tính: chuột phải); hàng rỗng tự ẩn; hồ sơ trẻ em không có hàng trận / radio.
+- **Danh sách lớn** (Xtream vài chục nghìn kênh): tivi lưu vào SQLite, máy tính / iPad đọc trong bộ nhớ (đo trên iPhone 6s Plus:
+  59 834 kênh đọc trong ~12 giây kể cả tải về, app dùng ~120 MB).
+- **Phím:** tivi ▲ ▼ hoặc CH+ / CH− đổi kênh, phím số nhảy tới kênh, OK hiện nút (☰ Kênh, Tạm dừng, ☆…); Windows / Linux PgUp /
+  PgDn đổi kênh, gõ số; iPad / Mac có bàn phím ↑ ↓, gõ số, Space dừng / phát.
+
 ## Trang phim hỗ trợ
 
 Có sẵn trong danh sách (menu **Đổi trang phim**). Mở menu này là app đo ngay từng trang: tải trang chủ mất bao lâu,
@@ -240,6 +269,17 @@ Next.js kiểu PhimMoi) thường cũng chạy: **Đổi trang phim** → **＋ 
 tên miền trong **Cài đặt** → **Lưu** → **Kiểm tra kết nối**. Trang mẫu đã xoá thì thêm lại bằng **＋ Thêm lại: …** ở cuối
 danh sách (iPad: mục "Thêm trang"; vuốt trái một trang để xoá). Trang nào không có `player.php` thì app tự mở trang tập
 và phóng trình phát ra toàn màn hình.
+
+**Thêm nhiều trang một lần** (TV 2.22 / iPad · iPhone · Mac 1.22 / Windows 1.20 / Linux 1.6): ô thêm trang nhận nhiều dòng — dán
+danh sách tên miền, mỗi dòng (hoặc mỗi chữ cách nhau) một trang. TV: **Cài đặt** → **Danh sách trang phim** → **＋ Thêm nhiều
+trang…** (hoặc **Đổi trang phim** → **＋ Thêm trang khác…**, Enter = xuống dòng); iPad / iPhone / Mac: **Chọn trang phim** → ô
+«Thêm trang» hoặc **Cài đặt** → **Địa chỉ trang phim** → **Lưu**; Windows / Linux: **Đổi trang phim** → ô «Thêm trang» (Ctrl+Enter
+= Thêm). App bỏ dòng trống, dòng `#`, chữ không có dấu chấm và số bản kiểu `1.5`; bỏ ký tự bao quanh (`" ' < > , ; ( ) [ ]`, dấu
+chấm cuối câu); rút mỗi trang về gốc `scheme://tên-miền[:cổng]`; trang đã có (không tính `www.`, http / https, dấu `/` cuối, đường
+dẫn — có tính cổng) tự bỏ qua. Dán nhiều trang thì chỉ thêm vào cuối danh sách (đồng bộ trong nhà ghi nhận), **không đổi trang đang
+dùng**, báo «Đã thêm N trang: a, b, c (bỏ qua K đã có)»; một trang thì như trước. iPad / iPhone (từ 1.22.1): chọn ô là danh sách
+tự cuộn ô lên sát thanh tiêu đề để bàn phím không che (`TextEditor` trong List / Form không tự cuộn như ô một dòng). Cùng một luật ở năm bản: `SitePaste.kt` (TV),
+`Prefs.parseSites` (Swift), `prefs::split_sites` / `add_sites` (lõi Rust, bản Linux) và `Prefs.SplitSites` / `AddSites` (Windows).
 
 phimmois.fun là trang tổng hợp: ngoài hoạt hình 3D (khối "Hoạt hình Trung Quốc mới cập nhật" đầu trang chủ) còn phim
 bộ / phim lẻ Hàn, Trung, Âu Mỹ, Nhật, Thái. Menu có Hoạt hình, Phim bộ mới, Phim lẻ mới, 5 mục theo nước, 10 thể
@@ -473,6 +513,7 @@ glibc 2.35) rồi đóng gói `.deb` (`linux/packaging/make-deb.sh`). Mã NextDN
 | Đang xem phim | OK/Space: dừng–phát • ◀ ▶: tua (giữ để tua nhanh) • ▲: xem thời gian • ▼/Menu: đổi server (kèm điểm từng server), đổi tập, **Thu nhỏ vào góc**, tốc độ, khung hình (Vừa / Lấp đầy), hẹn giờ tắt, nhạc mở đầu • Số 0–9: nhảy tới 0–90% • CH+/CH−, N/P: tập sau/trước • Phím Window (nếu remote có): thu nhỏ • Back: thoát |
 | Phim đang thu nhỏ (cửa sổ nhỏ) | Đầu menu: **▶ Phóng to: …** / **✕ Tắt phim thu nhỏ** • Phím phát / dừng / tua / tập sau / tập trước của remote (nếu có): điều khiển phim nhỏ • Chạm vào cửa sổ nhỏ: phóng to |
 | Gợi ý đổi server (hiện khi video giật nhiều) | OK: chuyển sang server được gợi ý, xem tiếp đúng chỗ • Back: bỏ qua |
+| Truyền hình · Radio — đang xem | ▲ ▼ / CH+ CH−: kênh trước / sau (khi đang ẩn nút) • Số 0–9: nhảy tới kênh theo số • OK: hiện nút (☰ Kênh, « Kênh trước, Tạm dừng, Kênh sau », ☆ Yêu thích, Lịch phát sóng) • Back: về lưới kênh |
 | Duyệt web | Mũi tên: di chuyển con trỏ (chạm mép thì cuộn) • OK: bấm • CH+/CH−: cuộn nhanh • Menu: tải lại • Back: lùi trang |
 
 Bàn phím rời (điện thoại / TV box cắm bàn phím): **ESC = Back** ở mọi màn hình (từ 1.9.2 app tự xử lý — `escapeAsBack`
@@ -873,14 +914,21 @@ web mà app đọc.
 
 ## Logo
 
-Logo và banner TV vẽ bằng SVG trong `design/logo.html` (phương án C — ấn triện chữ 鵬 của chim Côn Bằng trong vòng bút
-mực vàng; font Spectral SC cho tên có dấu tiếng Việt, Yuji Boku cho chữ bút lông 鵬).
-Sửa xong thì xuất lại toàn bộ icon / icon thích ứng / banner (xhdpi → xxxhdpi) bằng Chrome headless:
+Logo và banner TV vẽ bằng SVG trong `design/logo.html`. Từ 17/11/2026 dùng **phương án D «Đĩa kính 3D»** (như icon bản Legacy):
+đĩa kính tròn nền trong suốt, vòng bút mực vàng và ấn triện chữ 鵬 nổi khối cùng một hướng sáng (trước đó: phương án C, ấn triện
+phẳng trên ô vuông nền tối). Font Spectral SC cho tên có dấu tiếng Việt, Yuji Boku cho chữ bút lông 鵬.
+Sửa xong thì xuất lại toàn bộ icon bằng Chrome headless:
 
 ```powershell
-node design/render.mjs preview xem-truoc.png   # xem cả 3 phương án
-node design/render.mjs export c                 # ghi PNG vào app/src/main/res
+node design/render.mjs preview xem-truoc.png   # xem các phương án
+node design/render.mjs export d                 # Android: icon, icon thích ứng (nền trong suốt), banner, logo + design/*.png
+node design/render.mjs ios d                    # iPad / iPhone: AppIcon 1024 + logo trong app
+node design/render.mjs mac d                    # Mac: các cỡ icon macOS
+node design/render.mjs desktop d                # Windows: app.ico (tự ghép 9 cỡ) + logo.png; Linux: linux/packaging/icons
 ```
+
+iPadOS / iOS tô đen phần trong suốt của icon trên màn hình chính (với mọi app), nên riêng icon iPad / iPhone đặt đĩa kính trên nền
+nâu tối của banner; Mac, Android, Windows, Linux giữ nền trong suốt.
 
 Đổi tên app chỉ là đổi **tên hiển thị** (`app_name`), logo và banner. Mã gói `vn.chimto.tv`, khoá ký và tên repo
 `ChimToTV` phải giữ nguyên — đổi một trong ba thì các TV đã cài không nhận bản cập nhật nữa. Repo đã chuyển sang

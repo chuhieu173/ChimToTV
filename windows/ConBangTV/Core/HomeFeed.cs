@@ -43,6 +43,10 @@ public static class HomeFeed
     {
         ("new-eps", "Có tập mới"),
         ("continue", "Xem tiếp"),
+        ("tv-recent", "Kênh vừa xem (Truyền hình)"),
+        ("tv-favs", "Kênh yêu thích (Truyền hình)"),
+        ("tv-live", "Trận đang / sắp đá (Truyền hình)"),
+        ("tv-radio", "Radio (Truyền hình)"),
         ("similar", "Giống «phim vừa xem»"),
         ("interest", "Vì … hay xem <thể loại> (sở thích 1)"),
         ("dominant", "Loại phim hay xem · mới cập nhật"),
@@ -56,8 +60,17 @@ public static class HomeFeed
     };
     public static readonly HashSet<string> HeadRows = new() { "new-eps", "continue" };
     public static readonly HashSet<string> KidsRows = new() { "kids-young", "kids-family", "kids-dub" };
-    /// Hàng hồ sơ trẻ em không có (chỉ hoạt hình hợp trẻ em).
-    public static readonly HashSet<string> AdultRows = new() { "dominant", "dub", "newest", "movies" };
+    /// Hàng hồ sơ trẻ em không có (chỉ hoạt hình hợp trẻ em; trận đấu / radio của danh sách kênh cũng không).
+    public static readonly HashSet<string> AdultRows = new() { "dominant", "dub", "newest", "movies", "tv-live", "tv-radio" };
+    /// Hàng Truyền hình (dựng tại chỗ từ danh sách kênh — lõi iptv::home_rows, không qua tải phim): id → tiêu đề trên trang chủ;
+    /// khoá dữ liệu là id bỏ «tv-».
+    public static readonly (string Id, string Title)[] TvRows =
+        { ("tv-recent", "Kênh vừa xem"), ("tv-favs", "Kênh yêu thích"), ("tv-live", "Trận đang / sắp đá"), ("tv-radio", "Radio") };
+    /// Số hàng đầu Rows đứng trước các hàng tự thêm trong thứ tự mặc định (Có tập mới, Xem tiếp, 4 hàng Truyền hình).
+    private const int RowsBeforeCustom = 6;
+
+    /// Tiêu đề trên trang chủ của hàng Truyền hình (null: không phải hàng Truyền hình).
+    public static string? TvRowTitle(string id) => TvRows.FirstOrDefault(x => x.Id == id).Title;
     /// Tối đa số hàng tự thêm.
     public const int CustomMax = 6;
     /// Chủ đề hợp hồ sơ trẻ em (chỉ hoạt hình).
@@ -80,9 +93,10 @@ public static class HomeFeed
         return string.Join(" · ", parts);
     }
 
-    /// Thứ tự mặc định: «Có tập mới», «Xem tiếp», các hàng tự thêm (theo lúc thêm), rồi các hàng app tự chọn.
+    /// Thứ tự mặc định: «Có tập mới», «Xem tiếp», 4 hàng Truyền hình, các hàng tự thêm (theo lúc thêm), rồi các hàng app tự chọn.
     public static List<string> RowDefaults(List<CustomRow>? custom = null) =>
-        Rows.Take(2).Select(x => x.Id).Concat((custom ?? Prefs.HomeCustom).Select(c => c.Key)).Concat(Rows.Skip(2).Select(x => x.Id)).ToList();
+        Rows.Take(RowsBeforeCustom).Select(x => x.Id).Concat((custom ?? Prefs.HomeCustom).Select(c => c.Key))
+            .Concat(Rows.Skip(RowsBeforeCustom).Select(x => x.Id)).ToList();
 
     /// Ghép thứ tự đã lưu ("id" bật, "-id" tắt) với các hàng mặc định: bỏ id lạ / trùng, hàng mặc định chưa có (hàng mới ở bản
     /// sau, hàng vừa tự thêm) chèn ngay sau hàng đứng trước nó trong thứ tự mặc định.

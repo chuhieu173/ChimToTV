@@ -66,7 +66,7 @@ enum Doh {
 
     private static let lock = NSLock()
     /// Địa chỉ đã hỏi; addr nil = tên miền không có (NXDOMAIN).
-    private static var cache: [String: (addr: IPAddr?, until: Date)] = [:]
+    private static var cache: [String: (addr: IPAddr?, until: Date, all: [IPAddr])] = [:]
     private static var downUntil: [String: Date] = [:]
     private static var nextIp: [String: Int] = [:]
     private static var inflight: [String: DispatchGroup] = [:]
@@ -97,13 +97,19 @@ enum Doh {
     /// Địa chỉ IPv4 qua chuỗi DNS mã hoá (nhớ theo TTL, 30 giây – 10 phút). nil = IP / localhost, hoặc mọi máy chủ lỗi /
     /// không có bản ghi A → bên gọi dùng DNS của máy. Tên miền không có → SocksError 4. Chạy ở luồng nền (chờ mạng).
     static func resolve(_ host: String, servers: [Server]? = nil) throws -> IPAddr? {
+        try resolveAll(host, servers: servers)?.first
+    }
+
+    /// Như resolve nhưng mọi địa chỉ IPv4 máy chủ DNS trả (theo thứ tự): kết nối thẳng thử lần lượt — địa chỉ đầu của CDN / dịch
+    /// vụ rút gọn link chết thì sang địa chỉ sau (trước đây chỉ giữ địa chỉ đầu, hỏng tới hết TTL).
+    static func resolveAll(_ host: String, servers: [Server]? = nil) throws -> [IPAddr]? {
         let name = host.lowercased().trimmingCharacters(in: CharacterSet(charactersIn: "[]")).trimmingSuffix(".")
         if IPAddr(text: name) != nil || name == "localhost" { return nil }
         lock.lock()
         if let hit = cache[name], hit.until > Date() {
             lock.unlock()
-            guard let a = hit.addr else { throw noDomainError(name) }
-            return a
+            guard hit.addr != nil else { throw noDomainError(name) }
+            return hit.all
         }
         // Nhiều kết nối cùng lúc tới một tên miền (ảnh bìa, API…): chỉ hỏi một lần, các kết nối kia chờ kết quả đó
         if let running = inflight[name] {
@@ -113,8 +119,8 @@ enum Doh {
             let hit = cache[name]
             lock.unlock()
             guard let hit = hit, hit.until > Date() else { return nil }
-            guard let a = hit.addr else { throw noDomainError(name) }
-            return a
+            guard hit.addr != nil else { throw noDomainError(name) }
+            return hit.all
         }
         let group = DispatchGroup()
         group.enter()
@@ -129,7 +135,7 @@ enum Doh {
         return try lookup(name, servers ?? self.servers)
     }
 
-    private static func lookup(_ name: String, _ servers: [Server]) throws -> IPAddr? {
+    private static func lookup(_ name: String, _ servers: [Server]) throws -> [IPAddr]? {
         for s in servers {
             lock.lock()
             let down = (downUntil[s.label] ?? .distantPast) > Date()
@@ -158,19 +164,20 @@ enum Doh {
             case let .found(_, _, all) where all.contains(where: Self.blocked):
                 Log.d("dns", "\(name) bị \(s.label) chặn, hỏi máy chủ sau")
                 continue
-            case let .found(addr, ttl, _):
+            case let .found(addr, ttl, found):
+                let all = found.isEmpty ? [addr] : found
                 lock.lock()
-                cache[name] = (addr, Date().addingTimeInterval(TimeInterval(min(max(ttl, 30), 600))))
+                cache[name] = (addr, Date().addingTimeInterval(TimeInterval(min(max(ttl, 30), 600))), all)
                 lock.unlock()
                 #if DEVTOOLS
-                Log.d("dns", "\(name) → \(addr.text) (\(s.label) · \(ip), \(Int(Date().timeIntervalSince(t0) * 1000)) ms)")
+                Log.d("dns", "\(name) → \(all.map(\.text).joined(separator: ", ")) (\(s.label) · \(ip), \(Int(Date().timeIntervalSince(t0) * 1000)) ms)")
                 #else
                 _ = t0
                 #endif
-                return addr
+                return all
             case .noDomain:
                 lock.lock()
-                cache[name] = (nil, Date().addingTimeInterval(30)) // nhớ 30 giây: kết nối khác khỏi hỏi lại
+                cache[name] = (nil, Date().addingTimeInterval(30), []) // nhớ 30 giây: kết nối khác khỏi hỏi lại
                 lock.unlock()
                 throw noDomainError(name)
             case .noIpv4:
@@ -409,6 +416,12 @@ enum Doh {
     static func forConnect(_ host: String, secure: Bool, split: Bool) throws -> IPAddr? {
         if secure { return try resolve(host) }
         return split ? unblocked(host) : nil
+    }
+
+    /// Như forConnect nhưng mọi địa chỉ nên thử (kết nối thẳng thử lần lượt). nil = dùng DNS của máy.
+    static func forConnectAll(_ host: String, secure: Bool, split: Bool) throws -> [IPAddr]? {
+        if secure { return try resolveAll(host) }
+        return split ? unblocked(host).map { [$0] } : nil
     }
 }
 

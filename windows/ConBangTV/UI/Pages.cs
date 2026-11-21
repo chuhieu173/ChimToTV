@@ -1,3 +1,4 @@
+using System.Text.Json.Nodes;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -21,6 +22,14 @@ public sealed class HomePage : Page
 
     /// Số phim tối đa một dải vuốt ngang (còn lại xem ở «Xem thêm»).
     private const int StripMax = 12;
+    /// Số kênh tối đa một hàng Truyền hình.
+    private const int TvMax = 16;
+    /// Dữ liệu các hàng Truyền hình lần dựng gần nhất (lõi iptv::home_rows_now / home_rows).
+    private JsonObject _tv = new();
+    private bool _tvLoading;
+    /// Các hàng đang hiện (trừ «Có tập mới» / «Xem tiếp»), theo thứ tự trên trang: loại hàng, id hàng, uid ô đầu — sửa nhanh
+    /// (chuyển lên / xuống qua hàng kề, chọn ô của hàng kế sau khi ẩn).
+    private readonly List<(string Slot, string RowId, string? FirstUid)> _shown = new();
 
     private static string RowsSignature() =>
         string.Join(",", Prefs.HomeRows) + "|" + string.Join(",", Prefs.HomeCustom.Select(c => $"{c.Id};{c.Topic};{c.Type};{c.Country};{c.Genre};{c.Lang}")) +
@@ -173,21 +182,22 @@ public sealed class HomePage : Page
         string title, slot;
         if (rowId == "new-eps") (title, slot) = ("Có tập mới", rowId);
         else if (rowId == "continue") (title, slot) = ("Xem tiếp", rowId);
+        else if (HomeFeed.TvRowTitle(rowId) is { } tvTitle) (title, slot) = (tvTitle, rowId);
         else
         {
             var r = arranged.FirstOrDefault(x => x.Row.Id == rowId);
             if (r.Row == null || r.Slot == "topics") return;
             (title, slot) = (r.Row.Title, r.Slot);
         }
-        var shown = arranged.Select(x => x.Slot).ToList();
+        var shown = _shown.Select(x => x.Slot).ToList();
         var prefs = HomeFeed.RowPrefs();
-        var at = arranged.FindIndex(x => x.Row.Id == rowId);
-        var next = at < 0 ? null : (at + 1 < arranged.Count ? arranged[at + 1] : at > 0 ? arranged[at - 1] : default).Row;
+        var at = _shown.FindIndex(x => x.RowId == rowId);
+        var nextUid = at < 0 ? null : at + 1 < _shown.Count ? _shown[at + 1].FirstUid : at > 0 ? _shown[at - 1].FirstUid : null;
         var opts = new List<(string Label, Action Run)>
         {
             ("Ẩn hàng này", () =>
             {
-                Apply(HomeFeed.Hide(prefs, slot), next?.Cards.FirstOrDefault()?.Film.Url);
+                Apply(HomeFeed.Hide(prefs, slot), nextUid ?? "");
                 Main.Toast($"Đã ẩn hàng «{title}» — bật lại trong Cài đặt → Các hàng trên trang chủ.");
             }),
         };
@@ -214,6 +224,101 @@ public sealed class HomePage : Page
         if (_mix) BuildMix(); else Build();
         if (!string.IsNullOrEmpty(uid)) FocusUid(uid);
         else Dispatcher.BeginInvoke(() => FocusFirst(), DispatcherPriority.Loaded);
+    }
+
+    // ---- Hàng Truyền hình (Kênh vừa xem, Kênh yêu thích, Trận đang / sắp đá, Radio) ----
+
+    /// Hàng Truyền hình đang bật của người xem (theo thứ tự cài đặt) có kênh: (loại hàng, tiêu đề, ô kênh).
+    private List<(string Slot, string Title, List<JsonNode> Items)> TvRowsToShow(List<(string Id, bool On)> prefs)
+    {
+        var o = new List<(string, string, List<JsonNode>)>();
+        foreach (var (id, on) in prefs)
+        {
+            if (!on || HomeFeed.TvRowTitle(id) is not { } title) continue;
+            if (_kids && HomeFeed.AdultRows.Contains(id)) continue;
+            if (_tv[id[3..]] is not JsonArray a || a.Count == 0) continue;
+            o.Add((id, title, a.Where(x => x != null).Select(x => x!).ToList()));
+        }
+        return o;
+    }
+
+    /// Một hàng Truyền hình: dải thẻ kênh (bấm = phát luôn), ô «Xem thêm» cuối dải mở màn Truyền hình. Trả cả uid ô đầu.
+    private (UIElement Strip, string? FirstUid) TvStrip(string slot, string title, List<JsonNode> items)
+    {
+        var cards = new List<UIElement>();
+        foreach (var c in items)
+        {
+            var b = TvPage.ChannelCard(c);
+            b.Margin = new Thickness(0, 0, 16, 22);
+            b.Uid = $"{slot}:{Iptv.S(c, "l")}:{Iptv.S(c, "k")}";
+            var node = c;
+            b.Click += (_, _) => _ = OpenChannel(node);
+            cards.Add(b);
+        }
+        IptvFilter? start = slot switch { "tv-favs" => new IptvFilter(Favs: true), "tv-recent" => null, _ => new IptvFilter() };
+        Action more = () => Main.ShowRoot(new TvPage(start));
+        var tile = Ui.MoreTile(more, null);
+        tile.Height = 126; // cao bằng thẻ kênh
+        tile.Uid = "more:" + slot;
+        cards.Add(tile);
+        return (Strip(title, slot, cards, more), cards[0].Uid);
+    }
+
+    /// Bấm thẻ kênh ở hàng Truyền hình: phát luôn (kênh của danh sách khác thì đổi danh sách); trận còn hơn 30 phút mới đá thì
+    /// hỏi đặt nhắc như màn Truyền hình.
+    private async Task OpenChannel(JsonNode c)
+    {
+        if (WatchLimit.Blocked() is { } blocked)
+        {
+            _ = Main.LimitReached(blocked, "", "", () => _ = OpenChannel(c));
+            return;
+        }
+        if (Iptv.S(c, "match") == "later")
+        {
+            var kick = Iptv.D(c, "kick");
+            var m = (long)Math.Ceiling((kick - Iptv.NowSec()) / 60);
+            var left = m >= 24 * 60 ? $"{(m + 720) / 1440} ngày" : m >= 60 ? $"{m / 60} giờ {m % 60:00} phút" : $"{m} phút";
+            var has = Iptv.HasReminder(Iptv.S(c, "k"), null, true);
+            var r = await Main.Ask("Trận chưa bắt đầu",
+                $"{Iptv.S(c, "n")}\nBóng lăn lúc {Iptv.KickText(kick)} (còn {left}).\nKênh trận đấu thường chỉ lên sóng trước giờ đá 15–30 phút.",
+                new[] { has ? "Bỏ nhắc" : "Nhắc lúc bóng lăn", "Vẫn mở", "Đóng" });
+            if (r == 0)
+            {
+                var on = Iptv.ToggleReminder(Iptv.S(c, "k"), Iptv.S(c, "n"), Iptv.S(c, "n"), kick, true);
+                Main.Toast(on ? $"Sẽ nhắc lúc bóng lăn ({Iptv.KickText(kick)}) — khi app đang mở." : "Đã bỏ nhắc.");
+            }
+            if (r != 1) return;
+        }
+        await Main.PlayLiveKey(Iptv.S(c, "k"), Iptv.S(c, "l"));
+    }
+
+    /// Danh sách kênh chưa đọc (vừa mở app): đọc ở nền rồi dựng lại để hiện các hàng Truyền hình (giữ ô đang chọn).
+    private void MaybeLoadTv()
+    {
+        if (_tvLoading || Iptv.B(_tv, "loaded") || Iptv.ActiveList() == null) return;
+        _tvLoading = true;
+        _ = LoadTv();
+    }
+
+    private async Task LoadTv()
+    {
+        try
+        {
+            var tv = await Iptv.HomeRows(TvMax);
+            if (!Iptv.B(tv, "loaded") || !ReferenceEquals(Main.Current, this)) return;
+            var focus = (Keyboard.FocusedElement as UIElement)?.Uid;
+            if (_mix) BuildMix();
+            else Build();
+            if (!string.IsNullOrEmpty(focus)) FocusUid(focus);
+        }
+        catch (Exception e)
+        {
+            Log.D("home", "hàng Truyền hình: " + e.Message);
+        }
+        finally
+        {
+            _tvLoading = false;
+        }
     }
 
     /// Dựng trang chủ tổng hợp từ lần tải gần nhất: Có tập mới, Xem tiếp, (chọn chủ đề), mỗi hàng một dải vuốt ngang (tới
@@ -258,9 +363,30 @@ public sealed class HomePage : Page
                 return (UIElement)b;
             })));
         }
-        // Thứ tự / bật tắt theo cài đặt hiện tại của người xem (bản lưu dựng trước khi đổi cũng xếp đúng ngay)
-        foreach (var r in HomeFeed.Arrange(s.Rows))
+        // Thứ tự / bật tắt theo cài đặt hiện tại của người xem (bản lưu dựng trước khi đổi cũng xếp đúng ngay); hàng Truyền hình
+        // (dựng tại chỗ) chen vào đúng chỗ theo thứ tự trong cài đặt
+        _tv = Iptv.HomeRowsNow(TvMax);
+        var prefs = HomeFeed.RowPrefs();
+        var pos = new Dictionary<string, int>();
+        for (var i = 0; i < prefs.Count; i++) pos[prefs[i].Id] = i;
+        var tvRows = TvRowsToShow(prefs);
+        var tvAt = 0;
+        _shown.Clear();
+        void TvUntil(int limit)
         {
+            while (tvAt < tvRows.Count && pos[tvRows[tvAt].Slot] < limit)
+            {
+                var t = tvRows[tvAt++];
+                var (el, first) = TvStrip(t.Slot, t.Title, t.Items);
+                Body.Children.Add(el);
+                _shown.Add((t.Slot, t.Slot, first));
+                count++;
+            }
+        }
+        foreach (var (r, slot) in HomeFeed.ArrangeSlots(s.Rows))
+        {
+            TvUntil(slot == "topics" ? -1 : pos.TryGetValue(slot, out var p) ? p : int.MaxValue);
+            _shown.Add((slot, r.Id, r.Cards.FirstOrDefault()?.Film.Url));
             var n = r.Cards.Count;
             var cards = r.Cards.Take(StripMax).Select(c => (UIElement)CardButton(c)).ToList();
             Action? more = null;
@@ -276,6 +402,8 @@ public sealed class HomePage : Page
             Body.Children.Add(Strip(r.Title, r.Id, cards, more));
             count++;
         }
+        TvUntil(int.MaxValue);
+        MaybeLoadTv();
         return count > 0;
     }
 
@@ -327,6 +455,16 @@ public sealed class HomePage : Page
             Body.Children.Add(Ui.Section("Phim theo dõi có tập mới", fresh.Select(f =>
                 (UIElement)FilmCard(new Film(f.FilmUrl, f.Title, f.Poster, f.Latest.NonEmpty()), fresh: $"+{f.NewCount}"))));
         }
+        // Hàng Truyền hình (kiểu theo trang: ngay dưới Xem tiếp, theo thứ tự trong cài đặt)
+        _tv = Iptv.HomeRowsNow(TvMax);
+        _shown.Clear();
+        foreach (var t in TvRowsToShow(HomeFeed.RowPrefs()))
+        {
+            var (el, first) = TvStrip(t.Slot, t.Title, t.Items);
+            Body.Children.Add(el);
+            _shown.Add((t.Slot, t.Slot, first));
+        }
+        MaybeLoadTv();
         foreach (var s in home.Sections)
             Body.Children.Add(Ui.Section(s.Title, s.Films.Select(f => (UIElement)FilmCard(f))));
         if (home.Sections.Count == 0)

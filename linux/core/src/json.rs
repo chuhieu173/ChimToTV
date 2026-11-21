@@ -11,7 +11,7 @@ pub fn scan(text: &str, index: usize) -> Option<Value> {
     if index >= text.len() || !text.is_char_boundary(index) {
         return None;
     }
-    let mut p = Scan { u: text.as_bytes(), s: text, i: index };
+    let mut p = Scan { u: text.as_bytes(), s: text, i: index, depth: 0 };
     p.value().ok()
 }
 
@@ -31,7 +31,12 @@ struct Scan<'a> {
     u: &'a [u8],
     s: &'a str,
     i: usize,
+    /// Độ lồng [ / { hiện tại: trang lạ có `[[[[…` hàng trăm nghìn tầng thì đệ quy tràn ngăn xếp, cả app (và app Windows
+    /// dùng chung DLL) văng — quá MAX_DEPTH thì coi như JSON hỏng. Cây React thật chỉ vài chục tầng.
+    depth: u32,
 }
+
+const MAX_DEPTH: u32 = 512;
 
 struct Bad;
 
@@ -48,8 +53,15 @@ impl<'a> Scan<'a> {
             return Err(Bad);
         }
         match self.u[self.i] {
-            b'{' => self.object(),
-            b'[' => self.array(),
+            b'{' | b'[' => {
+                if self.depth >= MAX_DEPTH {
+                    return Err(Bad);
+                }
+                self.depth += 1;
+                let v = if self.u[self.i] == b'{' { self.object() } else { self.array() };
+                self.depth -= 1;
+                v
+            }
             b'"' => self.string().map(Value::String),
             b't' => self.literal("true").map(|_| Value::Bool(true)),
             b'f' => self.literal("false").map(|_| Value::Bool(false)),
@@ -317,6 +329,17 @@ mod tests {
         assert_eq!(scan(r#""a\ud83db""#, 0).unwrap(), "a\u{FFFD}b");
         assert_eq!(scan(r#""😀""#, 0).unwrap(), "😀");
         assert_eq!(scan(r#""Đấu Phá""#, 0).unwrap(), "Đấu Phá");
+    }
+
+    #[test]
+    fn scan_limits_nesting() {
+        // Lồng sâu vừa phải vẫn đọc được; `[[[[…` quá sâu (trang lạ) → None thay vì tràn ngăn xếp làm app văng
+        let ok = format!("{}1{}", "[".repeat(200), "]".repeat(200));
+        assert!(scan(&ok, 0).is_some());
+        let deep = format!("{}1{}", "[".repeat(100_000), "]".repeat(100_000));
+        assert!(scan(&deep, 0).is_none());
+        let objs = format!("{}1{}", r#"{"a":"#.repeat(100_000), "}".repeat(100_000));
+        assert!(scan(&objs, 0).is_none());
     }
 
     #[test]

@@ -3,6 +3,8 @@
 //   node design/render.mjs export <a|b|c>       → ghi PNG vào app/src/main/res (+ design/logo-512.png, banner-1280.png)
 //   node design/render.mjs ios <a|b|c>          → icon 1024 + logo cho bản iPad (ios/ConBangTV/Assets.xcassets)
 //   node design/render.mjs mac <a|b|c>          → các cỡ icon macOS (16…1024) cho bản Mac, cùng bộ AppIcon
+//   node design/render.mjs desktop <a|b|c|d>    → windows/ConBangTV/app.ico + logo.png, linux/packaging/icons/*.png
+// Đang dùng phương án D (đĩa kính 3D, nền trong suốt — 17/11/2026): chạy export, ios, mac, desktop với «d».
 import { spawn } from 'node:child_process';
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -36,7 +38,8 @@ const evaluate = async expr => (await send('Runtime.evaluate', { expression: exp
 
 await send('Page.enable');
 await send('Emulation.setDefaultBackgroundColorOverride', { color: { r: 0, g: 0, b: 0, a: 0 } });
-const query = mode === 'export' || mode === 'ios' || mode === 'mac' ? `?mode=${mode}&concept=${arg || 'a'}` : '?mode=preview';
+const assetModes = ['export', 'ios', 'mac', 'desktop'];
+const query = assetModes.includes(mode) ? `?mode=${mode}&concept=${arg || 'a'}` : '?mode=preview';
 await send('Emulation.setDeviceMetricsOverride', { width: 1400, height: 1000, deviceScaleFactor: 1, mobile: false });
 await send('Page.navigate', { url: pathToFileURL(join(here, 'logo.html')).href + query });
 for (let i = 0; i < 100 && (await evaluate('document.title')) !== 'ready'; i++) await sleep(200);
@@ -44,16 +47,38 @@ await sleep(300);
 
 const shot = async clip => Buffer.from((await send('Page.captureScreenshot', { format: 'png', clip: { ...clip, scale: 1 }, captureBeyondViewport: true })).result.data, 'base64');
 
-if (mode === 'export' || mode === 'ios' || mode === 'mac') {
+if (assetModes.includes(mode)) {
   const items = await evaluate(`[...document.querySelectorAll('.asset')].map(d => { const r = d.firstElementChild.getBoundingClientRect(); return { name: d.dataset.name, x: r.x, y: r.y, w: r.width, h: r.height }; })`);
   const total = Math.ceil(Math.max(...items.map(i => i.y + i.h)));
   await send('Emulation.setDeviceMetricsOverride', { width: 1400, height: total, deviceScaleFactor: 1, mobile: false });
   await sleep(300);
+  const icoParts = [];
   for (const it of items) {
+    if (it.name.startsWith('@ico/')) {
+      icoParts.push({ px: Number(it.name.slice(5)), png: await shot({ x: it.x, y: it.y, width: it.w, height: it.h }) });
+      continue;
+    }
     const out = resolve(res, it.name);
     mkdirSync(dirname(out), { recursive: true });
     writeFileSync(out, await shot({ x: it.x, y: it.y, width: it.w, height: it.h }));
     console.log('ghi', out, `${it.w}x${it.h}`);
+  }
+  if (icoParts.length) {
+    // Tệp .ico chứa ảnh PNG (Windows Vista trở lên đọc được mọi cỡ): đầu 6 byte, mỗi ảnh một mục 16 byte, rồi dữ liệu PNG
+    const head = Buffer.alloc(6 + 16 * icoParts.length);
+    head.writeUInt16LE(0, 0); head.writeUInt16LE(1, 2); head.writeUInt16LE(icoParts.length, 4);
+    let offset = head.length;
+    icoParts.forEach((p, i) => {
+      const e = 6 + 16 * i;
+      head.writeUInt8(p.px >= 256 ? 0 : p.px, e); head.writeUInt8(p.px >= 256 ? 0 : p.px, e + 1);
+      head.writeUInt8(0, e + 2); head.writeUInt8(0, e + 3);
+      head.writeUInt16LE(1, e + 4); head.writeUInt16LE(32, e + 6);
+      head.writeUInt32LE(p.png.length, e + 8); head.writeUInt32LE(offset, e + 12);
+      offset += p.png.length;
+    });
+    const out = resolve(here, '../windows/ConBangTV/app.ico');
+    writeFileSync(out, Buffer.concat([head, ...icoParts.map(p => p.png)]));
+    console.log('ghi', out, icoParts.map(p => p.px).join('/'));
   }
 } else {
   const h = Math.ceil(await evaluate('document.body.scrollHeight'));

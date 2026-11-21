@@ -25,6 +25,7 @@ pub mod feed;
 pub mod home_feed;
 pub mod related;
 pub mod imdb_top;
+pub mod iptv;
 pub mod sync_data;
 pub mod sync_service;
 pub mod watch_limit;

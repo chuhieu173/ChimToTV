@@ -34,9 +34,31 @@ final class HomeRowsTests: XCTestCase {
     func testCustomRowsDefaultAfterHead() {
         let custom = [CustomRow(id: "a", type: "hoathinh"), CustomRow(id: "t-kr", topic: "kr")]
         let d = HomeFeed.rowDefaults(custom)
-        XCTAssertEqual(Array(d.prefix(5)), ["new-eps", "continue", "custom-a", "custom-t-kr", "similar"])
+        XCTAssertEqual(Array(d.prefix(9)), ["new-eps", "continue", "tv-recent", "tv-favs", "tv-live", "tv-radio", "custom-a", "custom-t-kr",
+                                            "similar"])
         let m = HomeFeed.mergeRows(["new-eps", "continue", "custom-a", "movies", "similar"], d)
-        XCTAssertEqual(Array(ids(m).prefix(6)), ["new-eps", "continue", "custom-a", "custom-t-kr", "movies", "similar"])
+        XCTAssertEqual(Array(ids(m).prefix(10)), ["new-eps", "continue", "tv-recent", "tv-favs", "tv-live", "tv-radio", "custom-a",
+                                                  "custom-t-kr", "movies", "similar"])
+    }
+
+    /// Hàng Truyền hình (17/11/2026): người xem cũ (thứ tự đã lưu chưa có) cũng thấy, ngay sau «Xem tiếp», đang bật; mỗi hàng một
+    /// lần; hồ sơ trẻ em không có trận đấu / radio.
+    func testTvRowsForOldSavedOrder() {
+        let d = HomeFeed.rowDefaults([])
+        XCTAssertEqual(d.filter { HomeFeed.isTv($0) }, ["tv-recent", "tv-favs", "tv-live", "tv-radio"])
+        let m = HomeFeed.mergeRows(["new-eps", "continue", "newest", "-similar", "movies"], d)
+        XCTAssertEqual(Array(ids(m).prefix(6)), ["new-eps", "continue", "tv-recent", "tv-favs", "tv-live", "tv-radio"])
+        XCTAssertTrue(m.filter { HomeFeed.isTv($0.id) }.allSatisfy { $0.on })
+        XCTAssertEqual(Set(ids(m)).count, ids(m).count)
+        XCTAssertTrue(HomeFeed.adultRows.isSuperset(of: ["tv-live", "tv-radio"]))
+        XCTAssertFalse(HomeFeed.adultRows.contains("tv-recent"))
+        XCTAssertEqual(HomeFeed.tvTitle("tv-live"), "Trận đang / sắp đá")
+        // ẩn / chuyển hàng Truyền hình như hàng phim
+        let shown = ["continue", "tv-recent", "tv-favs", "newest"]
+        let up = HomeFeed.moveShown(m, shown, "tv-favs", up: true)
+        XCTAssertEqual(up.map { Array(ids($0).prefix(4)) }, ["new-eps", "continue", "tv-favs", "tv-recent"])
+        XCTAssertNil(HomeFeed.moveShown(m, shown, "tv-recent", up: true)) // không vượt «Xem tiếp»
+        XCTAssertEqual(HomeFeed.hide(m, "tv-radio").first { $0.id == "tv-radio" }?.on, false)
     }
 
     func testCustomTitles() {

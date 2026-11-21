@@ -219,7 +219,10 @@ impl App {
             let a = app();
             // Ô đang chọn mất lúc cửa sổ ở dưới (trang dựng lại khi đồng bộ…) thì lúc quay lại chọn lại
             ui::after(150, || app().refocus_if_lost());
-            if away > 0 && now - away > 30 * 60_000 && a.playing().is_none() && prefs::profiles().len() > 1 {
+            // Rời app hơn 30 phút (không xem phim / truyền hình): hỏi lại ai đang xem
+            if away > 0 && now - away > 30 * 60_000 && a.playing().is_none() && crate::live::current().is_none()
+                && prefs::profiles().len() > 1
+            {
                 let cur = prefs::current_profile();
                 if prefs::ask_profile() || cur.locked() {
                     crate::profiles::pick_profile(!cur.locked());
@@ -262,6 +265,8 @@ impl App {
         if let Some(p) = self.player.borrow().clone() {
             p.close(false);
         }
+        // Đang xem truyền hình / nghe radio lúc đóng app: ghi nốt giờ đã xem (tới 29 giây chưa ghi) cho giới hạn giờ xem
+        crate::limits::flush();
         cbtv::sync_service::stop();
         prefs::flush();
     }
@@ -383,7 +388,14 @@ impl App {
     /// Không ô nào được chọn (ô cũ bị huỷ khi trang dựng lại) → chọn ô cùng thứ tự trong trang / ô đầu / menu. Người dùng remote /
     /// bàn phím phải luôn thấy một ô sáng.
     pub fn refocus_if_lost(&self) {
-        if self.window.focused_widget().is_some() || !self.window.is_active() || self.playing().is_some() || self.dialog_open() {
+        // Trình phát truyền hình đang mở: bảng kênh / thanh điều khiển ẩn đi mang theo ô đang chọn — không đưa con trỏ về menu
+        // bên dưới (Enter lúc đó bấm nhầm mục menu ẩn sau trình phát)
+        if self.window.focused_widget().is_some()
+            || !self.window.is_active()
+            || self.playing().is_some()
+            || crate::live::current().is_some()
+            || self.dialog_open()
+        {
             return;
         }
         let Some(p) = self.current() else {
@@ -428,8 +440,23 @@ impl App {
 
     /// Mở trang gốc (từ menu): bỏ các trang đang mở.
     pub fn show_root(&self, p: Rc<dyn Page>) {
-        self.stack_pages.borrow_mut().clear();
+        let old: Vec<Rc<dyn Page>> = self.stack_pages.borrow_mut().drain(..).collect();
         self.push(p);
+        self.discard(old);
+    }
+
+    /// Trang vừa ra khỏi ngăn trang (mở trang gốc khác, thay trang, Back): huỷ cây ô của nó. Hàm bấm / hẹn giờ của các ô giữ Rc
+    /// tới chính trang (vòng tham chiếu) — không huỷ thì trang cũ (ảnh bìa, hẹn giờ mỗi giây của màn Truyền hình) nằm mãi trong
+    /// bộ nhớ, mỗi lần mở lại một mục menu thêm một bản. Huỷ ở lượt sau: hàm bấm đang chạy (nút trên trang cũ mở trang mới)
+    /// chạy xong đã.
+    fn discard(&self, old: Vec<Rc<dyn Page>>) {
+        let live: Vec<*const ()> = self.stack_pages.borrow().iter().map(|q| Rc::as_ptr(q) as *const ()).collect();
+        for p in old {
+            if live.contains(&(Rc::as_ptr(&p) as *const ())) {
+                continue;
+            }
+            ui::after(0, move || p.base().teardown());
+        }
     }
 
     pub fn push(&self, p: Rc<dyn Page>) {
@@ -451,12 +478,11 @@ impl App {
             self.push(p);
             return;
         }
-        if let Some(last) = self.stack_pages.borrow_mut().last_mut() {
-            *last = p.clone();
-        }
+        let old = self.stack_pages.borrow_mut().last_mut().map(|last| std::mem::replace(last, p.clone()));
         self.set_active_menu(&p.base().menu_key.borrow());
         self.host(&p);
         p.start();
+        self.discard(old.into_iter().collect());
     }
 
     pub fn back(&self) {
@@ -465,7 +491,8 @@ impl App {
             return;
         }
         if self.stack_pages.borrow().len() > 1 {
-            self.stack_pages.borrow_mut().pop();
+            let old = self.stack_pages.borrow_mut().pop();
+            self.discard(old.into_iter().collect());
             let p = self.current().unwrap();
             self.set_active_menu(&p.base().menu_key.borrow());
             self.host(&p);
@@ -531,6 +558,84 @@ impl App {
         self.rebuild_menu();
     }
 
+    /// Truyền hình: mở kênh ở vị trí `index` của bộ lọc (lưới / lịch). Phim đang phát (kể cả cửa sổ nhỏ) thì tắt.
+    pub fn play_live(&self, filter: cbtv::iptv::Filter, index: usize) {
+        if let Some(cur) = self.current() {
+            *cur.base().last_focus.borrow_mut() = self.window.focused_widget();
+        }
+        let film = self.player.borrow().clone();
+        if let Some(p) = film.filter(|p| p.is_open()) {
+            p.close(false);
+        }
+        let l = crate::live::get();
+        if self.stack.child_by_name("live").is_none() {
+            self.stack.add_named(&l.widget(), "live");
+        }
+        l.widget().show_all();
+        self.stack.set_visible_child_name("live");
+        self.window.present();
+        l.open(filter, index);
+    }
+
+    /// Mở kênh theo khoá (nhắc giờ phát, hàng Truyền hình trên trang chủ) trong cả danh sách đang chọn. `list`: kênh của danh
+    /// sách khác (hàng «Kênh vừa xem») thì đổi sang danh sách đó trước (danh sách đã bị xoá thì tìm trong danh sách đang chọn).
+    pub fn play_live_key(&self, key: String, list: Option<String>) {
+        ui::local(async move {
+            let other = list.filter(|l| {
+                !l.is_empty() && cbtv::iptv::active_list().map(|a| a.id).as_deref() != Some(l.as_str()) &&
+                    cbtv::iptv::lists().iter().any(|x| x.id == *l)
+            });
+            if let Some(l) = other {
+                cbtv::iptv::set_active(Some(&l));
+                if let Some(Err(e)) = ui::run(async { cbtv::iptv::refresh(false).await }).await {
+                    app().toast(&cbtv::util::friendly(&e));
+                }
+            }
+            let i = ui::run(async move { cbtv::iptv::index_of(&cbtv::iptv::Filter::default(), Some(&key), None).await }).await.unwrap_or(-1);
+            if i < 0 {
+                app().toast("Danh sách kênh đang chọn không có kênh này.");
+            } else {
+                app().play_live(cbtv::iptv::Filter::default(), i as usize);
+            }
+        });
+    }
+
+    /// Trình phát truyền hình đã đóng: về trang trước.
+    pub fn live_closed(&self) {
+        self.stack.set_visible_child_name("shell");
+        self.window.set_title("Côn Bằng TV");
+        if let Some(p) = self.current() {
+            p.clone().returned();
+            restore_focus(p);
+        }
+    }
+
+    /// Nhắc giờ phát / bóng lăn (Truyền hình): mỗi 15 giây khi app đang mở.
+    pub fn start_reminders(&self) {
+        glib::timeout_add_local(std::time::Duration::from_secs(15), || {
+            // Đang có hộp thoại (miễn trừ trách nhiệm, «Ai đang xem?», cập nhật…): để lần sau — hộp mới sẽ huỷ hộp đang mở,
+            // qua mặt được màn chặn / mã PIN. Nhắc chưa lấy ra khỏi danh sách nên vẫn còn đó.
+            if app().dialog_open() || cbtv::disclaimer::needed() {
+                return glib::ControlFlow::Continue;
+            }
+            let Some(r) = cbtv::iptv::due_reminder() else { return glib::ControlFlow::Continue };
+            let text = r["text"].as_str().unwrap_or("").to_string();
+            let key = r["k"].as_str().unwrap_or("").to_string();
+            let kick = r["kick"].as_bool().unwrap_or(false);
+            if let Some(l) = crate::live::current() {
+                l.notice(&format!("🔔 {text}"), 12_000);
+                return glib::ControlFlow::Continue;
+            }
+            ui::local(async move {
+                let a = app();
+                if a.ask_async(if kick { "Bóng lăn" } else { "Sắp phát" }, &text, &["Xem ngay", "Đóng"], None, 0).await == 0 {
+                    a.play_live_key(key, None);
+                }
+            });
+            glib::ControlFlow::Continue
+        });
+    }
+
     /// Trình phát đã đóng: về trang trước, cập nhật tập đã xem / xem tiếp.
     pub fn player_closed(&self) {
         crate::startup::sync_soon(1);
@@ -553,14 +658,20 @@ impl App {
         let ctrl = st.contains(gdk::ModifierType::CONTROL_MASK);
         let focused = self.window.focused_widget();
         let entry = focused.as_ref().and_then(|f| f.clone().downcast::<gtk::Entry>().ok());
+        // Ô chữ nhiều dòng (dán nhiều trang / nhiều danh sách)
+        let text_view = focused.as_ref().and_then(|f| f.clone().downcast::<gtk::TextView>().ok()).filter(|v| v.is_editable());
+        let typing = entry.is_some() || text_view.is_some();
 
         if self.dialog_open() {
-            if key == k::Escape || key == k::Back || (key == k::BackSpace && entry.is_none()) {
+            if key == k::Escape || key == k::Back || (key == k::BackSpace && !typing) {
                 self.close_dialog(-1);
                 return glib::Propagation::Stop;
             }
             if let Some(dir) = keynav::dir_of(&key) {
                 if entry.is_some() && matches!(dir, Dir::Left | Dir::Right) {
+                    return glib::Propagation::Proceed;
+                }
+                if text_view.as_ref().is_some_and(|v| keynav::text_view_keeps(v, dir)) {
                     return glib::Propagation::Proceed;
                 }
                 let root: gtk::Widget = self.dialog_box.clone().upcast();
@@ -578,7 +689,43 @@ impl App {
                 }
                 return glib::Propagation::Stop;
             }
+            // Tab / Shift+Tab và Enter / Space chỉ được tác động trong hộp thoại: chuỗi Tab mặc định của GTK đi cả xuống trang /
+            // menu nằm dưới lớp hộp thoại (vd màn «Ai đang xem?» chặn cửa → Tab tới thẻ «Xem tiếp» ẩn, Enter phát phim của
+            // người xem có mã PIN mà không cần mã)
+            let root: gtk::Widget = self.dialog_box.clone().upcast();
+            let inside = focused.as_ref().filter(|f| keynav::is_inside(f, &root)).cloned();
+            let tab = match key {
+                k::Tab | k::KP_Tab => Some(1isize),
+                k::ISO_Left_Tab => Some(-1isize),
+                _ => None,
+            };
+            if let Some(step) = tab {
+                if text_view.is_some() && inside.is_some() {
+                    return glib::Propagation::Proceed; // ô chữ nhiều dòng: Tab gõ vào ô
+                }
+                // Đi vòng qua các ô / nút của hộp thoại theo thứ tự (Shift+Tab: ngược lại)
+                let all = keynav::targets(&root);
+                let at = inside.as_ref().and_then(|f| all.iter().position(|w| w == f || f.is_ancestor(w)));
+                let next = match at {
+                    Some(i) if !all.is_empty() => all.get((i as isize + step).rem_euclid(all.len() as isize) as usize).cloned(),
+                    _ => keynav::first(&root),
+                };
+                if let Some(n) = next {
+                    keynav::focus_and_show(&n);
+                }
+                return glib::Propagation::Stop;
+            }
+            if inside.is_none() && matches!(key, k::Return | k::KP_Enter | k::ISO_Enter | k::space | k::KP_Space) {
+                if let Some(f) = keynav::first(&root) {
+                    keynav::focus_and_show(&f);
+                }
+                return glib::Propagation::Stop;
+            }
             return glib::Propagation::Proceed;
+        }
+        // Trình phát truyền hình đang mở
+        if let Some(l) = crate::live::current() {
+            return if l.handle_key(ev) { glib::Propagation::Stop } else { glib::Propagation::Proceed };
         }
         if let Some(p) = self.playing() {
             if p.handle_key(ev) {
@@ -590,7 +737,7 @@ impl App {
             self.toggle_fullscreen();
             return glib::Propagation::Stop;
         }
-        if key == k::Escape || key == k::Back || (key == k::BackSpace && entry.is_none()) {
+        if key == k::Escape || key == k::Back || (key == k::BackSpace && !typing) {
             self.back();
             return glib::Propagation::Stop;
         }
@@ -603,6 +750,9 @@ impl App {
             return glib::Propagation::Stop;
         }
         let Some(dir) = keynav::dir_of(&key) else { return glib::Propagation::Proceed };
+        if text_view.as_ref().is_some_and(|v| keynav::text_view_keeps(v, dir)) {
+            return glib::Propagation::Proceed;
+        }
         if let Some(e) = &entry {
             if matches!(dir, Dir::Left | Dir::Right) {
                 let pos = e.position();
@@ -658,6 +808,9 @@ impl App {
         *self.toast_timer.borrow_mut() = Some(id);
         if let Some(p) = self.playing() {
             p.notice(text, ms);
+        }
+        if let Some(l) = crate::live::current() {
+            l.notice(text, ms);
         }
     }
 

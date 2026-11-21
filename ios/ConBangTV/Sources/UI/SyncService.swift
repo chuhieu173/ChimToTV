@@ -53,6 +53,11 @@ final class SyncService: ObservableObject {
     private var listener: NWListener?
     private var browser: NWBrowser?
     private var pairTries = 0
+    /// Số lần đoán sai từ lúc mở màn Đồng bộ (cả các mã đã đổi) — tới maxPairFails thì thôi cho ghép (như bản TV / lõi Rust).
+    private var pairFails = 0
+    /// Mã 4 số chỉ có 10 000 khả năng, đổi mã sau 5 lần sai vẫn để máy lạ trong mạng đoán hết trong vài giây: sai tổng cộng
+    /// chừng này lần thì đóng ghép — mở lại màn Đồng bộ để có mã mới.
+    static let maxPairFails = 20
     private var autoTask: Task<Void, Never>?
     private let queue = DispatchQueue(label: "vn.chimto.sync")
 
@@ -156,6 +161,7 @@ final class SyncService: ObservableObject {
     func openPairing() {
         pairCode = String(format: "%04d", Int.random(in: 0...9999))
         pairTries = 0
+        pairFails = 0
         start()
     }
 
@@ -235,8 +241,17 @@ final class SyncService: ObservableObject {
         }
         guard given == code else {
             pairTries += 1
-            // Đoán sai nhiều lần: đổi mã
-            if pairTries >= 5 { openPairing() }
+            pairFails += 1
+            if pairFails >= Self.maxPairFails {
+                // Sai quá nhiều (dò mã): thôi cho ghép tới khi mở lại màn Đồng bộ
+                pairCode = nil
+                pairTries = 0
+                Log.d("sync", "nhập sai mã ghép quá nhiều lần — đóng ghép")
+            } else if pairTries >= 5 {
+                // Đoán sai nhiều lần: đổi mã
+                pairCode = String(format: "%04d", Int.random(in: 0...9999))
+                pairTries = 0
+            }
             return SyncHTTP.response(403, json: ["error": "code"])
         }
         let token = SyncHTTP.randomToken()

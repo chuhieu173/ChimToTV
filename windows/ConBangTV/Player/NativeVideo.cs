@@ -255,9 +255,44 @@ public sealed class NativeVideo : IDisposable
         }
     }
 
+    /// <summary>
+    /// Truyền hình (LiveView): phát thẳng luồng của kênh (HLS, HTTP-FLV, TS liền, đài radio MP3 / AAC…) — mpv tự đọc mọi loại,
+    /// kèm Referer / User-Agent riêng của nguồn (danh sách M3U ghi #EXTVLCOPT / «url|Referer=»).
+    /// </summary>
+    public void LoadLive(string url, string? referer, string? ua)
+    {
+        mpv_set_property_string(_h, "user-agent", string.IsNullOrEmpty(ua) ? Http.UserAgent : ua);
+        mpv_set_property_string(_h, "http-header-fields", string.IsNullOrEmpty(referer) ? "" : "Referer: " + referer.Replace(",", "\\,"));
+        // Luồng trực tiếp đứt giữa chừng: mpv tự nối lại (ffmpeg reconnect) trước khi báo hết
+        mpv_set_property_string(_h, "stream-lavf-o", "reconnect=1,reconnect_streamed=1,reconnect_delay_max=4");
+        _err = null;
+        _pendingSub = null;
+        _logLines = 0;
+        _restarted = false;
+        mpv_set_property_string(_h, "start", "none");
+        mpv_set_property_string(_h, "pause", "no");
+        Command("loadfile", url, "replace");
+    }
+
+    /// Thông tin luồng đang phát (Truyền hình): có hình không, tên bài của đài (ICY), mã tiếng, kbps, cỡ hình.
+    public sealed record LiveInfo(bool HasVideo, string? IcyTitle, string? AudioCodec, long Kbps, long Width, long Height, string? Format);
+
+    public LiveInfo Info()
+    {
+        var w = GetLong("width") ?? 0;
+        var vcodec = GetString("video-codec");
+        var br = GetDouble("audio-bitrate") ?? 0;
+        return new LiveInfo(w > 0 || !string.IsNullOrEmpty(vcodec), GetString("metadata/by-key/icy-title"), GetString("audio-codec-name"),
+            (long)(br / 1000), w, GetLong("height") ?? 0, GetString("file-format"));
+    }
+
     /// Phát địa chỉ (của cổng phát nội bộ) từ giây start, kèm phụ đề rời nếu có.
     public void Load(string url, double start, string? sub)
     {
+        // Trình phát truyền hình có thể đã đặt tiêu đề riêng của kênh: về mặc định
+        mpv_set_property_string(_h, "user-agent", Http.UserAgent);
+        mpv_set_property_string(_h, "http-header-fields", "");
+        mpv_set_property_string(_h, "stream-lavf-o", "");
         _err = null;
         _pendingSub = sub;
         _logLines = 0;
@@ -271,6 +306,7 @@ public sealed class NativeVideo : IDisposable
     {
         Command("stop");
         _restarted = false;
+        _err = null; // lỗi của luồng cũ không còn giá trị (trình phát truyền hình mở lại luồng sau khi dừng)
     }
 
     public State Read()

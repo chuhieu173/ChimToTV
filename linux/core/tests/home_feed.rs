@@ -323,9 +323,12 @@ fn custom_rows_and_topics_in_prefs() {
     // Đổi chủ đề: bỏ «cn», thêm «jp»; hàng lọc giữ nguyên
     home_feed::set_home_topics(&["kr", "jp"].iter().map(|s| s.to_string()).collect());
     assert_eq!(home_feed::home_custom(), vec![CustomRow::for_topic("kr"), row.clone(), CustomRow::for_topic("jp")]);
-    // Thứ tự mặc định: hai hàng đầu, các hàng tự thêm, rồi các hàng app tự chọn
+    // Thứ tự mặc định: hai hàng đầu, bốn hàng Truyền hình, các hàng tự thêm, rồi các hàng app tự chọn
     let d = home_feed::row_defaults(None);
-    assert_eq!(&d[..5], ["new-eps", "continue", "custom-t-kr", "custom-c1", "custom-t-jp"]);
+    assert_eq!(
+        &d[..9],
+        ["new-eps", "continue", "tv-recent", "tv-favs", "tv-live", "tv-radio", "custom-t-kr", "custom-c1", "custom-t-jp"]
+    );
     // Ẩn một hàng / lưu
     home_feed::save_rows(&home_feed::hide(&home_feed::row_prefs(), "custom-c1"));
     assert!(!home_feed::row_on("custom-c1"));

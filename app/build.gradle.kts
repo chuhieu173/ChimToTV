@@ -18,8 +18,8 @@ android {
         // Android 5.0 trở lên: chạy được cả trên các TV box đời cũ.
         minSdk = 21
         targetSdk = 35
-        versionCode = 43
-        versionName = "2.19"
+        versionCode = 47
+        versionName = "2.23"
         // Thử cập nhật OTA với bản giả số hiệu cao hơn: gradlew assembleDebug -Pvc=5 -Pvn=1.4
         (findProperty("vc") as String?)?.let { versionCode = it.toInt() }
         (findProperty("vn") as String?)?.let { versionName = it }
@@ -108,6 +108,12 @@ dependencies {
     implementation("androidx.webkit:webkit:1.14.0")
     // Engine Gecko (Firefox) cho trang bật lớp chống bot của Cloudflare chặn WebView (WebFetch.kt) — chỉ đóng gói ở bản full
     "fullImplementation"("org.mozilla.geckoview:geckoview:141.0.20250806102122")
+    // Truyền hình (IPTV, LiveActivity): ExoPlayer phát HLS / DASH / HTTP-FLV / TS liền / đài radio MP3 · AAC (tên bài ICY) bằng
+    // bộ giải mã phần cứng — trình phát WebView (hls.js) chỉ phát HLS. 1.5.x là bản cuối còn chạy Android 5.
+    implementation("androidx.media3:media3-exoplayer:1.5.1")
+    implementation("androidx.media3:media3-exoplayer-hls:1.5.1")
+    implementation("androidx.media3:media3-exoplayer-dash:1.5.1")
+    implementation("androidx.media3:media3-ui:1.5.1")
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.2")
     testImplementation("junit:junit:4.13.2")
     // org.json của Android trong test JVM chỉ là vỏ rỗng — NextSite đọc JSON nên test cần bản thật

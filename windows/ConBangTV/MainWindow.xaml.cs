@@ -23,6 +23,7 @@ public partial class MainWindow : Window
     private string _activeMenu = "home";
     private PlayerView? _player;
     private readonly DispatcherTimer _toastTimer = new() { Interval = TimeSpan.FromSeconds(4) };
+    private readonly DispatcherTimer _remindTimer = new() { Interval = TimeSpan.FromSeconds(15) };
     private TaskCompletionSource<int>? _dialog;
     private FrameworkElement? _focusBeforeDialog;
 
@@ -50,9 +51,13 @@ public partial class MainWindow : Window
         LoadBounds();
         ApplyScale();
         Loaded += (_, _) => Start();
+        // Truyền hình: nhắc giờ phát / bóng lăn khi app đang mở
+        _remindTimer.Tick += (_, _) => _ = CheckReminders();
+        _remindTimer.Start();
         Closing += (_, _) =>
         {
             SaveBounds();
+            _live?.Close();
             _player?.Close(false);
             SyncService.Stop();
             Prefs.Flush();
@@ -61,8 +66,8 @@ public partial class MainWindow : Window
         Activated += (_, _) =>
         {
             _player?.Reactivate();
-            // Rời app hơn 30 phút (không xem phim): hỏi lại ai đang xem
-            if (_deactivatedAt > 0 && Util.NowMs() - _deactivatedAt > 30 * 60_000 && Player == null && Prefs.Profiles.Count > 1 &&
+            // Rời app hơn 30 phút (không xem phim / truyền hình): hỏi lại ai đang xem
+            if (_deactivatedAt > 0 && Util.NowMs() - _deactivatedAt > 30 * 60_000 && Player == null && Live == null && Prefs.Profiles.Count > 1 &&
                 (Prefs.AskProfile || Prefs.CurrentProfile.Locked))
                 _ = PickProfile(!Prefs.CurrentProfile.Locked);
             // Quay lại app (vd vừa xem trên tivi): đồng bộ, tối đa 1 phút một lần
@@ -106,9 +111,10 @@ public partial class MainWindow : Window
                 Close();
                 return;
             }
+            // «Ai đang xem?» khi mở app (từ 2 người xem), hoặc người đang dùng có khoá — chọn xong mới hỏi cập nhật (hộp cập nhật
+            // hiện giữa chừng sẽ thay hộp chọn người xem, hộp chọn hiện lại thì «Có bản mới» bị coi như «Để sau»)
+            if (Prefs.CurrentProfile.Locked || (Prefs.AskProfile && Prefs.Profiles.Count > 1)) await PickProfile(!Prefs.CurrentProfile.Locked);
             _ = CheckUpdate(false);
-            // «Ai đang xem?» khi mở app (từ 2 người xem), hoặc người đang dùng có khoá
-            if (Prefs.CurrentProfile.Locked || (Prefs.AskProfile && Prefs.Profiles.Count > 1)) _ = PickProfile(!Prefs.CurrentProfile.Locked);
         });
     }
 
@@ -267,6 +273,8 @@ public partial class MainWindow : Window
         yield return new("follows", "★  Theo dõi" + (fresh > 0 ? $"  ({fresh} mới)" : ""), () => ShowRoot(new FollowsPage()));
         yield return new("imdb", "⭐  Điểm IMDb cao",
             () => ShowRoot(new ListPage("Điểm IMDb cao", "imdb:top", () => ImdbTop.Page(Prefs.Kids)) { MenuKey = "imdb" }));
+        // Truyền hình / radio: danh sách kênh M3U người xem tự thêm (TvPage, lõi cbtv::iptv)
+        yield return new("tv", "📺  Truyền hình · Radio", () => ShowRoot(new TvPage()));
         foreach (var c in _categories)
             yield return new("cat:" + c.Url, c.Title, () => ShowRoot(new ListPage(c.Title, c.Url) { MenuKey = "cat:" + c.Url }));
         var b = Prefs.BaseUrl;
@@ -413,10 +421,94 @@ public partial class MainWindow : Window
         RebuildMenu();
     }
 
+    private LiveView? _live;
+
+    /// Trình phát truyền hình đang mở.
+    public LiveView? Live => _live is { IsOpen: true } ? _live : null;
+
+    /// Mở kênh ở vị trí index của bộ lọc (lưới / lịch phát sóng). Phim đang phát (kể cả cửa sổ nhỏ) thì tắt.
+    public void PlayLive(IptvFilter filter, int index)
+    {
+        if (Current is { } cur) cur.LastFocus = Keyboard.FocusedElement as FrameworkElement;
+        if (_player is { IsOpen: true } p) p.Close();
+        _live ??= new LiveView(this);
+        PlayerHost.Content = _live;
+        PlayerHost.Visibility = Visibility.Visible;
+        Shell.Visibility = Visibility.Hidden;
+        _live.Open(filter, index);
+    }
+
+    /// Mở kênh theo khoá (kênh vừa xem / nhắc giờ phát) trong cả danh sách đang chọn.
+    public async Task PlayLiveKey(string key, string? listId = null)
+    {
+        // Kênh của danh sách khác (hàng «Kênh vừa xem» ở trang chủ): đổi sang danh sách đó (tải nếu chưa có / đã cũ) rồi mở
+        if (!string.IsNullOrEmpty(listId) && listId != Iptv.S(Iptv.ActiveList(), "id") && Iptv.Lists().Any(l => Iptv.S(l, "id") == listId))
+        {
+            Iptv.SetActive(listId);
+            try
+            {
+                await Iptv.Refresh(false);
+            }
+            catch (Exception e)
+            {
+                Toast(Util.Friendly(e));
+                return;
+            }
+        }
+        var all = new IptvFilter();
+        var i = await Iptv.IndexOf(all, key);
+        if (i < 0) Toast("Danh sách kênh đang chọn không có kênh này.");
+        else PlayLive(all, i);
+    }
+
+    /// Trình phát truyền hình đã đóng: về trang trước.
+    public void LiveClosed()
+    {
+        _ = CheckUpdate(false); // có bản mới mà lúc nãy đang xem thì hỏi bây giờ
+        PlayerHost.Content = _player;
+        PlayerHost.Visibility = Visibility.Collapsed;
+        Shell.Visibility = Visibility.Visible;
+        Activate();
+        if (Current is { } p)
+        {
+            p.Returned();
+            Dispatcher.BeginInvoke(DispatcherPriority.Loaded, () =>
+            {
+                if (p.LastFocus is { IsVisible: true } f) KeyNav.FocusAndShow(f);
+                else p.FocusFirst();
+            });
+        }
+    }
+
+    /// Nhắc giờ phát / bóng lăn (Truyền hình): mỗi 15 giây khi app đang mở.
+    private async Task CheckReminders()
+    {
+        // Đang có hộp thoại (miễn trừ trách nhiệm, «Ai đang xem?», cập nhật…): để lần sau — hộp mới sẽ đóng hộp đang mở,
+        // qua mặt được màn chặn / mã PIN. Nhắc chưa lấy ra khỏi danh sách nên vẫn còn đó.
+        if (DialogLayer.Visibility == Visibility.Visible || _picking || Disclaimer.Needed) return;
+        var r = Iptv.DueReminder();
+        if (r == null) return;
+        var text = Iptv.S(r, "text");
+        var key = Iptv.S(r, "k");
+        if (Live is { } lv)
+        {
+            lv.Notice("🔔 " + text, 12000);
+            return;
+        }
+        // Đang xem phim: hộp hỏi nằm khuất sau hình (phím do trình phát giữ) — báo ngay trong trình phát
+        if (Player is { } pv)
+        {
+            pv.Notice("🔔 " + text, 12000);
+            return;
+        }
+        if (await Ask(Iptv.B(r, "kick") ? "Bóng lăn" : "Sắp phát", text, new[] { "Xem ngay", "Đóng" }) == 0) await PlayLiveKey(key);
+    }
+
     /// Trình phát đã đóng (người xem thoát): về trang trước, cập nhật tập đã xem / xem tiếp.
     public void PlayerClosed()
     {
         SyncService.SyncSoon(1);
+        _ = CheckUpdate(false); // có bản mới mà lúc nãy đang xem thì hỏi bây giờ
         PlayerHost.Visibility = Visibility.Collapsed;
         Shell.Visibility = Visibility.Visible;
         Activate();
@@ -467,7 +559,7 @@ public partial class MainWindow : Window
     }
 
     /// Hết giờ xem: người lớn nhập mã PIN phụ huynh để cho xem thêm (rồi mở lại đúng tập, xem tiếp), hoặc thôi.
-    public async Task LimitReached(WatchLimit.Block b, string film, string ep)
+    public async Task LimitReached(WatchLimit.Block b, string film, string ep, Action? resume = null)
     {
         if (WindowState == WindowState.Minimized) WindowState = WindowState.Normal;
         Activate();
@@ -492,7 +584,8 @@ public partial class MainWindow : Window
             if (g < WatchLimit.Grants.Length) WatchLimit.Grant(WatchLimit.Grants[g]);
             else WatchLimit.GrantUntilMorning();
             Toast("Đã cho xem thêm.");
-            Play(film, ep);
+            if (resume != null) resume();
+            else Play(film, ep);
             return;
         }
     }
@@ -662,6 +755,12 @@ public partial class MainWindow : Window
     private void OnPreviewKeyDown(object sender, KeyEventArgs e)
     {
         var key = e.Key == Key.System ? e.SystemKey : e.Key;
+        // Trình phát truyền hình đang mở (hộp thoại thì để hộp thoại nhận phím)
+        if (Live is { } live && DialogLayer.Visibility != Visibility.Visible)
+        {
+            live.HandleKey(e);
+            return;
+        }
         // Trình phát đang mở: phím do trình phát xử lý (cửa sổ phủ thường giữ phím; đây là khi cửa sổ chính được chọn)
         if (Player != null)
         {
@@ -702,6 +801,12 @@ public partial class MainWindow : Window
             var atEdge = dir == KeyNav.Dir.Left ? tb.CaretIndex == 0 && tb.SelectionLength == 0 : tb.CaretIndex >= tb.Text.Length;
             if (!atEdge) return;
         }
+        // Ô chữ nhiều dòng (dán nhiều trang / nhiều danh sách): ▲ ▼ đi giữa các dòng, ở dòng đầu / cuối thì sang mục khác
+        if (focused is TextBox { AcceptsReturn: true } ml && dir is KeyNav.Dir.Up or KeyNav.Dir.Down)
+        {
+            var line = ml.GetLineIndexFromCharacterIndex(ml.CaretIndex);
+            if (line >= 0 && (dir == KeyNav.Dir.Up ? line > 0 : line < ml.LineCount - 1)) return;
+        }
         e.Handled = true;
         Visual root = DialogLayer.Visibility == Visibility.Visible ? DialogBox : Shell;
         if (focused == null || !KeyNav.IsInside(focused, root))
@@ -727,6 +832,7 @@ public partial class MainWindow : Window
         _toastTimer.Interval = TimeSpan.FromMilliseconds(ms);
         _toastTimer.Start();
         _player?.Notice(text, ms);
+        _live?.Notice(text, ms);
     }
 
     /// Hộp thoại: trả về chỉ số nút được bấm (-1 = huỷ / Back). Nút đầu tiên được chọn sẵn.
@@ -786,8 +892,13 @@ public partial class MainWindow : Window
                 return;
             }
             if (!manual && Prefs.IsUpdateSnoozed(rel.Version)) return;
-            // Đang xem phim thì để lúc khác (lần kiểm sau)
-            if (!manual && Player != null) return;
+            // Đang xem phim / truyền hình (hộp hỏi nằm khuất sau hình, phím OK bấm nhầm «Cập nhật ngay») hay đang có hộp thoại
+            // khác: để lúc đóng trình phát / lần kiểm sau
+            if (!manual && (Player != null || Live != null || _picking || DialogLayer.Visibility == Visibility.Visible))
+            {
+                Prefs.LastUpdateCheck = 0;
+                return;
+            }
             var summary = UpdateCheck.Summary(rel.Notes);
             var choice = await Ask($"Có bản mới: Côn Bằng TV {rel.Version}", (summary.Length > 0 ? summary + "\n\n" : "") +
                 $"Bản đang dùng: {UpdateCheck.CurrentVersion}.", new[] { "Cập nhật ngay", "Để sau" });

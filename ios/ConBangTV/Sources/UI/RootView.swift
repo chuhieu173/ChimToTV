@@ -14,6 +14,13 @@ enum Router {
 
     static func play(filmUrl: String, epUrl: String, continueMode: Bool = false) {
         guard let top = topController, !(top is PlayerController) else { return }
+        // Đang xem truyền hình / nghe radio (vd chạm widget «Xem tiếp»): đóng trình phát đó trước, không thì hai luồng tiếng
+        // chạy cùng lúc và đóng phim lại quay về kênh vẫn đang phát
+        if let live = LiveModel.current {
+            live.close()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) { play(filmUrl: filmUrl, epUrl: epUrl, continueMode: continueMode) }
+            return
+        }
         // Phim đang ở cửa sổ hình trong hình: mở phim khác thì đóng phim đó (lưu chỗ xem)
         PlayerModel.detachedModel?.closeDetached()
         present(PlayerModel(filmUrl: filmUrl, epUrl: epUrl, continueMode: continueMode), on: top)
@@ -45,7 +52,16 @@ enum Router {
             if let p = top as? PlayerController { p.model.close() } else { top.dismiss(animated: true) }
             return
         }
-        if app.sheet != nil { app.sheet = nil } else if app.detailFilm != nil { app.detailFilm = nil }
+        let tv = TvModel.shared
+        if app.sheet != nil {
+            app.sheet = nil
+        } else if app.detailFilm != nil {
+            app.detailFilm = nil
+        } else if tv.guideTarget != nil {
+            tv.guideTarget = nil
+        } else if tv.settingsShown {
+            tv.settingsShown = false
+        }
     }
 }
 
@@ -239,6 +255,15 @@ struct HomeContent: View {
     @FocusState private var searchFocused: Bool
 
     var body: some View {
+        if app.active?.kind == .tv {
+            // Truyền hình · Radio: trang riêng (UI/TvViews.swift), cùng khung chính
+            TvContent(showMenuButton: showMenuButton, openMenu: openMenu)
+        } else {
+            films
+        }
+    }
+
+    private var films: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 14) {
                 if showMenuButton {
@@ -421,6 +446,8 @@ struct FilmGridView: View {
     private func strip(_ s: GridSection, pad: CGFloat, width: CGFloat, spacing: CGFloat) -> some View {
         let n = CGFloat(max(2, app.gridCols))
         let cardW = floor((width - pad - n * spacing) / (n + 0.35))
+        // Ô kênh (hàng Truyền hình): khung ngang, rộng hơn ô phim
+        let chanW = max(150, floor(cardW * 1.55))
         let more = s.items.last.flatMap { $0.more != nil ? $0 : nil }
         return VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
@@ -436,6 +463,16 @@ struct FilmGridView: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("Xem thêm: \(s.title ?? "")")
+                } else if let r = s.row, HomeFeed.isTv(r) {
+                    // Hàng Truyền hình: mở mục Truyền hình (hàng yêu thích: chọn sẵn Yêu thích)
+                    Button { app.openTvPage(r) } label: {
+                        Text("Xem tất cả ›").appFont(15, .semibold).foregroundColor(Theme.brand)
+                            .padding(.vertical, 6)
+                            .padding(.leading, 8)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Mở Truyền hình")
                 }
             }
             .padding(.horizontal, pad)
@@ -445,7 +482,7 @@ struct FilmGridView: View {
                     LazyHStack(alignment: .top, spacing: spacing) {
                         ForEach(s.items) { item in
                             FilmCard(item: item, tileHeight: item.more != nil ? cardW * 1.5 : nil)
-                                .frame(width: item.more != nil ? max(70, floor(cardW * 0.62)) : cardW)
+                                .frame(width: item.channel != nil ? chanW : item.more != nil ? max(70, floor(cardW * 0.62)) : cardW)
                                 .id(item.id)
                         }
                     }
@@ -511,12 +548,63 @@ struct FilmCard: View {
     }
 
     var body: some View {
-        if item.topic != nil {
+        if item.channel != nil {
+            channelCard
+        } else if item.topic != nil {
             topicChip
         } else if item.more != nil {
             moreTile
         } else {
             filmCard
+        }
+    }
+
+    /// Ô kênh của hàng Truyền hình (trang chủ): logo (khung ngang), nhãn ĐANG ĐÁ / SẮP ĐÁ / RADIO, tên kênh, chương trình đang phát
+    /// / giờ trận / nhóm, thanh tiến độ. Bấm là phát; giữ (chuột phải) — sửa nhanh hàng.
+    @ViewBuilder private var channelCard: some View {
+        if let c = item.channel {
+            Button { app.open(item) } label: {
+                VStack(alignment: .leading, spacing: 6) {
+                    Color.clear
+                        .aspectRatio(1.75, contentMode: .fit)
+                        .overlay(LogoTile(url: c.logo, radio: c.radio, corner: 12))
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                        .overlay(alignment: .topLeading) {
+                            if let t = c.tag {
+                                Text(c.live ? "● " + t : t)
+                                    .appFont(10, .bold)
+                                    .lineLimit(1)
+                                    .foregroundColor(c.live || t == "RADIO" ? .white : Theme.onBrand)
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background(Capsule().fill(c.live ? Color(hex: 0xE5533D) : t == "RADIO" ? Color(hex: 0x3B82F6) : Theme.focus))
+                                    .padding(6)
+                            }
+                        }
+                        .overlay(alignment: .bottomTrailing) {
+                            Image(systemName: "play.circle.fill")
+                                .appFont(24)
+                                .foregroundColor(.white.opacity(0.95))
+                                .shadow(color: .black.opacity(0.6), radius: 5)
+                                .padding(6)
+                        }
+                        .overlay { if app.keySel == item.id { RoundedRectangle(cornerRadius: 12).stroke(Theme.focus, lineWidth: 4) } }
+                    Text(c.n).appFont(15, .medium).foregroundColor(Theme.text).lineLimit(1)
+                    Text(c.line).appFont(12).foregroundColor(Theme.dim).lineLimit(1)
+                    if c.frac >= 0 {
+                        ProgressView(value: c.frac)
+                            .tint(c.live ? Color(hex: 0xE5533D) : Theme.brand)
+                            .scaleEffect(x: 1, y: 0.7, anchor: .center)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(PressScale())
+            .contentShape(.hoverEffect, RoundedRectangle(cornerRadius: 12))
+            .hoverEffect(.lift)
+            .accessibilityLabel(c.n)
+            .contextMenu { if let row = item.row { RowMenuItems(row: row) } }
         }
     }
 

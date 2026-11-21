@@ -177,6 +177,10 @@ impl Part {
 pub const ROWS: &[(&str, &str)] = &[
     ("new-eps", "Có tập mới"),
     ("continue", "Xem tiếp"),
+    ("tv-recent", "Kênh vừa xem (Truyền hình)"),
+    ("tv-favs", "Kênh yêu thích (Truyền hình)"),
+    ("tv-live", "Trận đang / sắp đá (Truyền hình)"),
+    ("tv-radio", "Radio (Truyền hình)"),
     ("similar", "Giống «phim vừa xem»"),
     ("interest", "Vì … hay xem <thể loại> (sở thích 1)"),
     ("dominant", "Loại phim hay xem · mới cập nhật"),
@@ -190,8 +194,19 @@ pub const ROWS: &[(&str, &str)] = &[
 ];
 pub const HEAD_ROWS: &[&str] = &["new-eps", "continue"];
 pub const KIDS_ROWS: &[&str] = &["kids-young", "kids-family", "kids-dub"];
-/// Hàng hồ sơ trẻ em không có (chỉ hoạt hình hợp trẻ em).
-pub const ADULT_ROWS: &[&str] = &["dominant", "dub", "newest", "movies"];
+/// Hàng hồ sơ trẻ em không có (chỉ hoạt hình hợp trẻ em; trận đấu / radio của danh sách kênh cũng không).
+pub const ADULT_ROWS: &[&str] = &["dominant", "dub", "newest", "movies", "tv-live", "tv-radio"];
+/// Hàng Truyền hình (dựng tại chỗ từ danh sách kênh, không qua tải phim): id → tiêu đề trên trang chủ; khoá dữ liệu của
+/// `iptv::home_rows` là id bỏ «tv-».
+pub const TV_ROWS: &[(&str, &str)] =
+    &[("tv-recent", "Kênh vừa xem"), ("tv-favs", "Kênh yêu thích"), ("tv-live", "Trận đang / sắp đá"), ("tv-radio", "Radio")];
+/// Số hàng đầu danh sách ROWS đứng trước các hàng tự thêm trong thứ tự mặc định (Có tập mới, Xem tiếp, 4 hàng Truyền hình).
+const ROWS_BEFORE_CUSTOM: usize = 6;
+
+/// Tiêu đề trên trang chủ của hàng Truyền hình (None: không phải hàng Truyền hình).
+pub fn tv_row_title(id: &str) -> Option<&'static str> {
+    TV_ROWS.iter().find(|x| x.0 == id).map(|x| x.1)
+}
 /// Tối đa số hàng tự thêm.
 pub const CUSTOM_MAX: usize = 6;
 /// Chủ đề hợp hồ sơ trẻ em (chỉ hoạt hình).
@@ -232,7 +247,7 @@ pub fn custom_title(r: &CustomRow) -> String {
     parts.join(" · ")
 }
 
-/// Thứ tự mặc định: «Có tập mới», «Xem tiếp», các hàng tự thêm (theo lúc thêm), rồi các hàng app tự chọn.
+/// Thứ tự mặc định: «Có tập mới», «Xem tiếp», 4 hàng Truyền hình, các hàng tự thêm (theo lúc thêm), rồi các hàng app tự chọn.
 pub fn row_defaults(custom: Option<&[CustomRow]>) -> Vec<String> {
     let owned;
     let custom = match custom {
@@ -242,11 +257,11 @@ pub fn row_defaults(custom: Option<&[CustomRow]>) -> Vec<String> {
             &owned[..]
         }
     };
-    ROWS[..2]
+    ROWS[..ROWS_BEFORE_CUSTOM]
         .iter()
         .map(|x| x.0.to_string())
         .chain(custom.iter().map(|c| c.key()))
-        .chain(ROWS[2..].iter().map(|x| x.0.to_string()))
+        .chain(ROWS[ROWS_BEFORE_CUSTOM..].iter().map(|x| x.0.to_string()))
         .collect()
 }
 
@@ -1836,9 +1851,12 @@ mod tests {
     fn custom_rows_default_after_head() {
         let custom = vec![CustomRow::filter("a", "hoathinh", "", "", ""), CustomRow::for_topic("kr")];
         let d = row_defaults(Some(&custom));
-        assert_eq!(&d[..5], ["new-eps", "continue", "custom-a", "custom-t-kr", "similar"]);
+        assert_eq!(&d[..9], ["new-eps", "continue", "tv-recent", "tv-favs", "tv-live", "tv-radio", "custom-a", "custom-t-kr", "similar"]);
         let m = merge_rows(&s(&["new-eps", "continue", "custom-a", "movies", "similar"]), Some(&d));
-        assert_eq!(&ids(&m)[..6], ["new-eps", "continue", "custom-a", "custom-t-kr", "movies", "similar"]);
+        assert_eq!(
+            &ids(&m)[..10],
+            ["new-eps", "continue", "tv-recent", "tv-favs", "tv-live", "tv-radio", "custom-a", "custom-t-kr", "movies", "similar"]
+        );
     }
 
     #[test]
@@ -1866,6 +1884,19 @@ mod tests {
 
     fn row(id: &str, slot: &str) -> FeedRow {
         FeedRow::new(id, id, Vec::new(), None, slot)
+    }
+
+    #[test]
+    fn tv_rows_default_after_continue() {
+        let d = row_defaults(Some(&[]));
+        assert_eq!(&d[..7], ["new-eps", "continue", "tv-recent", "tv-favs", "tv-live", "tv-radio", "similar"]);
+        // Thứ tự lưu từ bản trước (chưa có hàng Truyền hình): 4 hàng mới chèn ngay sau «Xem tiếp», giữ thứ tự / tắt cũ
+        let m = merge_rows(&s(&["new-eps", "continue", "-similar", "movies", "newest"]), Some(&d));
+        assert_eq!(&ids(&m)[..7], ["new-eps", "continue", "tv-recent", "tv-favs", "tv-live", "tv-radio", "similar"]);
+        assert!(m.iter().filter(|x| x.0.starts_with("tv-")).all(|x| x.1));
+        assert_eq!(tv_row_title("tv-live"), Some("Trận đang / sắp đá"));
+        assert_eq!(row_label("tv-radio"), "Radio (Truyền hình)");
+        assert!(ADULT_ROWS.contains(&"tv-live") && !ADULT_ROWS.contains(&"tv-recent"));
     }
 
     #[test]

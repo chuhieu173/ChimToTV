@@ -9,6 +9,193 @@ Bản Windows (Windows 10 / 11, một tệp `.exe`) ghi riêng với tiêu đề
 Bản Mac (macOS 12+, từ 13/11/2026, cùng mã nguồn và số bản với bản iPad) ghi riêng với tiêu đề "Mac …", tag `mac-v…`.
 Bản Linux (Ubuntu 22.04+ / Linux Mint 21+ / Debian 12+, từ 13/11/2026, tệp `.deb`) ghi riêng với tiêu đề "Linux …", tag `linux-v…`.
 
+## iPad / iPhone 1.22.1 và Mac 1.22.1 — 17/11/2026 (sửa: bàn phím che ô dán nhiều trang)
+
+- **Sửa lỗi của 1.22 trên iPhone / iPad:** ô dán nhiều trang (SwiftUI `TextEditor`) ở **Chọn trang phim** → «Thêm trang» và **Cài đặt** → **Địa chỉ trang phim** không tự cuộn lên trên bàn phím như ô một dòng cũ — chạm ô ở nửa dưới màn hình là bàn phím che ô, gõ không thấy chữ (đo trên iPhone 6s Plus iOS 15: bàn phím từ y 435; ô ở y 415 / 513 → bị che). Giờ chọn ô (và khi ô thêm / bớt dòng) thì danh sách cuộn ô lên sát thanh tiêu đề, nút Thêm / Lưu ngay dưới (`@FocusState` + `ScrollViewReader`, neo mép trên — neo nút vào mép bàn phím thì Form Cài đặt cuộn quá ~200 pt). Mac không đổi cách dùng (không cuộn), chỉ giữ cùng số bản.
+- Bản thử: cổng gỡ lỗi có thêm `/focus` (đặt con trỏ vào ô nhập, báo khung bàn phím và ô / con trỏ có bị che) và `/type?back=N` — để thử gõ phím thật trên máy.
+- iPad / iPhone: bản 1.22.1 (build 29) · tag `ios-v1.22.1` · `ConBangTV-iPad-1.22.1.ipa` 5 956 912 byte · SHA-256 `11ae12cb1e1ec288c2a38cc2a6cc6c332ccecb844b7fbe5e4541518512562056`; Mac: bản 1.22.1 (build 29) · tag `mac-v1.22.1` · `ConBangTV-Mac-1.22.1.zip` 9 050 802 byte (Intel + Apple Silicon, ký ad-hoc, `codesign --verify` đạt, không cổng gỡ lỗi) · SHA-256 `b01aa7dbf3c4ea39c4b9783b4f80090506012f76f956902bbf7529fffe7fafec` · commit `2ea045c` (sửa: `349927b`) · dựng trên Mac mini
+- Thử: test lõi Swift 178 đạt. iPhone thật (bản thử, gõ từng phím qua `/type`): trước sửa ô bị che; sau sửa ô lên y 160–163, con trỏ thấy được sau khi gõ 2 dòng ở cả hai màn; «Lưu» 2 trang mới + 1 đã có → «Đã thêm 2 trang … (bỏ qua 1 đã có).», trang đang dùng giữ nguyên. IPA chính cài lên iPhone 1.22 → 1.22.1, mở được. Chưa thử trên iPad.
+- Đăng lúc 12:45:41 (iPad) và 12:45:58 (Mac) bằng `release.ps1 ipad|mac -File dist\mac\…`; Latest vẫn `v2.22`; link cố định chép đè, khớp SHA-256. **Tự cập nhật thật Mac 1.22 → 1.22.1** (Mac mini): «Có bản mới 1.22.1 — Đang dùng 1.22» → «Cài đặt ngay» → mở lại 1.22.1 (build 29) lúc 12:46:50.
+
+## iPad / iPhone 1.22 và Mac 1.22 — 17/11/2026 (dán một lần nhiều trang phim)
+
+- **Thêm trang phim: dán một lần nhiều tên miền** (anh yêu cầu, «tương tự như nhập list danh sách kênh truyền hình») — ở **Chọn trang phim** → ô «Thêm trang» và **Cài đặt** → **Địa chỉ trang phim** (cả hai thành ô nhiều dòng). Mỗi dòng / mỗi chữ một trang; bỏ dòng trống, dòng `#`, chữ không có dấu chấm, số bản kiểu `1.5`; bỏ ký tự bao quanh và dấu chấm cuối câu; rút về gốc trang; trang đã có (không tính `www.`, http / https, `/` cuối, đường dẫn) tự bỏ qua. Nhiều trang mới → chỉ thêm vào danh sách (đo tốc độ luôn), trang đang dùng giữ nguyên, báo «Đã thêm N trang: a, b, c (bỏ qua K đã có)»; một trang thì như trước (thêm rồi chuyển sang trang đó). «Kiểm tra kết nối» khi đang dán nhiều trang thì nhắc kiểm từng trang.
+- `Prefs.parseSites` / `splitSites` / `addSites` cùng luật với bản TV, Windows, Linux (`Core/Prefs.swift`); test `CoreTests/SitePasteTests.swift`.
+- iPad / iPhone: bản 1.22 (build 28) · tag `ios-v1.22` · `ConBangTV-iPad-1.22.ipa` 5 951 171 byte · SHA-256 `56211fa67b6b8469639ed4af789d61df8ecaa84a869cca4d2281171ec42bfe71`; Mac: bản 1.22 (build 28) · tag `mac-v1.22` · `ConBangTV-Mac-1.22.zip` 9 037 622 byte (Intel + Apple Silicon, ký ad-hoc, `codesign --verify` đạt) · SHA-256 `dadc6597009d5a4f8b4186c43ff2f0594bf67d94ae8403c426703b4fda84308a` · commit `0af3e7f` (tính năng: `c967170`) · dựng trên Mac mini
+- Thử: test lõi Swift 178 đạt (Mac mini). Bản Mac thử: một trang → thêm và chuyển trang; dán 3 dòng → «Đã thêm 2 trang … (bỏ qua 1 đã có)», trang đang dùng giữ nguyên; dán toàn trang đã có → «Các trang này đã có trong danh sách.», chữ còn trong ô; chữ không có tên miền → câu báo đúng. IPA chính cài lên iPhone 1.20 → 1.22, mở được. Chưa gõ tay trên iPad / iPhone thật.
+- Đăng lúc 10:41:55 (iPad) và 10:46:05 (Mac) bằng `release.ps1 ipad|mac -File dist\mac\…`; link cố định chép đè, khớp SHA-256. **Tự cập nhật thật Mac 1.21 → 1.22** (Mac mini): «Có bản mới 1.22 — Đang dùng 1.21» → «Cài đặt ngay» → mở lại 1.22 (build 28) lúc 10:51:22.
+
+## Windows 1.20 — 17/11/2026 (dán một lần nhiều trang phim)
+
+- **Thêm trang phim: dán một lần nhiều tên miền** — **Đổi trang phim** → ô «Thêm trang» thành ô nhiều dòng (Enter xuống dòng, **Ctrl+Enter = Thêm**; ▲ ▼ đi giữa các dòng, ở dòng đầu / cuối thì sang mục khác). Cùng luật tách / bỏ trùng với các bản khác (số bản kiểu `1.5` bỏ qua, `bad..host` báo không hợp lệ, tính cổng). Nhiều trang → chỉ thêm vào danh sách và đo từng trang, trang đang dùng giữ nguyên; một trang như trước.
+- `Prefs.SiteKey` / `SplitSites` / `AddSites` + `AddSitesResult` (câu báo giống lõi Rust); test `ConBangTV.Tests/SitesTests.cs`.
+- bản 1.20.0 · tag `win-v1.20` · `ConBangTV-Windows-1.20.exe` 120 339 145 byte · SHA-256 `cf4c6ea6ad83aafe73b4eb96131cce89c38dccfdb1eac9508fb97f330dbda780` · commit `0af3e7f` (tính năng: `73f1483`)
+- Thử: `windows\build.ps1` — test lõi Rust đạt (cả test tích hợp mới `core/tests/sites.rs`), .NET 38 đạt. Bản thử (thư mục dữ liệu riêng): dán 3 dòng → «Đã thêm 2 trang … (bỏ qua 1 đã có).», trang đang dùng giữ nguyên; trang đã có / tên sai báo đúng, chữ giữ trong ô; ▲ ▼ trong ô đúng.
+- Đăng lúc 10:41:10 bằng `release.ps1 windows`; link cố định `conbangtv_windows` = 1.20. **Tự cập nhật thật 1.19 → 1.20** (bản sao chạy riêng, bỏ ghép đồng bộ): «Có bản mới: Côn Bằng TV 1.20» → «Cập nhật ngay» (UI Automation) → «Cài bản 1.20» 10:50:02 → «Mở bản 1.20 (--updated)» 10:50:04.
+
+## Linux 1.6 — 17/11/2026 (dán một lần nhiều trang phim)
+
+- **Thêm trang phim: dán một lần nhiều tên miền** — **Đổi trang phim** → ô «Thêm trang» thành TextView nhiều dòng (**Ctrl+Enter = Thêm**; Backspace trong ô không còn là «quay lại»; ▲ ▼ đi giữa các dòng). Cùng luật với các bản khác; nhiều trang → chỉ thêm vào danh sách, trang đang dùng giữ nguyên; một trang như trước.
+- Lõi Rust `prefs::split_sites` / `add_sites` / `site_key` (dùng chung với bản Windows); test `core/tests/sites.rs` + test trong `prefs.rs`.
+- bản 1.6.0 · tag `linux-v1.6` · `ConBangTV-Linux-1.6.deb` 6 213 472 byte · SHA-256 `9b74a343c365af7855e0114e393713adb0a00effc7657305b145a777dbf2bb1c` · commit `0af3e7f` (tính năng: `73f1483`) · dựng trong container Ubuntu 22.04 (glibc ≤ 2.34), tệp chạy không có cổng gỡ lỗi
+- Thử: test lõi đạt (192 + tích hợp). Bản thử trên máy ảo: dán thật qua clipboard + Ctrl+Enter → «Đã thêm 2 trang … (bỏ qua 1 đã có).», trang đang dùng giữ nguyên; trang đã có, tên sai, một trang mới đều đúng; ▲ ▼ / Backspace trong ô (cả hộp thêm danh sách kênh) đúng.
+- Đăng lúc 10:41:34 bằng `release.ps1 linux`; link cố định `conbangtv_linux` = 1.6. **Tự cập nhật thật 1.5 → 1.6** trên máy ảo: «Có bản mới: Côn Bằng TV 1.6» → «Cập nhật ngay» → gói 1.6.0 lúc 10:48:23, mở lại `--updated`.
+
+## 2.22 — 17/11/2026 (dán một lần nhiều trang phim)
+
+- **Thêm trang phim: dán một lần nhiều tên miền** (anh yêu cầu) — **Cài đặt** → **Danh sách trang phim** → nút mới **＋ Thêm nhiều trang…**, và **Đổi trang phim** → **＋ Thêm trang khác…** (hộp thành ô nhiều dòng, Enter = xuống dòng). Mỗi dòng / mỗi chữ một trang; bỏ dòng trống, dòng `#`, chữ không có dấu chấm, số bản kiểu `1.5`; bỏ ký tự bao quanh và dấu chấm cuối câu; rút về gốc trang (`kkphim.com` → trang KKPhim mẫu như trước); trang đã có (không tính `www.`, http / https, `/` cuối, đường dẫn) tự bỏ qua. Nhiều trang → chỉ thêm vào cuối danh sách (đồng bộ trong nhà ghi nhận), trang đang dùng giữ nguyên, báo «Đã thêm N trang: a, b, c (bỏ qua K đã có).»; không có trang mới → báo ngay trong ô, chữ giữ lại để sửa. Một trang như trước (ở «Đổi trang phim» là thêm rồi chuyển sang).
+- `SitePaste.kt` (tách / chuẩn hoá / bỏ trùng, thuần để test JVM) + `Prefs.addSites`; test `SitePasteTest` (5).
+- bản 2.22 · versionCode 46 · tag `v2.22` (Latest) · commit `0af3e7f` (tính năng: `1266275`) · `ConBangTV-2.22.apk` = `ConBangTV.apk` = `ChimToTV.apk` 151 566 660 byte · SHA-256 `52d4dde6a5885df181830249d2d645532fa65fabf0e5950bb5ab8f233664ddcc` · chứng chỉ `949ef2b5…177b`
+- Thử: test đơn vị đạt. Bản thử trên TX3: dán nhiều trang ở Cài đặt và ở «Đổi trang phim», trang đã có / chữ sai báo đúng. Bản chính chạy thử trên TX3 (dán 3 dòng toàn trang đã có + số bản «1.5» → «Các trang này đã có trong danh sách.») rồi hạ về 2.21.
+- Đăng lúc 10:40:12 bằng `release.ps1 tv` (Latest = `v2.22`, ba tệp cùng SHA-256, hai link cố định đúng 2.22). **Tự cập nhật thật 2.21 → 2.22 trên TX3**: «Kiểm tra cập nhật» → «Có bản mới 2.22 (đang dùng 2.21)» (hiện đủ «Có gì mới») → «Cài đặt ngay» → màn cài của hệ thống → **2.22 lúc 10:47:22**.
+
+## iPad / iPhone 1.21 và Mac 1.21 — 17/11/2026 (hàng Truyền hình trên trang chủ, dán nhiều danh sách)
+
+- **4 hàng Truyền hình trên trang chủ** — «Kênh vừa xem», «Kênh yêu thích», «Trận đang / sắp đá», «Radio» (anh chọn): dải thẻ kênh (logo, số kênh, ★, chương trình đang phát + tiến độ, nhãn ĐANG ĐÁ / SẮP ĐÁ + giờ bóng lăn), bấm là phát (kênh của danh sách khác thì đổi danh sách trước; hàng yêu thích phát trong nhóm yêu thích), «Xem thêm» mở Truyền hình (yêu thích chọn sẵn). Là hàng trang chủ thật (`tv-recent` / `tv-favs` / `tv-live` / `tv-radio`): mặc định bật ngay sau «Xem tiếp» (người dùng cũ tự có), bật / tắt / đổi thứ tự trong Cài đặt → Trang chủ → «Các hàng trên trang chủ…» (ghi «(Truyền hình)») và sửa nhanh trên hàng; hàng rỗng tự ẩn; hồ sơ trẻ em không có hàng trận / radio; dữ liệu dựng tại chỗ, đọc ở nền.
+- **Thêm danh sách kênh: dán một lần nhiều địa chỉ** (mỗi dòng một danh sách; thiếu `http://` tự thêm; địa chỉ đã có — kể cả khác http / https, dấu `/` cuối — tự bỏ qua; danh sách đầu tiên tải ngay, các danh sách khác tải khi chọn; mỗi danh sách một mã riêng).
+- Dựng bản chính ngay trên Mac mini (`ios/scripts/mac-build.ps1 -Release`, `-Mac -Release -NoTest`) — lần đầu theo quy trình mới (anh chọn), không qua GitHub Actions.
+- iPad / iPhone: bản 1.21 (build 27) · tag `ios-v1.21` · `ConBangTV-iPad-1.21.ipa` 5 942 986 byte · SHA-256 `f1ee3017e6bab915357d4f36dbb21831dd47f7144444faefc86eef8b7afe626c`; Mac: bản 1.21 (build 27) · tag `mac-v1.21` · `ConBangTV-Mac-1.21.zip` 9 023 625 byte (Intel + Apple Silicon, ký ad-hoc, `codesign --verify` đạt) · SHA-256 `ca9382ba4ca91cd029fc2b3574b1f2520cb60fdfde82fe506cf9a1daddf0c60a` · commit `98ba8ca` (tính năng: `bb3fe3d`, `b9352f4`)
+- Thử: test lõi Swift đạt (HomeRows 14, Iptv 8 — trên Mac mini). Bản Mac thử: các hàng đúng thứ tự, sửa nhanh qua `/row`, «Các hàng…» có 4 dòng mới, bấm thẻ kênh của danh sách khác đổi danh sách và phát 720p, hàng trận với danh sách thể thao; dán 4 địa chỉ → «Đã thêm … (bỏ qua 3 đã có)». iPhone 6s Plus dọc: dải vuốt ngang, chạm thẻ mở trình phát; IPA chính cài lên iPhone 1.20 → 1.21, mở được, không có báo cáo sập. Chưa thử trên iPad và hồ sơ trẻ em (chỉ test).
+- Đăng lúc 09:43:04 (iPad) và 09:43:19 (Mac) bằng `release.ps1 ipad|mac -File dist\mac\…`; link cố định chép đè, khớp SHA-256. **Tự cập nhật thật Mac 1.20 → 1.21** (Mac mini): «Có bản mới 1.21 — Đang dùng 1.20» → «Cài đặt ngay» 09:48:07 → mở lại 1.21 lúc 09:48:13.
+
+## Windows 1.19 — 17/11/2026 (hàng Truyền hình trên trang chủ, dán nhiều danh sách)
+
+- **4 hàng Truyền hình trên trang chủ** — «Kênh vừa xem», «Kênh yêu thích», «Trận đang / sắp đá», «Radio» (anh chọn): dải thẻ kênh (logo, số kênh, ★, chương trình đang phát + tiến độ, nhãn ĐANG ĐÁ / SẮP ĐÁ + giờ bóng lăn), bấm là phát (kênh của danh sách khác thì đổi danh sách trước; hàng yêu thích phát trong nhóm yêu thích), «Xem thêm» mở Truyền hình (yêu thích chọn sẵn). Là hàng trang chủ thật (`tv-recent` / `tv-favs` / `tv-live` / `tv-radio`): mặc định bật ngay sau «Xem tiếp» (người dùng cũ tự có), bật / tắt / đổi thứ tự trong Cài đặt → Trang chủ → «Các hàng trên trang chủ…» (ghi «(Truyền hình)») và sửa nhanh trên hàng; hàng rỗng tự ẩn; hồ sơ trẻ em không có hàng trận / radio; dữ liệu dựng tại chỗ, đọc ở nền.
+- **Thêm danh sách kênh: dán một lần nhiều địa chỉ** (mỗi dòng một danh sách; thiếu `http://` tự thêm; địa chỉ đã có — kể cả khác http / https, dấu `/` cuối — tự bỏ qua; danh sách đầu tiên tải ngay, các danh sách khác tải khi chọn; mỗi danh sách một mã riêng).
+- Lõi Rust: `iptv::split_urls` / `add_lists` (FFI `iptv.addMany`), dữ liệu 4 hàng; `HomeFeed.cs` giữ khớp luật hàng của lõi. Hộp thêm danh sách: ô nhiều dòng (Ctrl+Enter = Thêm). Sửa nhanh hàng: chuột phải / Apps / Shift+F10 / M.
+- bản 1.19.0 · tag `win-v1.19` · `ConBangTV-Windows-1.19.exe` 120 345 677 byte · SHA-256 `65eeb986144acd9a12fd120a8991b4a35405c7164ac9a447b44f9e0f5a2c154f` · commit `98ba8ca` (tính năng: `bb3fe3d`, `fc03186`)
+- Thử: `windows\build.ps1` — test lõi Rust đạt (190 + 37 test tích hợp), .NET 33 đạt. Bản thử: dán đúng 4 địa chỉ → thêm 4 danh sách, dán lại → «Các danh sách này đã có trong app.»; trang chủ có 3 hàng (vừa xem / yêu thích / radio), hàng trận với danh sách thể thao, menu sửa nhanh chuyển hàng lưu đúng, «Các hàng…» có 4 dòng mới, thẻ kênh của danh sách khác đổi danh sách rồi phát.
+- Đăng lúc 09:42:15 bằng `release.ps1 windows`; link cố định `conbangtv_windows` = 1.19. **Tự cập nhật thật 1.18 → 1.19** (bản sao chạy riêng): tải + «Cài bản 1.19» 09:47:08 → «Mở bản 1.19 (--updated)» 09:47:09 (nút «Cập nhật ngay» được bấm trên màn hình — lệnh UI Automation của em không tìm thấy nút).
+
+## Linux 1.5 — 17/11/2026 (hàng Truyền hình trên trang chủ, dán nhiều danh sách)
+
+- **4 hàng Truyền hình trên trang chủ** — «Kênh vừa xem», «Kênh yêu thích», «Trận đang / sắp đá», «Radio» (anh chọn): dải thẻ kênh (logo, số kênh, ★, chương trình đang phát + tiến độ, nhãn ĐANG ĐÁ / SẮP ĐÁ + giờ bóng lăn), bấm là phát (kênh của danh sách khác thì đổi danh sách trước; hàng yêu thích phát trong nhóm yêu thích), «Xem thêm» mở Truyền hình (yêu thích chọn sẵn). Là hàng trang chủ thật (`tv-recent` / `tv-favs` / `tv-live` / `tv-radio`): mặc định bật ngay sau «Xem tiếp» (người dùng cũ tự có), bật / tắt / đổi thứ tự trong Cài đặt → Trang chủ → «Các hàng trên trang chủ…» (ghi «(Truyền hình)») và sửa nhanh trên hàng; hàng rỗng tự ẩn; hồ sơ trẻ em không có hàng trận / radio; dữ liệu dựng tại chỗ, đọc ở nền.
+- **Thêm danh sách kênh: dán một lần nhiều địa chỉ** (mỗi dòng một danh sách; thiếu `http://` tự thêm; địa chỉ đã có — kể cả khác http / https, dấu `/` cuối — tự bỏ qua; danh sách đầu tiên tải ngay, các danh sách khác tải khi chọn; mỗi danh sách một mã riêng).
+- `pages/home_tv.rs` (mới) dùng chung cho hai kiểu trang chủ; hộp thêm danh sách là TextView nhiều dòng (giữ riêng bộ đệm chữ — đóng hộp là ô bị huỷ).
+- bản 1.5.0 · tag `linux-v1.5` · `ConBangTV-Linux-1.5.deb` 6 209 512 byte · SHA-256 `3457cd7208b9f078b6f9b36a0ba1714e44f2847c40ee9255d46533be1ee6d34b` · commit `98ba8ca` (tính năng: `bb3fe3d`, `fc03186`) · dựng trong container Ubuntu 22.04 (glibc ≤ 2.34)
+- Thử: bản thử trên máy ảo: dán 4 địa chỉ bằng Ctrl+V → «Đã thêm 3 danh sách (bỏ qua 1 đã có)» (danh sách cũ lưu `http`, địa chỉ dán `https`), danh sách thể thao tải ngay; trang chủ: vừa xem + trận, yêu thích + chương trình đang phát, menu sửa nhanh / ẩn / chuyển, «Các hàng…», «Xem thêm» mở Truyền hình đúng bộ lọc, trang chủ theo trang.
+- Đăng lúc 09:42:41 bằng `release.ps1 linux`; link cố định `conbangtv_linux` = 1.5. **Tự cập nhật thật 1.4 → 1.5** trên máy ảo: «Có bản mới: Côn Bằng TV 1.5» → «Cập nhật ngay» → gói 1.5.0 lúc 09:46:31, mở lại `--updated`.
+
+## 2.21 — 17/11/2026 (hàng Truyền hình trên trang chủ, dán nhiều danh sách)
+
+- **4 hàng Truyền hình trên trang chủ** — «Kênh vừa xem», «Kênh yêu thích», «Trận đang / sắp đá», «Radio» (anh chọn): dải thẻ kênh (logo, số kênh, ★, chương trình đang phát + tiến độ, nhãn ĐANG ĐÁ / SẮP ĐÁ + giờ bóng lăn), bấm là phát (kênh của danh sách khác thì đổi danh sách trước; hàng yêu thích phát trong nhóm yêu thích), «Xem thêm» mở Truyền hình (yêu thích chọn sẵn). Là hàng trang chủ thật (`tv-recent` / `tv-favs` / `tv-live` / `tv-radio`): mặc định bật ngay sau «Xem tiếp» (người dùng cũ tự có), bật / tắt / đổi thứ tự trong Cài đặt → Trang chủ → «Các hàng trên trang chủ…» (ghi «(Truyền hình)») và sửa nhanh trên hàng; hàng rỗng tự ẩn; hồ sơ trẻ em không có hàng trận / radio; dữ liệu dựng tại chỗ, đọc ở nền.
+- **Thêm danh sách kênh: dán một lần nhiều địa chỉ** (mỗi dòng một danh sách; thiếu `http://` tự thêm; địa chỉ đã có — kể cả khác http / https, dấu `/` cuối — tự bỏ qua; danh sách đầu tiên tải ngay, các danh sách khác tải khi chọn; mỗi danh sách một mã riêng).
+- Thay dải chip «Kênh vừa xem» cũ (2.20) bằng hàng thẻ kênh; ô kênh ngang trong dải, OK phát, Menu / giữ OK sửa nhanh hàng. Trang gửi danh sách từ điện thoại cũng nhận nhiều địa chỉ. Sửa kèm: trang chủ theo trang — chuyển hàng vẫn đứng đúng ô.
+- bản 2.21 · versionCode 45 · tag `v2.21` (Latest) · commit `98ba8ca` (tính năng: `bb3fe3d`, `59c9bd6`) · `ConBangTV-2.21.apk` = `ConBangTV.apk` = `ChimToTV.apk` 151 565 087 byte · SHA-256 `b7054342e94f9dab767949ae21f66d49660312e1040e5e1e9e25fef36e5dabaa` · chứng chỉ `949ef2b5…177b`
+- Thử: test đơn vị đạt. Bản thử trên TX3: các hàng đúng chỗ, OK phát kênh và quay về đúng ô, Menu → ẩn / chuyển hàng, «Các hàng…» có 4 dòng mới, «Xem thêm kênh» mở Truyền hình với Yêu thích chọn sẵn, hàng trận với danh sách thể thao; gõ 4 địa chỉ (Enter giữa các dòng) → «Các danh sách này đã có trong app.». Bản chính chạy thử trên TX3 rồi hạ về 2.20.
+- Đăng lúc 09:41:12 bằng `release.ps1 tv` (Latest = `v2.21`, ba tệp cùng SHA-256, hai link cố định đúng 2.21). **Tự cập nhật thật 2.20 → 2.21 trên TX3**: «Kiểm tra cập nhật» → «Có bản mới 2.21 (đang dùng 2.20)» → «Cài đặt ngay» → màn cài của hệ thống → **2.21 lúc 09:45:51**.
+
+## Lịch sử repo viết lại — 17/11/2026 (không phải bản mới)
+
+- Commit «dán nhiều danh sách» lúc đầu có hai link rút gọn thật (danh sách thử) trong bài test; đã viết lại 6 commit (thay bằng `short.example/…`) và đẩy đè `main` / `cachang` trước khi gắn tag phát hành (anh đồng ý). Mã app không đổi.
+
+## iPad / iPhone 1.20 và Mac 1.20 — 17/11/2026 (Truyền hình · Radio, logo mới)
+
+- **Mục mới «Truyền hình · Radio»** (port từ bản Legacy, giao diện theo kiểu app hiện đại — anh dặn không theo kiểu iOS 6): một mục
+  trong menu, vẽ ngay trong khung chính. Đầu trang có ô tìm (tên / số kênh), hàng «Kênh vừa xem» vuốt ngang, dải chip nhóm kênh;
+  thẻ kênh có logo, số kênh, nhãn ĐANG ĐÁ / SẮP ĐÁ / RADIO / PHIM, chương trình đang phát + tiến độ + chương trình kế; giữ tay /
+  chuột phải mở menu nhanh (yêu thích, lịch, nhắc bóng lăn). Lõi Swift `Core/IptvParse.swift` + `Core/Iptv.swift` (bản Swift của
+  `linux/core/src/iptv.rs`: M3U, XMLTV cả `.gz`, giờ trận, gộp nguồn, kênh lỗi, yêu thích / vừa xem theo người xem, nhắc giờ).
+- **Trình phát truyền hình** (`Player/LivePlayer.swift`, AVPlayer) cùng kiểu trình phát phim: nút tròn, nhãn TRỰC TIẾP, bảng kênh trượt
+  từ phải, vuốt dọc đổi kênh; nguồn lỗi tự sang nguồn sau, luồng FLV (AVPlayer không phát được) đánh dấu lỗi và chuyển nguồn; tạm
+  dừng → CHẬM, «Về trực tiếp»; radio hiện thẻ đài trên nền logo làm mờ, tên bài (ICY), «MP3 · 56 kbps».
+  Bàn phím (iPad / Mac): ↑ ↓ / PgUp PgDn đổi kênh, số, Space, G lịch, F yêu thích, Esc.
+- Lịch phát sóng dạng dòng thời gian (hôm qua / hôm nay / ngày mai), chạm chương trình sắp tới để được nhắc; nhắc giờ phát / bóng lăn
+  hiện hộp «Xem ngay».
+- Sửa sau khi thử trên iPhone 6s Plus / iPad thật: tiêu đề bị cắt trên iPhone dọc (màn hẹp chỉ còn 2 nút tròn, «Tải lại» vào menu
+  danh sách); thẻ radio trên iPhone ngang chạm thanh nút; **lối tắt truyền hình đóng được màn miễn trừ / «Ai đang xem?» và «Xem ngay»
+  mở kênh đè lên màn chọn người xem (qua mặt mã PIN)** — nay chờ qua màn chặn; quay lại app sau ≥ 30 phút lúc đang nghe radio không
+  hỏi lại người xem.
+- **Sửa lỗi anh báo: thoát trình phát ra lưới kênh thì không vuốt về được đầu danh sách** (iPad + iPhone). Đo bằng cổng gỡ lỗi
+  `/scrollinfo`: sau mỗi lần thoát, chiều cao nội dung phình (25 921 → 48 370 điểm), cuộn về đầu dừng ở 16 155. Hai nguyên nhân: ô
+  kênh định danh bằng khoá kênh mà một kênh có thể nằm ở nhiều nhóm (trùng mã trong «Tất cả»), và lưới kênh là một phần tử con của
+  LazyVStack (dựng lại thì SwiftUI ước sai cỡ các phần phía trên). Nay cả trang là một LazyVGrid (đầu trang = tiêu đề mục, nút trang
+  = chân mục), ô định danh bằng số thứ tự. Thử đổi sang VStack thường thì iOS 15 sập (IDViewList) — đã bỏ.
+- **Logo / icon mới** (đĩa kính tròn, vòng vàng, ấn 鵬 nổi khối — như icon bản Legacy): iPadOS tô đen phần trong suốt của icon trên
+  màn hình chính (ảnh trong gói vẫn có kênh trong suốt — đã kiểm), nên icon iPad / iPhone đặt đĩa kính trên nền nâu tối (anh chọn);
+  Mac giữ dáng tròn trong suốt; logo thanh bên trong suốt.
+- iPad / iPhone: bản 1.20 (build 26) · tag `ios-v1.20` · `ConBangTV-iPad-1.20.ipa` 6 630 021 byte · SHA-256
+  `99727e1af65b6806639185757c433ec299258e612fe998fface39df262b80cc1`
+- Mac: bản 1.20 (build 26) · tag `mac-v1.20` · `ConBangTV-Mac-1.20.zip` 10 523 201 byte (Intel + Apple Silicon, ký ad-hoc) · SHA-256
+  `2e37acf927b99008161c710a830dbb08d67688085c33a148e6b60916e7dc2207`
+- commit `ab171e7` (tính năng: `661d2b2`, `26a41da`, `ab171e7`; logo `ccfa577`, `2b0bb00`; chữ `f0e16fd`; số bản `94b14e2`; không bản
+  nào là "latest" — Latest là `v2.20`).
+- Thử:
+  - Bản thử trên iPhone 6s Plus (iOS 15.8.3) và iPad Pro 11″ M1 (iPadOS 15.4.1): danh sách 467 kênh + lịch 144 kênh nạp ~2 s; VTV1 /
+    VTV2 720p, VTV3 1080p; radio BBC (MP3 · 56 kbps) và VOV1 (AAC · 256 kbps, tên chương trình); bảng kênh, lịch dọc / ngang, danh
+    sách thể thao (nhãn ĐANG ĐÁ; luồng trận lúc đó bị máy chủ trả 403 — app báo «Trận đang đá nhưng kênh chưa phát hình», tự thử
+    lại); danh sách Xtream 59 834 kênh trên iPhone ~12 s, app ~120 MB. Màn miễn trừ / «Ai đang xem?» chặn được lối tắt truyền hình.
+  - Lỗi cuộn: bản sửa trên iPhone — xem rồi thoát 3 lần, chiều cao giữ ~19 300–20 600 điểm, cuộn xuống cuối / về đầu nhiều lần đều
+    tới đúng; bản Mac thử cũng vậy (danh sách Xtream).
+  - CI `ios.yml` (release=true, run 43983144202): test lõi, IPA, bản Mac đạt. Info.plist đúng (`vn.chimto.tv`, 1.20, build 26),
+    không có cổng gỡ lỗi; bản Mac hai kiến trúc. IPA chính cài lên iPhone (`vn.chimto.tv` 1.19 → 1.20), app mở, không có báo cáo sập.
+- Đăng lúc 07:07:53 (iPad) và 07:08:30 (Mac) bằng `release.ps1 ipad` / `release.ps1 mac`; link cố định `conbangtv_ios` /
+  `conbangtv_macos` chép đè sang 1.20, khớp SHA-256.
+  - **Tự cập nhật thật Mac 1.19 → 1.20** (bản trong `/Applications` của Mac mini): xoá mốc kiểm cập nhật, mở app → «Có bản mới 1.20 —
+    Đang dùng 1.19» kèm «Có gì mới» → «Cài đặt ngay» 07:09:37 → mở lại ở 1.20 lúc 07:09:42.
+
+## Windows 1.18 — 17/11/2026 (Truyền hình · Radio, logo mới)
+
+- **Mục mới «Truyền hình · Radio»** như bản tivi: lõi Rust chung `linux/core/src/iptv.rs` (đọc M3U trong bộ nhớ, 353 nghìn kênh
+  ~1,6 s; XMLTV; giờ trận; kênh lỗi; mạng của app lỗi mà không bật proxy thì thử mạng của máy) qua FFI `iptv.*`; trang
+  `UI/TvPages.cs` (lưới kênh, nhóm, tìm tên / số, yêu thích, vừa xem, lịch phát sóng, cài đặt danh sách, thêm tệp .m3u), trình phát
+  `Player/LiveView.cs` bằng mpv (Referer / User-Agent theo luồng, ICY cho radio). Phím: PgUp / PgDn đổi kênh, gõ số nhảy kênh.
+- Luồng đứt giữa chừng thì nối lại, không báo lỗi thoáng qua / nhảy nguồn nhầm (`661d2b2`).
+- Nhắc giờ phát chờ tới khi không có hộp thoại nào: hộp mới đóng hộp đang mở, trước đó nhắc giờ đóng được màn miễn trừ / «Ai đang
+  xem?» (qua mặt mã PIN). Quay lại app sau ≥ 30 phút lúc đang xem truyền hình không hỏi lại người xem. Thẻ radio bỏ dòng ♪ chỉ lặp
+  tên đài.
+- **Logo mới:** `app.ico` (9 cỡ, xuất bằng `node design/render.mjs desktop d`) và logo thanh bên — đĩa kính tròn nền trong suốt.
+- bản 1.18.0 · tag `win-v1.18` · `ConBangTV-Windows-1.18.exe` 120 332 421 byte · SHA-256
+  `7b31ad5290661faab932e947c217c71a1d3dd8e06609a140c71b074341f7fe0e` · commit `94b14e2` (tính năng: `ebb892e`, `661d2b2`, `9aa2d22`,
+  `f0e16fd`; logo `ccfa577`)
+- Thử: `windowsuild.ps1` — test lõi Rust đạt (187 ở `conbang-core`), .NET 32 đạt. Bản thử (thư mục dữ liệu riêng): thêm danh sách
+  467 kênh, VTV1 1280×720 (giải mã d3d11va, không rớt khung), radio BBC «MP3 · 56 kbps» không còn dòng lặp tên.
+- Đăng lúc 06:14:32 bằng `release.ps1 windows`; link cố định `conbangtv_windows` = 1.18. **Tự cập nhật thật 1.17 → 1.18** (bản sao chạy
+  riêng): hộp «Có bản mới» → «Cập nhật ngay» (UI Automation) 06:26:16 → cài 06:26:33 → «Mở bản 1.18 (--updated)» 06:26:35.
+
+## Linux 1.4 — 17/11/2026 (Truyền hình · Radio, logo mới)
+
+- **Mục mới «Truyền hình · Radio»** như bản Windows (lõi `cbtv::iptv`): `pages/tv.rs`, trình phát `live.rs` (mpv dưới lớp GTK
+  Overlay, ICY cho radio). Phím: PgUp / PgDn đổi kênh, gõ số nhảy kênh.
+- Luồng đứt giữa chừng thì nối lại không báo lỗi thoáng qua; nhắc giờ phát không vượt màn miễn trừ / «Ai đang xem?» (hộp mới huỷ hộp
+  đang mở — trước đó có thể coi như bấm «Thoát»); quay lại sau ≥ 30 phút lúc đang xem truyền hình không hỏi lại người xem; thẻ radio bỏ
+  dòng ♪ chỉ lặp tên đài.
+- **Logo mới:** icon gói `.deb` (`linux/packaging/icons`) và logo trong app (`design/logo-512.png`) — đĩa kính tròn nền trong suốt.
+- bản 1.4.0 · tag `linux-v1.4` · `ConBangTV-Linux-1.4.deb` 6 149 828 byte · SHA-256
+  `871796eed330deb8fa8932309e1606f2e480838271bea16071b1202cc6c6cf55` · commit `94b14e2` (tính năng: `5472dd1`, `661d2b2`, `9aa2d22`,
+  `f0e16fd`; logo `ccfa577`) · dựng trong container Ubuntu 22.04 (glibc ≤ 2.34)
+- Thử: bản thử trên máy ảo Ubuntu 26.04 — VTV1 1280×720, radio BBC MP3 56 kbps, không còn dòng lặp tên; `dpkg-deb -f` đúng gói
+  `conbangtv` 1.4.0 amd64.
+- Đăng lúc 06:15:03 bằng `release.ps1 linux`; link cố định `conbangtv_linux` = 1.4. **Tự cập nhật thật 1.3 → 1.4** trên máy ảo: hộp
+  «Có bản mới: Côn Bằng TV 1.4» → «Cập nhật ngay» → `pkexec apt-get install` → mở lại `--updated`, gói 1.4.0 lúc 06:25:31.
+
+## 2.20 — 17/11/2026 (Truyền hình · Radio, logo mới)
+
+- **Mục mới «Truyền hình · Radio»** (port từ bản Legacy — `CBIPTV.m`, `CBLivePlayerViewController.m`…): xem kênh truyền hình / nghe
+  radio từ **danh sách M3U / M3U8 người xem tự thêm** — app không kèm sẵn kênh. Thêm bằng địa chỉ, gửi tệp / dán nội dung từ điện
+  thoại / máy tính cùng Wi-Fi (trang tải lên ở cổng 8795, mã QR tự vẽ `Qr.kt`) hoặc chọn tệp .m3u. `Iptv.kt` đọc danh sách vào SQLite
+  (mỗi lần nhập một tệp, chèn theo lô; danh sách không đổi thì bỏ qua đọc lại), `IptvParse.kt` (thuần, có test JVM).
+- Đọc nhóm, logo, số kênh, `#EXTVLCOPT` Referer / User-Agent, `địa-chỉ|Referer=…`; gộp kênh trùng tên trong nhóm thành nhiều nguồn;
+  nhận đài radio, kênh thiếu nhi (hồ sơ trẻ em chỉ thấy kênh thiếu nhi), phim; bỏ mã nước đầu tên («|UK| SPORT 1» → «SPORT 1»).
+- **Lịch phát sóng (XMLTV)**, màn lịch `TvGuideActivity`, **nhắc giờ phát** (hộp trong app + thông báo) và **nhắc lúc bóng lăn** cho kênh
+  trận đấu (giờ trận đọc từ tên kênh, nhãn ĐANG ĐÁ / SẮP ĐÁ). Nhắc giờ không hiện đè lên màn «Ai đang xem?» / miễn trừ trách nhiệm.
+- Yêu thích, «Kênh vừa xem» (cả một hàng ở trang chủ — bấm là mở kênh; kênh của danh sách khác thì đổi sang danh sách đó), tìm tên /
+  số kênh.
+- **Trình phát truyền hình** (`LiveActivity`, Media3 ExoPlayer 1.5.1 — trình phát WebView chỉ phát được HLS): ▲ ▼ / CH+ CH− đổi kênh,
+  phím số nhảy kênh, bảng kênh; nguồn lỗi tự chuyển nguồn sau, cả kênh lỗi thì tải lại danh sách một lần; trận chưa phát hình thì thử
+  lại 20 giây một lần; tạm dừng → CHẬM, «Về trực tiếp»; radio hiện logo đài + tên bài (ICY). Thẻ radio bỏ dòng ♪ chỉ lặp tên đài.
+- **Logo / biểu tượng mới:** đĩa kính tròn, vòng vàng và ấn 鵬 nổi khối (phương án D trong `design/logo.html`, như icon bản Legacy);
+  icon Android 8+ nền trong suốt (lớp nền = màu trong suốt); banner tivi đổi dấu hình.
+- bản 2.20 · versionCode 44 · tag `v2.20` (Latest) · commit `94b14e2` (tính năng: `757f95f`, `b7c189a`, `fff278d`, `9aa2d22`, `f0e16fd`;
+  logo `ccfa577`) · `ConBangTV-2.20.apk` = `ConBangTV.apk` = `ChimToTV.apk` 151 557 659 byte · SHA-256
+  `7643470fa101831a60d512bd585a7cbd1f34411ad438a550267cb4f30bd92251` · chứng chỉ `949ef2b5…177b`
+- Thử: test đơn vị đạt. Bản thử trên TX3: danh sách 467 kênh (làm mới, lịch 144 kênh), VTV1 1280×720 (vẽ 107 khung, rớt 0), bấm số 438 →
+  radio BBC (MP3); Xtream 63 nghìn kênh ~42 s (hôm trước). Icon tròn trên điện thoại S10e (Android 14), banner mới trên launcher TX3. Bản
+  chính chạy thử trên TX3 (màn chính, mục Truyền hình mở được) rồi hạ về 2.19.
+- Đăng lúc 06:13:22 bằng `release.ps1 tv` (Latest = `v2.20`, ba tệp cùng SHA-256, hai link cố định tải về đúng 2.20). **Tự cập nhật thật
+  2.19 → 2.20 trên TX3**: Cài đặt → «Kiểm tra cập nhật» → «Có bản mới 2.20 (đang dùng 2.19)» (mục «Có gì mới» 421 ký tự, hiện đủ) →
+  «Cài đặt ngay» → màn cài của hệ thống → **2.20 lúc 06:22:43**.
+
 ## iPad / iPhone 1.19 và Mac 1.19 — 15/11/2026 (dexter.pw, phụ đề chọn được)
 
 - **Trang mới dexter.pw — «Phim Âu Mỹ 4K (dexter.pw)»** (chọn trong «Đổi trang phim»): khoảng 6 400 phim lẻ (nhiều phim 4K) và hơn

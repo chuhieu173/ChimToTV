@@ -34,8 +34,13 @@ pub fn flush_and_reset() {
     wl::reset();
 }
 
-/// Hết giờ xem: hỏi mã PIN phụ huynh để cho xem thêm.
+/// Hết giờ xem: hỏi mã PIN phụ huynh để cho xem thêm (rồi mở lại đúng tập).
 pub fn limit_reached(b: Block, film: String, ep: String) {
+    limit_reached_then(b, std::rc::Rc::new(move || app().play(&film, &ep, false)));
+}
+
+/// Như limit_reached, cho xem thêm xong thì chạy `resume` (Truyền hình: mở lại kênh đang xem).
+pub fn limit_reached_then(b: Block, resume: std::rc::Rc<dyn Fn()>) {
     crate::ui::local(async move {
         let a = app();
         a.window.present();
@@ -68,7 +73,7 @@ pub fn limit_reached(b: Block, film: String, ep: String) {
                 wl::grant_until_morning(None);
             }
             a.toast("Đã cho xem thêm.");
-            a.play(&film, &ep, false);
+            resume();
             return;
         }
     });
