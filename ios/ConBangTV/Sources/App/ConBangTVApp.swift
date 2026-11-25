@@ -9,10 +9,8 @@ struct ConBangTVApp: App {
 
     var body: some Scene {
         WindowGroup {
-            RootView()
-                .environmentObject(AppModel.shared)
-                .preferredColorScheme(.dark)
-                .modifier(DisclaimerGate())
+            // Giao diện chính (MainUI = RootView); đang chiếu lên màn xe (CarPlay) thì cửa sổ này hiện bảng điều khiển
+            PhoneRoot()
         }
         .onChange(of: phase) { p in
             Log.d("App", "trạng thái: \(p)")
@@ -26,6 +24,7 @@ struct ConBangTVApp: App {
                 AppModel.shared.checkFollows()
                 SyncService.shared.appActive() // đồng bộ trong nhà (đã ghép máy)
             case .background:
+                CarScreen.shared.undimPhone()
                 AppModel.shared.appLeft()
                 AutoClear.leftApp()
             default:

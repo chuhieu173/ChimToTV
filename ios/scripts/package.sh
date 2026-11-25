@@ -30,6 +30,12 @@ EOF
     [ -d "$ext" ] || continue
     ldid -S"$ent" "$ext/$(/usr/libexec/PlistBuddy -c "Print CFBundleExecutable" "$ext/Info.plist")"
   done
+  # App (không phải widget): thêm quyền màn xe CarPlay (UI/CarScreen.swift) — SBStarkCapable = hiện trên CarPlay với cửa sổ
+  # UIKit thường; hai quyền runningboard / multitasking giữ WebKit + app chạy khi màn điện thoại không ở trước mặt (như CarTube).
+  # KHÔNG thêm com.apple.private.security.no-container: app đổi thư mục dữ liệu → mất lịch sử, cài đặt.
+  /usr/libexec/PlistBuddy -c "Add :SBStarkCapable bool true" \
+    -c "Add :com.apple.runningboard.assertions.webkit bool true" \
+    -c "Add :com.apple.multitasking.systemappassertions bool true" "$ent" >/dev/null
   ldid -S"$ent" "$app/ConBangTV"
   rm -f "$ent"
   # Tên tệp giữ "iPad" (bản 1.2 trở về trước tìm tệp .ipa bất kỳ trong release ios-v*); dùng cho cả iPhone

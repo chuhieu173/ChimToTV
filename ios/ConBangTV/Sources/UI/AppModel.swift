@@ -177,8 +177,7 @@ final class AppModel: ObservableObject {
     private func begin() {
         started = true
         // Màn hẹp biết trước khi lưới hiện lần đầu (khỏi vẽ lưới rồi mới đổi sang dải vuốt ngang)
-        let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
-        stripMode = (scenes.flatMap { $0.windows }.first?.bounds.width ?? UIScreen.main.bounds.width) < Self.stripWidth
+        stripMode = (CarScreen.mainWindow?.bounds.width ?? UIScreen.main.bounds.width) < Self.stripWidth
         showSiteLabel()
         rebuildMenu()
         select(menu[0])
@@ -1345,8 +1344,7 @@ final class AppModel: ObservableObject {
     /// SwiftUI không đụng tới.
     private func askUpdate(_ rel: UpdateCheck.Release) {
         guard updateWindow == nil else { return }
-        let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
-        guard let scene = scenes.first(where: { $0.activationState == .foregroundActive }) ?? scenes.first else { return }
+        guard let scene = CarScreen.mainScene else { return } // đang chiếu lên màn xe: hỏi trên màn xe
         let main = scene.windows.first { $0.isKeyWindow } ?? scene.windows.first
         let w = UIWindow(windowScene: scene)
         w.windowLevel = .alert

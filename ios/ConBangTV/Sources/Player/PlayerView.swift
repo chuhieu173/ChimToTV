@@ -752,13 +752,14 @@ final class PlayerController: UIHostingController<PlayerView> {
     @available(*, unavailable)
     required dynamic init?(coder: NSCoder) { fatalError("không dùng") }
 
-    /// iPhone: phim luôn xem ngang (mở trình phát là tự xoay); iPad xoay tự do.
+    /// iPhone: phim luôn xem ngang (mở trình phát là tự xoay); iPad xoay tự do. Màn xe (CarPlay) không xoay.
     override var supportedInterfaceOrientations: UIInterfaceOrientationMask {
-        UIDevice.current.userInterfaceIdiom == .phone ? .landscape : .all
+        UIDevice.current.userInterfaceIdiom == .phone && !CarScreen.shared.uiOnCar ? .landscape : .all
     }
 
     override var preferredInterfaceOrientationForPresentation: UIInterfaceOrientation {
-        UIDevice.current.userInterfaceIdiom == .phone ? .landscapeRight : super.preferredInterfaceOrientationForPresentation
+        UIDevice.current.userInterfaceIdiom == .phone && !CarScreen.shared.uiOnCar
+            ? .landscapeRight : super.preferredInterfaceOrientationForPresentation
     }
 
     override var prefersStatusBarHidden: Bool { true }
@@ -817,7 +818,7 @@ final class PlayerController: UIHostingController<PlayerView> {
     override func viewDidDisappear(_ animated: Bool) {
         super.viewDidDisappear(animated)
         if isBeingDismissed {
-            UIApplication.shared.isIdleTimerDisabled = false
+            UIApplication.shared.isIdleTimerDisabled = CarScreen.keepPhoneAwake // đang nối xe: màn điện thoại đừng tự khoá
             // Đóng vì phim vào hình trong hình: trình phát chạy tiếp tới khi phóng to / đóng cửa sổ nhỏ
             if !model.detached { model.teardown() }
             SystemLevels.shared.restoreBrightness()

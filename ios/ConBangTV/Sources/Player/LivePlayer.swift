@@ -91,6 +91,8 @@ final class LiveModel: NSObject, ObservableObject, LimitHost {
             Task { @MainActor in me.gotIcy(t) }
         }
         player.automaticallyWaitsToMinimizeStalling = true
+        // Đang nối CarPlay: không phát ra «màn ngoài» (màn xe) — không thì lớp hình trong app đen (UI/CarScreen.swift)
+        if CarScreen.shared.connected { player.allowsExternalPlayback = false }
     }
 
     // MARK: - Mở / đóng
@@ -1204,11 +1206,12 @@ final class LiveController: UIHostingController<LiveView> {
     required dynamic init?(coder: NSCoder) { fatalError("không dùng") }
 
     override var supportedInterfaceOrientations: UIInterfaceOrientationMask {
-        UIDevice.current.userInterfaceIdiom == .phone ? .landscape : .all
+        UIDevice.current.userInterfaceIdiom == .phone && !CarScreen.shared.uiOnCar ? .landscape : .all
     }
 
     override var preferredInterfaceOrientationForPresentation: UIInterfaceOrientation {
-        UIDevice.current.userInterfaceIdiom == .phone ? .landscapeRight : super.preferredInterfaceOrientationForPresentation
+        UIDevice.current.userInterfaceIdiom == .phone && !CarScreen.shared.uiOnCar
+            ? .landscapeRight : super.preferredInterfaceOrientationForPresentation
     }
 
     override var prefersStatusBarHidden: Bool { true }
@@ -1233,7 +1236,7 @@ final class LiveController: UIHostingController<LiveView> {
     override func viewDidDisappear(_ animated: Bool) {
         super.viewDidDisappear(animated)
         if isBeingDismissed {
-            UIApplication.shared.isIdleTimerDisabled = false
+            UIApplication.shared.isIdleTimerDisabled = CarScreen.keepPhoneAwake // đang nối xe: màn điện thoại đừng tự khoá
             model.teardown()
             TvModel.shared.loadCards()
         }

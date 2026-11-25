@@ -174,8 +174,8 @@ final class WebFetcher {
         web.alpha = 0
         web.isUserInteractionEnabled = false
         // Gắn vào cửa sổ (ngoài vùng nhìn thấy): WebView không nằm trong cửa sổ thì WebKit giảm nhịp chạy mã của trang
-        let windows = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.flatMap(\.windows)
-        if let win = windows.first(where: \.isKeyWindow) ?? windows.first { win.addSubview(web) }
+        // (đang chiếu lên màn xe thì gắn vào cửa sổ màn xe — cửa sổ điện thoại có thể đang nằm nền / khoá máy)
+        if let win = CarScreen.mainWindow { win.addSubview(web) }
         s.web = web
         s.gen = AppProxy.generation
         return web

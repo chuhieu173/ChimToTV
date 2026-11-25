@@ -84,6 +84,16 @@ targets:
         UIStatusBarStyle: UIStatusBarStyleLightContent
         UIViewControllerBasedStatusBarAppearance: true
         UIApplicationSupportsIndirectInputEvents: true
+        # Màn xe (CarPlay, UI/CarScreen.swift): cảnh riêng có cửa sổ UIKit thường — cần quyền SBStarkCapable (scripts/package.sh).
+        # Khoá «~iphone»: chỉ iPhone đọc; iPad / Mac giữ một cửa sổ như cũ (bật nhiều cảnh trên iPad thì mở được 2 cửa sổ app).
+        UIApplicationSceneManifest~iphone:
+          UIApplicationSupportsMultipleScenes: true
+          UISceneConfigurations:
+            UIWindowSceneSessionRoleCarPlay:
+              - UISceneConfigurationName: CarPlay
+                UISceneDelegateClassName: $(PRODUCT_MODULE_NAME).CarSceneDelegate
+        # Màn xe: xe đang chạy thì che hình, chỉ phát tiếng — biết qua tốc độ GPS
+        NSLocationWhenInUseUsageDescription: "Khi chiếu lên màn hình xe (CarPlay), app dùng tốc độ xe để tắt hình lúc xe đang chạy — chỉ phát tiếng. App không lưu hay gửi vị trí đi đâu."
         UIBackgroundModes:
           - audio
         NSAppTransportSecurity:

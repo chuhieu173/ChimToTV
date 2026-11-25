@@ -30,7 +30,8 @@ final class PlayerModel: NSObject, ObservableObject, WKNavigationDelegate, WKUID
 
     let web: WKWebView
     let filmUrl: String
-    private let startEpUrl: String
+    /// Tập lúc mở trình phát (màn xe đổi chỗ khi tập chưa kịp mở: mở lại đúng tập này).
+    let startEpUrl: String
     private let continueMode: Bool
 
     /// Đóng trình phát (PlayerController gắn vào); mở trang web của tập (trên trình phát).
@@ -135,6 +136,12 @@ final class PlayerModel: NSObject, ObservableObject, WKNavigationDelegate, WKUID
         startEpUrl = epUrl
         self.continueMode = continueMode
         let config = WebSetup.configuration()
+        if CarScreen.shared.connected {
+            // Đang nối CarPlay: hệ thống coi màn xe là «màn ngoài» — video cho phép AirPlay chuyển sang phát ra ngoài, lớp hình
+            // trong app đen thui (trên màn xe lẫn điện thoại). Tắt AirPlay / hình trong hình như CarTube.
+            config.allowsAirPlayForMediaPlayback = false
+            config.allowsPictureInPictureMediaPlayback = false
+        }
         web = WebSetup.make(config)
         super.init()
         web.navigationDelegate = self

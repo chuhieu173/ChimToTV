@@ -347,6 +347,7 @@ struct DetailView: View {
                 .padding(.vertical, 8)
                 .background(RoundedRectangle(cornerRadius: 8).fill(Theme.surface2))
                 .onSubmit { m.jump() }
+                .carSubmit(jumpFocused) { m.jump() } // bàn phím riêng của màn xe (CarPlay)
             Button("Đến") {
                 jumpFocused = false
                 m.jump()
