@@ -9,6 +9,29 @@ Bản Windows (Windows 10 / 11, một tệp `.exe`) ghi riêng với tiêu đề
 Bản Mac (macOS 12+, từ 13/11/2026, cùng mã nguồn và số bản với bản iPad) ghi riêng với tiêu đề "Mac …", tag `mac-v…`.
 Bản Linux (Ubuntu 22.04+ / Linux Mint 21+ / Debian 12+, từ 13/11/2026, tệp `.deb`) ghi riêng với tiêu đề "Linux …", tag `linux-v…`.
 
+## iPad / iPhone 1.24 — 25/11/2026 (Côn Bằng TV trên màn xe CarPlay)
+
+Anh hỏi «code cho nó hiện ở carplay» rồi muốn «giao diện app trên carplay full như trên màn hình iphone»; thử trên màn CarPlay độc lập
+của anh (nối dây USB) với iPhone 6s Plus iOS 15.8.3. Chỉ bản iPad / iPhone (Mac giữ 1.23 — không có gì mới).
+
+- **Màn xe CarPlay (chỉ iPhone, màn xe cảm ứng):** biểu tượng Côn Bằng TV trên CarPlay; màn xe hiện nguyên giao diện app, chạm trên màn
+  xe; điện thoại thành bảng điều khiển (đang phát + nút, tìm phim, tắt sáng màn, «Dùng trên điện thoại»). Đổi qua lại giữa màn xe và điện
+  thoại lúc đang xem thì phim mở lại đúng chỗ.
+- **Phim KKPhim / link .m3u8 trên màn xe phát bằng AVPlayer:** có hình cả khi tắt màn iPhone (trình phát web thì không — WebKit bỏ khung
+  hình khi màn điện thoại tắt), tự bỏ quảng cáo KKPhim chèn giữa phim, đi qua mạng của app (DNS mã hoá / vượt chặn). Server mã hoá của
+  trang thì app tự đổi sang server KKPhim dự phòng nếu có.
+- **Xe đang chạy** (tốc độ GPS): màn xe chỉ phát tiếng. **Bàn phím riêng** cho ô gõ chữ trên màn xe.
+- iPad / iPhone: bản 1.24 (build 31) · tag `ios-v1.24` · `ConBangTV-iPad-1.24.ipa` 6 124 474 byte · SHA-256
+  `d1847c09c6c3baf129adc707cad832b24c2dfd05deb37d14c239b0c4238d3568` · commit `a166e5a` (tính năng: `76b3911`, `ffce26f`; bỏ dòng nhắc
+  «Bật màn iPhone…»: `a166e5a`) · dựng trên Mac mini (`mac-build.ps1 -Release`, test lõi đạt)
+- Thử trên màn CarPlay thật: biểu tượng hiện, giao diện chính lên màn xe (535×300 điểm @3x), phim chạy 0 khung rớt; đổi màn xe ↔ điện
+  thoại hai chiều (mở lại đúng giây); giả xe chạy → màn che + nút lớn, tiếng vẫn chạy; bàn phím riêng gõ «tien nghich» → Tìm ra 11 nhóm;
+  AVPlayer (server KKPhim): xem tiếp đúng chỗ, dừng / phát / tua / tập sau, bỏ 1 khối quảng cáo, **anh xác nhận tắt màn iPhone mà màn xe
+  vẫn có hình, mượt**; Truyền hình VTV1 cũng có hình khi tắt màn iPhone. IPA chính (`vn.chimto.tv` 1.24 / 31, có `SBStarkCapable`, không
+  cổng gỡ lỗi) cài bằng TrollStore, anh mở trên màn xe — chạy bình thường. Chưa thử: khoá hình theo GPS khi xe chạy thật (anh thử sau).
+- Đăng lúc 15:16:08 bằng `release.ps1 ipad -File dist\mac\ConBangTV-iPad-1.24.ipa` (`--latest=false`; Latest vẫn `v2.23`); link cố định
+  `conbangtv_ios/ConBangTV-iPad.ipa` chép đè — tải từ link công khai và link cố định, khớp SHA-256.
+
 ## 2.23 — 18/11/2026 (sửa lỗi sau audit cả 5 bản)
 
 Anh yêu cầu audit lại cả 5 bản («báo cáo lỗi và fix lỗi nếu có»), rồi duyệt thêm 5 mục đề xuất. Cùng đợt với iPad / iPhone / Mac 1.23,

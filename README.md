@@ -372,6 +372,29 @@ Cùng app cho iPad và iPhone (iOS / iPadOS 15 trở lên, cài bằng TrollStor
 - **Khác bản TV:** không có con trỏ ảo (chạm thẳng vào trang web). Lúc bật proxy / vượt chặn / DNS mã hoá, trên iPadOS 15–16
   app không giữ cookie của trang web sau khi tắt app.
 
+### Màn xe CarPlay (iPhone, từ 1.24)
+
+Apple chỉ cho app lên CarPlay bằng giao diện mẫu và không cho phát video; app cài bằng TrollStore nên tự khai quyền `SBStarkCapable`
+(`ios/scripts/package.sh`) và cảnh `UIWindowSceneSessionRoleCarPlay` (khoá `UIApplicationSceneManifest~iphone` trong `ios/project.yml` —
+iPad / Mac giữ một cửa sổ) — cách của [CarTube](https://github.com/Avangelista/CarTube). Mã: `ios/ConBangTV/Sources/UI/CarScreen.swift`,
+`UI/CarInput.m`, `Player/NativeFilm.swift`.
+
+- **Dùng:** cắm iPhone vào xe / màn CarPlay (màn cảm ứng) → chạm biểu tượng Côn Bằng TV trên CarPlay. Màn xe hiện **nguyên giao diện app**
+  (chạm trên màn xe); điện thoại thành **bảng điều khiển**: phim / kênh đang phát và nút điều khiển, ô tìm phim (kết quả hiện trên màn
+  xe), «Tắt sáng màn điện thoại», «Dùng trên điện thoại» (giao diện về điện thoại; đang xem thì phim đóng ở màn xe và mở lại đúng chỗ ở
+  điện thoại — và ngược lại). Rút dây thì phim đóng (lưu chỗ xem), không tự phát tiếp trên điện thoại.
+- **Phim trên màn xe:** luồng `.m3u8` / tệp video (KKPhim…) phát bằng **AVPlayer** — có hình cả khi tắt màn iPhone, tự bỏ khối quảng
+  cáo KKPhim chèn giữa phim; danh sách phát và đoạn video đi qua mạng của app (DNS mã hoá / vượt chặn / proxy — cổng chuyển tiếp
+  127.0.0.1). Server riêng của trang (nhúng, mã hoá) chỉ phát được bằng trình phát web: WebKit bỏ khung hình khi màn iPhone tắt nên
+  cần màn iPhone bật (bấm «Tắt sáng màn điện thoại» cho tối hẳn); vì vậy trên màn xe app tự mở server KKPhim dự phòng (cùng kiểu
+  Vietsub / Thuyết minh) nếu phim có. AVPlayer không mở được luồng thì tự quay về trình phát web. Truyền hình (AVPlayer) có hình cả khi
+  tắt màn iPhone.
+- **Xe đang chạy** (tốc độ GPS ≥ 10 km/h trong 2 giây; dừng: < 4 km/h trong 6 giây): màn xe bị che, chỉ phát tiếng, nút điều khiển cỡ
+  lớn. Lần đầu nối xe iPhone hỏi quyền vị trí — chọn «Cho phép khi dùng ứng dụng».
+- **Gõ chữ trên màn xe:** bàn phím riêng của app (bàn phím của iPhone hiện trên màn xe bị lỗi).
+- **Thử khi không có người ngồi cạnh** (iPhone thử có jailbreak Dopamine): cổng gỡ lỗi `/car` (trạng thái; `phone=1|0`, `moving=1|0|auto`,
+  `type=…`), thêm `w=phone|car` cho `/shot` `/ui` `/press`…; công cụ mở khoá / chạm biểu tượng CarPlay nằm ngoài repo (bộ công cụ máy thử).
+
 ## Bản Mac
 
 Chính app iPad dựng thành app Mac bằng **Mac Catalyst** (cùng mã nguồn `ios/`, cùng số bản với bản iPad): macOS 12 trở lên,
