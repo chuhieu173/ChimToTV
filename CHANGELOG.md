@@ -9,6 +9,33 @@ Bản Windows (Windows 10 / 11, một tệp `.exe`) ghi riêng với tiêu đề
 Bản Mac (macOS 12+, từ 13/11/2026, cùng mã nguồn và số bản với bản iPad) ghi riêng với tiêu đề "Mac …", tag `mac-v…`.
 Bản Linux (Ubuntu 22.04+ / Linux Mint 21+ / Debian 12+, từ 13/11/2026, tệp `.deb`) ghi riêng với tiêu đề "Linux …", tag `linux-v…`.
 
+## iPad / iPhone 1.25 và Mac 1.25 — 25/11/2026 (mục TubeMini — xem YouTube qua máy chủ TubeMini)
+
+Anh giao: «lên phương án tích hợp tubemini vào Côn Bằng TV, vị trí menu bên dưới nút Truyền hình - radio», chốt tên «TubeMini», làm iPad /
+iPhone / Mac trước, chưa làm phần ra mạng ngoài nhà, ẩn với hồ sơ trẻ em + tính giờ xem; rồi «ok rồi đó e, đẩy và phát hành giúp a». Mac
+nhảy 1.23 → 1.25 cho cùng số với bản iPad.
+
+- **Mục TubeMini** (dưới «Truyền hình · Radio»): app khách của máy chủ **tubemini-server** (dự án TubeMini, theo `docs/API.md` của dự án đó)
+  — Đã theo dõi, Phổ biến, Âm nhạc, Tin tức, Thể thao, Trò chơi, Phim, Lịch sử, Kênh; ô tìm video / kênh có kính lúp ngay cạnh tiêu đề;
+  thẻ video 16:9; trang kênh, theo dõi / bỏ theo dõi, xoá khỏi lịch sử; nhập địa chỉ máy chủ + mã (token) ngay trên trang.
+- **Phát** bằng trình phát phim của app, luôn qua AVPlayer: danh sách đang xem thành «tập» (video kế, tự sang video sau), chất lượng 720p /
+  1080p / 360p / Chỉ nghe là «server»; chờ quảng cáo đầu; xem tiếp + lưu chỗ xem trên máy chủ (dùng chung với app TubeMini). Màn xe CarPlay:
+  có hình cả khi tắt màn iPhone.
+- Cuộn xuống thì thanh trên (tiêu đề, ô tìm, chip) thu gọn, cuộn lên thì hiện lại (như menu nổi của Roza — anh yêu cầu).
+- Hồ sơ trẻ em không có mục TubeMini; giới hạn giờ xem tính cả TubeMini.
+- iPad / iPhone: bản 1.25 (build 32) · tag `ios-v1.25` · `ConBangTV-iPad-1.25.ipa` 6 287 089 byte · SHA-256
+  `6e1b7844c47ff725417d4db771656a433587b0339052fad6b10042c3290d239a`; Mac: bản 1.25 (build 32) · tag `mac-v1.25` · `ConBangTV-Mac-1.25.zip`
+  9 711 554 byte (x86_64 + arm64, ký ad-hoc, `codesign --verify` đạt, không cổng gỡ lỗi) · SHA-256
+  `e5e9b253c49d840a27a9ec0d45c6789667c79a3d5ca3b5036b4152e10ccdac18` · commit `5b7b397` (tính năng: `f2ec7a2`, `ee42488`) · dựng trên Mac mini
+- Thử: test lõi Swift 184 đạt (mới: `TubeMiniTests` — feed video / kênh, link phát, lịch sử, chữ hiện). Bản Mac thử (Mac mini cùng mạng máy
+  chủ thử): feed, phát 720p (chờ quảng cáo 3 giây), xem tiếp đúng chỗ đã xem trong app TubeMini, chỗ xem ghi ngược lên máy chủ, đổi 1080p /
+  Chỉ nghe giữ chỗ xem, thanh trên ẩn / hiện khi cuộn. iPhone trên màn xe CarPlay: anh tự mở và xem video TubeMini (720p, AVPlayer). IPA chính:
+  `vn.chimto.tv` 1.25 / 32, có `SBStarkCapable`, không cổng gỡ lỗi; chưa cài lên iPhone lúc đăng (bản thử trên iPhone không mở để đẩy tệp).
+- Đăng lúc 16:43:03 (iPad) và 16:43:34 (Mac) bằng `release.ps1 ipad|mac -File dist\mac\…` (`--latest=false`, Latest vẫn `v2.23`); link cố
+  định chép đè, tải từ link công khai và link cố định khớp SHA-256. **Tự cập nhật thật Mac 1.23 → 1.25** trên Mac mini (`/Applications`):
+  hộp «Có bản mới 1.25» đủ «Có gì mới» → «Cài đặt ngay» → app mở lại 1.25 / 32 lúc 16:46, `codesign` đạt, menu có TubeMini. Trang hướng
+  dẫn: dòng số bản → iPad / iPhone 1.25 · Mac 1.25 (site `1e0d750`).
+
 ## iPad / iPhone 1.24 — 25/11/2026 (Côn Bằng TV trên màn xe CarPlay)
 
 Anh hỏi «code cho nó hiện ở carplay» rồi muốn «giao diện app trên carplay full như trên màn hình iphone»; thử trên màn CarPlay độc lập
