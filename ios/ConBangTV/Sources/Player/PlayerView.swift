@@ -14,6 +14,10 @@ struct PlayerView: View {
         ZStack {
             Color.black.ignoresSafeArea()
             WebHost(web: m.web).ignoresSafeArea()
+            // Màn xe: phim phát bằng AVPlayer (NativeFilm.swift) — lớp hình nằm trên WebView (đang để trống)
+            if let p = m.nativePlayer {
+                NativeVideoSurface(player: p, fill: m.nativeFill).ignoresSafeArea()
+            }
             TouchLayer(m: m)
                 .ignoresSafeArea()
             if let text = m.loading {

@@ -134,7 +134,7 @@ final class CarScreen: NSObject, ObservableObject, CLLocationManagerDelegate {
     private func updateScreenHint() {
         // Chỉ trình phát phim (WebKit — lớp video ở tiến trình khác, theo nhịp màn điện thoại). Truyền hình dùng AVPlayer trong
         // app: đo 25/11/2026, tắt màn iPhone thì màn xe vẫn có hình.
-        let video = PlayerModel.current != nil
+        let video = PlayerModel.current?.webVideo == true // phim bằng AVPlayer (NativeFilm) thì không cần màn iPhone
         let hint = connected && uiOnCar && phoneScreenOff && video
         guard hint != screenHint else { return }
         screenHint = hint

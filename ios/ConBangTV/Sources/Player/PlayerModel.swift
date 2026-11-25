@@ -81,6 +81,14 @@ final class PlayerModel: NSObject, ObservableObject, WKNavigationDelegate, WKUID
     private var embedUrl: String?
     private(set) var episodeUrl = ""
     private var hlsUrl: String?
+    /// Màn xe (CarPlay): luồng .m3u8 / tệp video phát bằng AVPlayer (NativeFilm.swift) — tắt màn iPhone vẫn có hình; nil = web.
+    private var native: NativeFilm?
+    @Published private(set) var nativePlayer: AVPlayer?
+    @Published private(set) var nativeFill = false
+    /// Luồng vừa mở (AVPlayer lỗi trước khi phim chạy thì phát lại bằng trình phát web).
+    private var lastVideo: Video?
+    /// Phim đang phát bằng trình phát web: trên màn xe phải bật màn iPhone mới có hình.
+    var webVideo: Bool { native == nil && (embedUrl != nil || hlsUrl != nil || pageMode) }
     private var errShown = false
     private var lastAdAt: Int64 = 0
     private var resumeAt = 0
@@ -231,10 +239,14 @@ final class PlayerModel: NSObject, ObservableObject, WKNavigationDelegate, WKUID
                 } else {
                     let host = Site.hostOf(src.epUrl)
                     let usual = src.servers.first { $0.type == Prefs.serverType(host) } ?? src.servers.first
-                    let pick = PlayStats.choose(AppProxy.statsHost(host), src.servers, usual)
+                    var pick = PlayStats.choose(AppProxy.statsHost(host), src.servers, usual)
                     if let u = usual, let p = pick, p != u {
                         let why = PlayStats.score(AppProxy.statsHost(host), u.type).label ?? "hay giật"
                         showNotice("\(u.label) \(why) gần đây — mở \(p.label) (Menu để đổi server).", 6)
+                    }
+                    if CarScreen.shared.uiOnCar, let p = pick, let alt = Self.carServer(src.servers, like: p) {
+                        showNotice("Màn xe: mở \(alt.label) — có hình cả khi tắt màn iPhone (Menu để đổi server).", 6)
+                        pick = alt
                     }
                     playServer(pick)
                 }
@@ -283,13 +295,12 @@ final class PlayerModel: NSObject, ObservableObject, WKNavigationDelegate, WKUID
                 let m3u8 = URL(string: v.url)?.path.hasSuffix(".m3u8") == true
                 if v.file || v.hls || m3u8 {
                     hlsUrl = v.url
-                    let listed = !v.subs.isEmpty || v.subsLater != nil
-                    setSubs(v.subs)
-                    subDelay = listed ? Prefs.subDelay(src.epUrl) : 0
-                    installScripts(hls: true, page: false, fullHls: v.hls)
-                    loadHTML(Assets.hlsPage(src: v.url, start: startHint, sub: v.subtitle, subs: listed ? subs : nil, subIdx: subIdx,
-                                            subDelay: subDelay, file: v.file || !(v.hls || m3u8), cap: v.hls), base: src.epUrl)
-                    if let later = v.subsLater { pollSubs(later, t) }
+                    lastVideo = v
+                    if Self.nativeOK(v, m3u8: m3u8) {
+                        playNative(v, src)
+                    } else {
+                        playHls(v, src, m3u8: m3u8, t)
+                    }
                 } else {
                     embedUrl = v.url
                     installScripts(hls: false, page: false)
@@ -301,6 +312,62 @@ final class PlayerModel: NSObject, ObservableObject, WKNavigationDelegate, WKUID
                 showPanel()
             }
         }
+    }
+
+    /// Luồng HLS / tệp video bằng trang hls.html (+ hls.js nếu máy có MediaSource).
+    private func playHls(_ v: Video, _ src: EpisodeSource, m3u8: Bool, _ t: Int) {
+        let listed = !v.subs.isEmpty || v.subsLater != nil
+        setSubs(v.subs)
+        subDelay = listed ? Prefs.subDelay(src.epUrl) : 0
+        installScripts(hls: true, page: false, fullHls: v.hls)
+        loadHTML(Assets.hlsPage(src: v.url, start: startHint, sub: v.subtitle, subs: listed ? subs : nil, subIdx: subIdx,
+                                subDelay: subDelay, file: v.file || !(v.hls || m3u8), cap: v.hls), base: src.epUrl)
+        if let later = v.subsLater { pollSubs(later, t) }
+    }
+
+    // MARK: - Trình phát gốc (AVPlayer) trên màn xe
+
+    /// Đang chiếu lên màn xe và luồng là HLS thường / tệp video, không phụ đề rời, không âm thanh tách rời (dexter.pw) → AVPlayer.
+    private static func nativeOK(_ v: Video, m3u8: Bool) -> Bool {
+        CarScreen.shared.uiOnCar && (m3u8 || v.file) && !v.hls && v.subs.isEmpty && v.subsLater == nil
+    }
+
+    private func playNative(_ v: Video, _ src: EpisodeSource) {
+        guard let u = URL(string: v.url) else { return }
+        Log.d("Player", "màn xe: phát bằng AVPlayer (tắt màn iPhone vẫn có hình)")
+        let n = NativeFilm(url: u, referer: src.epUrl, start: Double(startHint))
+        n.onRemote = { [weak self] r in
+            if r == "next" { self?.next() } else if r == "prev" { self?.prev() }
+        }
+        native = n
+        nativeFill = Prefs.videoFill
+        nativePlayer = n.player
+    }
+
+    private func stopNative() {
+        native?.stop()
+        native = nil
+        nativePlayer = nil
+    }
+
+    /// AVPlayer không mở được luồng trước khi phim chạy (vd đoạn video ngụy trang ảnh của VSMOV): phát lại bằng trình phát web.
+    private func nativeFallback(_ why: String) {
+        guard let v = lastVideo, let src = source, native != nil else { return }
+        Log.d("Player", "AVPlayer không phát được (\(why)) — chuyển sang trình phát web")
+        stopNative()
+        playHls(v, src, m3u8: URL(string: v.url)?.path.hasSuffix(".m3u8") == true, token)
+        showNotice("Luồng này phải phát bằng trình phát web: màn iPhone cần bật thì màn xe mới có hình.", 8)
+    }
+
+    /// Màn xe: server riêng của trang (trang nhúng mã hoá) chỉ phát được bằng trình phát web → có server KKPhim dự phòng thì
+    /// dùng nó (AVPlayer, tắt màn iPhone vẫn có hình), cùng kiểu Vietsub / Thuyết minh với server định mở.
+    private static func carServer(_ servers: [Server], like p: Server) -> Server? {
+        guard !p.type.hasPrefix("kk-") else { return nil }
+        let kk = servers.filter { $0.type.hasPrefix("kk-") }
+        guard !kk.isEmpty else { return nil }
+        let l = p.label.lowercased()
+        let dub = l.contains("thuyết") || l.contains("lồng") || p.type.lowercased().contains("tm")
+        return kk.first { dub ? $0.type.hasSuffix("tm") : $0.type.hasSuffix("vs") } ?? kk.first
     }
 
     /// Script chèn vào trang phát: agent (mọi khung, kèm chỗ bắt đầu + số lần nạp), hls.js, phóng trình phát (trang tập).
@@ -338,6 +405,8 @@ final class PlayerModel: NSObject, ObservableObject, WKNavigationDelegate, WKUID
         pageMode = false
         embedUrl = nil
         hlsUrl = nil
+        stopNative()
+        lastVideo = nil
         subs = []
         subIdx = -1
         subDelay = 0
@@ -475,6 +544,17 @@ final class PlayerModel: NSObject, ObservableObject, WKNavigationDelegate, WKUID
     }
 
     private func poll() {
+        if let n = native {
+            if !started, let why = n.failed {
+                nativeFallback(why)
+                return
+            }
+            onState([NSNumber(value: pageLoad), n.state(), NSNull()])
+            if started, let s = state, let d = detail {
+                n.nowPlaying(title: d.title, subtitle: episodes[safe: index]?.title ?? "", duration: s.d, elapsed: s.t, playing: !s.paused)
+            }
+            return
+        }
         web.evaluateJavaScript("[window.__chimtoLoad||0,window.__chimtoState||null,window.__chimtoSubNote||null]") { [weak self] result, _ in
             Task { @MainActor in self?.onState(result) }
         }
@@ -767,7 +847,7 @@ final class PlayerModel: NSObject, ObservableObject, WKNavigationDelegate, WKUID
     }
 
     func syncQuality() {
-        guard hlsUrl != nil else { levels = []; return }
+        guard hlsUrl != nil, native == nil else { levels = []; return } // AVPlayer tự chọn bản theo mạng
         web.evaluateJavaScript("window.__chimtoLevels?__chimtoLevels():null") { [weak self] r, _ in self?.showQuality(r) }
     }
 
@@ -886,6 +966,10 @@ final class PlayerModel: NSObject, ObservableObject, WKNavigationDelegate, WKUID
     }
 
     func cmd(_ name: String, _ arg: Double? = nil) {
+        if let n = native {
+            if name == "fit" { nativeFill = (arg ?? 0) == 1 } else { n.command(name, arg) }
+            return
+        }
         let a = arg.map { String($0) } ?? "null"
         web.evaluateJavaScript("window.chimtoCmd&&chimtoCmd('\(name)',\(a))", completionHandler: nil)
     }
@@ -985,7 +1069,7 @@ final class PlayerModel: NSObject, ObservableObject, WKNavigationDelegate, WKUID
     /// Tên phim, tập, ảnh cho màn hình khoá / Trung tâm điều khiển / AirPods: gửi xuống trang phát (Media Session của
     /// WebKit — player-agent.js); nút phát / dừng / tua do WebKit tự lo, nút tập trước / sau báo ngược lên app.
     private func sendNowPlaying() {
-        guard let d = detail else { return }
+        guard native == nil, let d = detail else { return } // AVPlayer: poll() cập nhật màn hình khoá
         var meta: [String: Any] = ["title": d.title, "artist": episodes[safe: index]?.title ?? "", "album": "Côn Bằng TV"]
         if let p = d.poster, !p.isEmpty { meta["artwork"] = [["src": p, "sizes": "512x512"]] }
         guard let data = try? JSONSerialization.data(withJSONObject: meta), let json = String(data: data, encoding: .utf8) else { return }
@@ -1145,7 +1229,7 @@ final class PlayerModel: NSObject, ObservableObject, WKNavigationDelegate, WKUID
     /// Thu nhỏ phim (cửa sổ hình trong hình của iPad). Gọi thẳng trong khung có <video>: WebKit chỉ cho vào hình trong
     /// hình khi "người dùng vừa bấm" — evaluateJavaScript của app được tính là vậy, qua postMessage của trang bọc thì mất.
     func startPip() {
-        guard started, !inPip, limitBlock == nil else { return }
+        guard started, !inPip, limitBlock == nil, native == nil else { return }
         pipRequestedAt = nowMs()
         hidePanel()
         hideBar()
@@ -1263,6 +1347,7 @@ final class PlayerModel: NSObject, ObservableObject, WKNavigationDelegate, WKUID
         polling = nil
         for t in timers.values { t.cancel() }
         timers.removeAll()
+        stopNative()
         web.stopLoading()
         web.configuration.userContentController.removeAllUserScripts()
         web.configuration.userContentController.removeScriptMessageHandler(forName: "chimtoLog")
@@ -1360,7 +1445,8 @@ final class PlayerModel: NSObject, ObservableObject, WKNavigationDelegate, WKUID
 
     func debugState() -> [String: Any] {
         var o: [String: Any] = [
-            "title": title, "episode": episodeUrl, "started": started, "pageMode": pageMode,
+            "title": title, "episode": episodeUrl, "started": started, "pageMode": pageMode, "native": native != nil,
+            "nativeDebug": native?.debugInfo ?? NSNull(),
             "loading": loading ?? NSNull(), "notice": notice ?? NSNull(), "bar": barShown, "panel": panelShown,
             "server": server?.type ?? NSNull(), "servers": servers.map { ["label": $0.label, "type": $0.type] },
             "groups": groups.map { $0.name }, "group": group?.name ?? NSNull(),
