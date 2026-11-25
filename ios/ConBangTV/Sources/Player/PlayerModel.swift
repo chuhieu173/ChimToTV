@@ -87,8 +87,6 @@ final class PlayerModel: NSObject, ObservableObject, WKNavigationDelegate, WKUID
     @Published private(set) var nativeFill = false
     /// Luồng vừa mở (AVPlayer lỗi trước khi phim chạy thì phát lại bằng trình phát web).
     private var lastVideo: Video?
-    /// Phim đang phát bằng trình phát web: trên màn xe phải bật màn iPhone mới có hình.
-    var webVideo: Bool { native == nil && (embedUrl != nil || hlsUrl != nil || pageMode) }
     private var errShown = false
     private var lastAdAt: Int64 = 0
     private var resumeAt = 0

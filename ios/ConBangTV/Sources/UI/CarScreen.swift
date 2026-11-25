@@ -1,5 +1,4 @@
 import CoreLocation
-import notify
 import SwiftUI
 import UIKit
 
@@ -38,14 +37,9 @@ final class CarScreen: NSObject, ObservableObject, CLLocationManagerDelegate {
     @Published private(set) var moving = false
     @Published private(set) var locationDenied = false
     @Published private(set) var phoneDimmed = false
-    /// Màn điện thoại đang tắt (khoá máy / tự tắt): phim (trình phát web) chỉ ra hình khi màn điện thoại bật — đo 25/11/2026
-    /// trên iPhone 6s Plus: màn tắt thì WebKit bỏ hết khung hình (màn xe đen, chỉ có tiếng); CarTube cũng vậy. Truyền hình
-    /// (AVPlayer trong app) vẫn có hình khi màn điện thoại tắt.
-    @Published private(set) var phoneScreenOff = false
-    /// Đang hiện dòng nhắc «bật màn iPhone để thấy hình» trên màn xe.
-    @Published private(set) var screenHint = false
-    private var blankToken: Int32 = -1
-    private var watcher: Task<Void, Never>?
+    // Phim phát bằng trình phát web (server nhúng mã hoá) chỉ ra hình trên màn xe khi màn iPhone bật — WebKit bỏ khung hình lúc
+    // màn điện thoại tắt (đo 25/11/2026). Đã từng có dòng nhắc «Bật màn iPhone để thấy hình»; anh bảo bỏ (25/11/2026): bật màn
+    // một lần rồi tắt thì màn xe đã có hình, dòng nhắc chen ngang gây khó chịu. Phim .m3u8 dùng AVPlayer (NativeFilm) không bị.
     /// Tốc độ GPS gần nhất (km/h, -1 = chưa biết). Không @Published: đổi mỗi giây, bảng điều khiển tự đọc lại.
     private(set) var speedKmh: Double = -1
     /// Cổng gỡ lỗi: giả xe đang chạy / đứng (nil = theo GPS).
@@ -99,46 +93,7 @@ final class CarScreen: NSObject, ObservableObject, CLLocationManagerDelegate {
         UIApplication.shared.isIdleTimerDisabled = true
         CarKeyboard.shared.install()
         startMotion()
-        watchPhoneScreen()
         reconcile()
-    }
-
-    /// Theo dõi màn điện thoại tắt / bật (thông báo của SpringBoard) và trình phát có hình đang mở (mỗi giây).
-    private func watchPhoneScreen() {
-        if blankToken == -1 {
-            notify_register_dispatch("com.apple.springboard.hasBlankedScreen", &blankToken, .main) { token in
-                var s: UInt64 = 0
-                notify_get_state(token, &s)
-                Task { @MainActor in CarScreen.shared.setPhoneScreenOff(s == 1) }
-            }
-            var s: UInt64 = 0
-            notify_get_state(blankToken, &s)
-            setPhoneScreenOff(s == 1)
-        }
-        watcher?.cancel()
-        watcher = Task { [weak self] in
-            while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: 1_000_000_000)
-                self?.updateScreenHint()
-            }
-        }
-    }
-
-    private func setPhoneScreenOff(_ off: Bool) {
-        guard off != phoneScreenOff else { return }
-        phoneScreenOff = off
-        Log.d("Car", off ? "màn điện thoại tắt (video trên màn xe sẽ không có hình)" : "màn điện thoại bật")
-        updateScreenHint()
-    }
-
-    private func updateScreenHint() {
-        // Chỉ trình phát phim (WebKit — lớp video ở tiến trình khác, theo nhịp màn điện thoại). Truyền hình dùng AVPlayer trong
-        // app: đo 25/11/2026, tắt màn iPhone thì màn xe vẫn có hình.
-        let video = PlayerModel.current?.webVideo == true // phim bằng AVPlayer (NativeFilm) thì không cần màn iPhone
-        let hint = connected && uiOnCar && phoneScreenOff && video
-        guard hint != screenHint else { return }
-        screenHint = hint
-        updateOverlay()
     }
 
     fileprivate func setVisible(_ v: Bool) {
@@ -152,9 +107,6 @@ final class CarScreen: NSObject, ObservableObject, CLLocationManagerDelegate {
         Log.d("Car", "màn xe ngắt")
         connected = false
         carVisible = false
-        watcher?.cancel()
-        watcher = nil
-        screenHint = false
         stopMotion()
         undimPhone()
         CarKeyboard.shared.hide()
@@ -251,9 +203,8 @@ final class CarScreen: NSObject, ObservableObject, CLLocationManagerDelegate {
         guard let w = window, let scene = w.windowScene else { return }
         let cover = uiOnCar && moving
         let keys = uiOnCar && CarKeyboard.shared.shown && !moving
-        let hint = uiOnCar && screenHint && !moving && !keys
         (w.rootViewController as? CarHostController)?.keyboardHeight = keys ? keyboardHeight : 0
-        guard cover || keys || hint else {
+        guard cover || keys else {
             overlay?.isHidden = true
             return
         }
@@ -273,14 +224,10 @@ final class CarScreen: NSObject, ObservableObject, CLLocationManagerDelegate {
         let b = w.bounds, safe = w.safeAreaInsets
         if cover {
             o.frame = b
-        } else if keys {
+        } else {
             let h = keyboardHeight
             o.frame = CGRect(x: b.minX + safe.left, y: b.maxY - safe.bottom - h, width: b.width - safe.left - safe.right, height: h)
-        } else {
-            // Dòng nhắc giữa màn, không nhận chạm (chạm xuyên xuống trình phát)
-            o.frame = CGRect(x: b.minX + safe.left + 20, y: b.midY - 40, width: b.width - safe.left - safe.right - 40, height: 80)
         }
-        o.isUserInteractionEnabled = !hint
         o.isHidden = false
     }
 
@@ -385,7 +332,6 @@ final class CarScreen: NSObject, ObservableObject, CLLocationManagerDelegate {
             "connected": connected, "carVisible": carVisible, "onPhone": onPhone, "uiOnCar": uiOnCar, "switching": switching,
             "moving": moving, "fakeMoving": fakeMoving.map { $0 ? "1" : "0" } ?? "auto", "speedKmh": speedKmh,
             "locationAuth": loc.authorizationStatus.rawValue, "phoneDimmed": phoneDimmed,
-            "phoneScreenOff": phoneScreenOff, "screenHint": screenHint,
             "keyboard": CarKeyboard.shared.shown, "carKeyboardHook": CBTCarKeyboardEnabled(),
             "manifest": Bundle.main.object(forInfoDictionaryKey: "UIApplicationSceneManifest") != nil,
             "multiScene": UIApplication.shared.supportsMultipleScenes,
@@ -545,19 +491,6 @@ private struct CarOverlayView: View {
             DrivingCover()
         } else if keys.shown {
             CarKeyboardView()
-        } else if car.screenHint {
-            HStack(spacing: 12) {
-                Image(systemName: "iphone").appFont(26, .semibold)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Bật màn iPhone để thấy hình").appFont(18, .bold)
-                    Text("Màn iPhone tắt thì màn xe chỉ có tiếng.").appFont(14).foregroundColor(Theme.dim)
-                }
-                Spacer(minLength: 0)
-            }
-            .foregroundColor(Theme.text)
-            .padding(.horizontal, 16)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(RoundedRectangle(cornerRadius: 16).fill(Color.black.opacity(0.82)))
         }
     }
 }
@@ -749,9 +682,9 @@ private struct CarPhonePanel: View {
                     }
                     action("Tắt sáng màn điện thoại", icon: "moon.fill") { car.dimPhone() }
                     action("Dùng trên điện thoại", icon: "iphone") { car.onPhone = true }
-                    Text("Phim chỉ có hình trên màn xe khi màn iPhone đang bật: để Côn Bằng TV mở trên điện thoại, đừng bấm nút "
-                         + "nguồn khoá máy (khoá máy thì màn xe chỉ có tiếng). Khi đang nối xe, màn điện thoại không tự tắt; bấm "
-                         + "«Tắt sáng màn điện thoại» cho tối hẳn mà vẫn có hình.")
+                    Text("Phim KKPhim / link .m3u8 và Truyền hình có hình trên màn xe cả khi tắt màn iPhone. Server riêng của trang "
+                         + "(mã hoá) cần màn iPhone bật — bấm «Tắt sáng màn điện thoại» cho tối hẳn mà vẫn có hình. Khi đang nối xe, "
+                         + "màn điện thoại không tự tắt.")
                         .appFont(13)
                         .foregroundColor(Theme.dim)
                 }
