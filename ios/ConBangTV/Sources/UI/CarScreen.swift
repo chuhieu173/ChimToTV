@@ -864,10 +864,13 @@ final class CarKeyboard: ObservableObject {
             tf.sendActions(for: .editingChanged)
             NotificationCenter.default.post(name: UITextField.textDidChangeNotification, object: tf)
             tf.delegate?.textFieldDidChangeSelection?(tf)
-            // Ô tìm phim: nút «Tìm» bên cạnh đọc biến tìm kiếm — chắc chắn cập nhật dù SwiftUI chưa nhận
+            // Ô tìm phim / ô tìm TubeMini: nút bên cạnh đọc biến tìm kiếm — chắc chắn cập nhật dù SwiftUI chưa nhận
             let app = AppModel.shared
-            if (tf.placeholder ?? tf.attributedPlaceholder?.string) == "Tên phim…" && app.active?.kind == .search {
+            let hint = tf.placeholder ?? tf.attributedPlaceholder?.string
+            if hint == "Tên phim…" && app.active?.kind == .search {
                 app.searchText = tf.text ?? ""
+            } else if hint == "Tìm video, kênh" && app.active?.kind == .tube {
+                TubeModel.shared.query = tf.text ?? ""
             }
         } else if let tv = field as? UITextView {
             tv.delegate?.textViewDidChange?(tv)
@@ -897,6 +900,9 @@ final class CarKeyboard: ObservableObject {
             } else if isSearch {
                 Log.d("Car", "bàn phím: phím \(returnLabel) — tìm thẳng")
                 app.doSearch()
+            } else if (tf.placeholder ?? tf.attributedPlaceholder?.string) == "Tìm video, kênh" && app.active?.kind == .tube {
+                Log.d("Car", "bàn phím: phím \(returnLabel) — tìm TubeMini")
+                TubeModel.shared.search(tf.text ?? "")
             } else {
                 Log.d("Car", "bàn phím: phím \(returnLabel) — ô không có việc riêng")
             }

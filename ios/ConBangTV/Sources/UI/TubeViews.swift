@@ -17,8 +17,9 @@ final class TubeModel: ObservableObject {
     static let chips: [(String, Tab)] = [
         ("Đã theo dõi", .feed), ("Phổ biến", .popular("")), ("Âm nhạc", .popular("Music")), ("Tin tức", .popular("News")),
         ("Thể thao", .popular("Sports")), ("Trò chơi", .popular("Games")), ("Phim", .popular("Film")),
-        ("Lịch sử", .history), ("Kênh", .channels), ("Tìm", .search),
+        ("Lịch sử", .history), ("Kênh", .channels),
     ]
+    // Tìm: ô tìm (kính lúp) nằm ngay trên hàng tiêu đề «TubeMini» — anh chọn 25/11/2026, nhìn là hiểu (trước là chip «Tìm»)
 
     @Published private(set) var tab: Tab = .feed
     @Published private(set) var videos: [TubeVideo] = []
@@ -234,22 +235,70 @@ struct TubeContent: View {
     @FocusState private var searchFocused: Bool
     @State private var address = TubeMini.server
     @State private var token = TubeMini.token
+    /// Thanh trên (tiêu đề + ô tìm + chip) đang khuất: cuộn xuống thì ẩn, cuộn lên / về đầu thì hiện — như menu nổi của Roza
+    /// (RZTabs: quá 80 điểm, mỗi lần cuộn hơn 12 điểm). Thanh nằm đè lên danh sách nên ẩn / hiện không làm danh sách nhảy.
+    @State private var barsHidden = false
+    @State private var topH: CGFloat = 120
+    @State private var track = ScrollTrack()
+
+    final class ScrollTrack {
+        var lastY: CGFloat = 0
+        var travel: CGFloat = 0
+    }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            header
+        Group {
             if m.configured {
-                chips
-                if m.tab == .search { searchBar }
-                if case .channel(let id, let name) = m.tab { channelBar(id, name) }
-                grid
+                ZStack(alignment: .top) {
+                    grid
+                    topBar
+                        .background(GeometryReader { g in Color.clear.preference(key: TubeTopHeight.self, value: g.size.height) })
+                        .background(Theme.bg.ignoresSafeArea(edges: .top))
+                        .offset(y: barsHidden ? -topH - 8 : 0)
+                        .animation(.easeOut(duration: 0.22), value: barsHidden)
+                }
+                .onPreferenceChange(TubeTopHeight.self) { topH = $0 }
+                .clipped()
             } else {
-                setup
+                VStack(alignment: .leading, spacing: 0) {
+                    header
+                    setup
+                }
             }
         }
         .background(Theme.bg.ignoresSafeArea())
         .onAppear { m.appear() }
         .onChange(of: app.historyVersion) { _ in if m.tab == .history { m.reload() } } // vừa đóng trình phát
+        .onChange(of: m.tab) { _ in barsHidden = false }
+        .onChange(of: searchFocused) { f in if f { barsHidden = false } }
+    }
+
+    private var topBar: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            header
+            chips
+            if case .channel(let id, let name) = m.tab { channelBar(id, name) }
+        }
+    }
+
+    /// Vị trí cuộn mới (điểm, 0 = đầu danh sách).
+    private func scrolled(_ y: CGFloat) {
+        let t = track
+        let d = y - t.lastY
+        t.lastY = y
+        if y <= 10 {
+            t.travel = 0
+            if barsHidden { barsHidden = false }
+            return
+        }
+        if d == 0 { return }
+        if (d > 0) != (t.travel > 0) { t.travel = 0 }
+        t.travel += d
+        if t.travel > 12 && y > 80 && !barsHidden && !searchFocused {
+            barsHidden = true
+        } else if t.travel < -12 && barsHidden {
+            barsHidden = false
+        }
     }
 
     private var header: some View {
@@ -260,24 +309,65 @@ struct TubeContent: View {
                 }
                 .accessibilityLabel("Menu")
             }
-            Text("TubeMini").appFont(26, .bold).foregroundColor(Theme.text).lineLimit(1)
+            Text("TubeMini").appFont(26, .bold).foregroundColor(Theme.text).lineLimit(1).fixedSize()
             if m.loading { ProgressView().tint(Theme.dim) }
-            Spacer(minLength: 8)
             if m.configured {
+                searchField
                 Button { m.reload(fresh: true) } label: {
-                    Image(systemName: "arrow.clockwise").appFont(18, .semibold).foregroundColor(Theme.text).frame(width: 40, height: 40)
+                    Image(systemName: "arrow.clockwise").appFont(18, .semibold).foregroundColor(Theme.text).frame(width: 36, height: 40)
                 }
                 .accessibilityLabel("Tải lại")
                 Button { m.editServer() } label: {
-                    Image(systemName: "gearshape").appFont(18, .semibold).foregroundColor(Theme.text).frame(width: 40, height: 40)
+                    Image(systemName: "gearshape").appFont(18, .semibold).foregroundColor(Theme.text).frame(width: 36, height: 40)
                 }
                 .accessibilityLabel("Máy chủ TubeMini")
+            } else {
+                Spacer(minLength: 8)
             }
         }
         .padding(.leading, showMenuButton ? 8 : 20)
-        .padding(.trailing, 14)
+        .padding(.trailing, 10)
         .padding(.top, 14)
         .padding(.bottom, 6)
+    }
+
+    /// Ô tìm cạnh tiêu đề: kính lúp (chạm = tìm), chữ mờ «Tìm video, kênh», nút ✕ xoá chữ.
+    private var searchField: some View {
+        HStack(spacing: 8) {
+            Button {
+                if m.query.trimmed.isEmpty { searchFocused = true } else { runSearch() }
+            } label: {
+                Image(systemName: "magnifyingglass").appFont(17, .semibold).foregroundColor(Theme.dim)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Tìm")
+            TextField("Tìm video, kênh", text: $m.query)
+                .focused($searchFocused)
+                .submitLabel(.search)
+                .onSubmit { runSearch() }
+                .carSubmit(searchFocused) { m.search(m.query) } // bàn phím riêng của màn xe
+                .disableAutocorrection(true)
+                .foregroundColor(Theme.text)
+            if !m.query.isEmpty {
+                Button { m.query = "" } label: {
+                    Image(systemName: "xmark.circle.fill").foregroundColor(Theme.dim)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Xoá chữ tìm")
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 9)
+        .background(Capsule().fill(Theme.surface2))
+        .frame(maxWidth: 460)
+        .frame(maxWidth: .infinity, alignment: .trailing)
+    }
+
+    private func runSearch() {
+        guard !m.query.trimmed.isEmpty else { return }
+        m.search(m.query)
+        CarKeyboard.shared.hide()
+        searchFocused = false
     }
 
     private var chips: some View {
@@ -300,33 +390,6 @@ struct TubeContent: View {
             .padding(.horizontal, 20)
             .padding(.vertical, 6)
         }
-    }
-
-    private var searchBar: some View {
-        HStack(spacing: 10) {
-            HStack {
-                Image(systemName: "magnifyingglass").foregroundColor(Theme.dim)
-                TextField("Tìm video, kênh…", text: $m.query)
-                    .focused($searchFocused)
-                    .submitLabel(.search)
-                    .onSubmit { m.search(m.query) }
-                    .carSubmit(searchFocused) { m.search(m.query) } // bàn phím riêng của màn xe
-                    .disableAutocorrection(true)
-                    .foregroundColor(Theme.text)
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-            .background(RoundedRectangle(cornerRadius: 12).fill(Theme.surface2))
-            Button("Tìm") {
-                m.search(m.query)
-                CarKeyboard.shared.hide()
-                searchFocused = false
-            }
-            .buttonStyle(.borderedProminent)
-            .tint(Theme.brand)
-        }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 6)
     }
 
     private func channelBar(_ id: String, _ name: String) -> some View {
@@ -358,7 +421,9 @@ struct TubeContent: View {
                     }
                 }
                 .padding(.horizontal, pad)
-                .padding(.vertical, 8)
+                .padding(.bottom, 8)
+                .padding(.top, topH + 8) // chừa chỗ cho thanh trên (nằm đè lên danh sách)
+                .background(ScrollWatch { y in scrolled(y) })
             }
         }
     }
@@ -437,6 +502,44 @@ struct TubeContent: View {
             .padding(.vertical, 12)
             .background(RoundedRectangle(cornerRadius: 12).fill(Theme.surface2))
     }
+}
+
+private struct TubeTopHeight: PreferenceKey {
+    static var defaultValue: CGFloat = 120
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
+}
+
+/// Báo vị trí cuộn (điểm từ đầu nội dung) của khung cuộn chứa view này — gắn làm nền của nội dung ScrollView (SwiftUI của iOS 15
+/// chưa có cách đọc vị trí cuộn; theo dõi contentOffset của UIScrollView bên dưới).
+struct ScrollWatch: UIViewRepresentable {
+    let changed: (CGFloat) -> Void
+
+    final class Probe: UIView {
+        var changed: (CGFloat) -> Void = { _ in }
+        private var obs: NSKeyValueObservation?
+
+        override func didMoveToWindow() {
+            super.didMoveToWindow()
+            obs = nil
+            guard window != nil else { return }
+            var v = superview
+            while let s = v, !(s is UIScrollView) { v = s.superview }
+            guard let sv = v as? UIScrollView else { return }
+            obs = sv.observe(\.contentOffset, options: [.new]) { [weak self] s, _ in
+                let y = s.contentOffset.y + s.adjustedContentInset.top
+                DispatchQueue.main.async { self?.changed(y) }
+            }
+        }
+    }
+
+    func makeUIView(context: Context) -> Probe {
+        let p = Probe()
+        p.isUserInteractionEnabled = false
+        p.changed = changed
+        return p
+    }
+
+    func updateUIView(_ p: Probe, context: Context) { p.changed = changed }
 }
 
 /// Thẻ video: ảnh 16:9 (thời lượng, vạch đã xem), tên, «kênh · lượt xem · thời gian». Giữ ngón tay: chỉ nghe, kênh, theo dõi.
