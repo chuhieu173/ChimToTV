@@ -257,6 +257,9 @@ struct HomeContent: View {
         if app.active?.kind == .tv {
             // Truyền hình · Radio: trang riêng (UI/TvViews.swift), cùng khung chính
             TvContent(showMenuButton: showMenuButton, openMenu: openMenu)
+        } else if app.active?.kind == .tube {
+            // TubeMini (UI/TubeViews.swift)
+            TubeContent(showMenuButton: showMenuButton, openMenu: openMenu)
         } else {
             films
         }

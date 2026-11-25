@@ -378,6 +378,8 @@ enum Site {
     // MARK: - Chi tiết phim
 
     static func detail(_ url: String) async throws -> FilmDetail {
+        // TubeMini: danh sách video đang phát (Core/TubeMini.swift)
+        if TubeMini.isTubeUrl(url) { return try await TubeMini.detail(url) }
         if ApiSite.isKnown(url) {
             let d = try await ApiSite.detail(url)
             cache(d, url)
@@ -520,6 +522,7 @@ enum Site {
 
     /// Hỏi player.php địa chỉ trình phát nhúng (iframe) của một server (trang Next.js: link .m3u8 / iframe).
     static func video(_ src: EpisodeSource, _ server: Server?) async throws -> Video {
+        if TubeMini.isTubeUrl(src.epUrl) { return try await TubeMini.video(src.epUrl, server) }
         // Server dự phòng KKPhim / NguonC: link có sẵn (KkPhim.attach)
         if let s = server, KkPhim.isBackup(s.type), let v = src.links[s.type] { return v }
         if src.next {

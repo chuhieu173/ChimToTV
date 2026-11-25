@@ -35,14 +35,15 @@ final class NativeFilm: NSObject {
     var onRemote: (String) -> Void = { _ in }
     private var remoteTargets: [(MPRemoteCommand, Any)] = []
 
-    init(url: URL, referer: String?, start: Double) {
+    /// `hls`: danh sách phát HLS (đọc qua app, viết lại địa chỉ); false = tệp video (MP4) AVPlayer tải thẳng.
+    init(url: URL, hls: Bool, referer: String?, start: Double) {
         loader = PlaylistLoader(referer: referer)
         startAt = start
         super.init()
         MediaRelay.shared.headers = loader.headers
         player.automaticallyWaitsToMinimizeStalling = true
         player.allowsExternalPlayback = false
-        let real = url.path.lowercased().hasSuffix(".m3u8") ? PlaylistLoader.wrap(url) : url
+        let real = hls ? PlaylistLoader.wrap(url) : url
         let asset = AVURLAsset(url: real, options: ["AVURLAssetHTTPHeaderFieldsKey": loader.headers])
         asset.resourceLoader.setDelegate(loader, queue: loader.queue)
         let it = AVPlayerItem(asset: asset)

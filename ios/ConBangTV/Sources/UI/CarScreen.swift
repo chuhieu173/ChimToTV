@@ -191,6 +191,11 @@ final class CarScreen: NSObject, ObservableObject, CLLocationManagerDelegate {
         let app = AppModel.shared
         guard !app.gateUp else { return }
         app.sheet = nil
+        // Đang ở mục TubeMini: tìm video YouTube
+        if app.active?.kind == .tube {
+            TubeModel.shared.search(q)
+            return
+        }
         if let e = app.menu.first(where: { $0.kind == .search }) { app.select(e) }
         app.searchFocus = false
         app.searchText = q

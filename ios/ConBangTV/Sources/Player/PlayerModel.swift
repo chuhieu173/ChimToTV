@@ -87,6 +87,8 @@ final class PlayerModel: NSObject, ObservableObject, WKNavigationDelegate, WKUID
     @Published private(set) var nativeFill = false
     /// Luồng vừa mở (AVPlayer lỗi trước khi phim chạy thì phát lại bằng trình phát web).
     private var lastVideo: Video?
+    /// Đang phát video TubeMini (Core/TubeMini.swift).
+    var isTube: Bool { TubeMini.isTubeUrl(filmUrl) }
     private var errShown = false
     private var lastAdAt: Int64 = 0
     private var resumeAt = 0
@@ -214,15 +216,16 @@ final class PlayerModel: NSObject, ObservableObject, WKNavigationDelegate, WKUID
         source = nil
         servers = []
         let groupName = d.groups.count > 1 ? (group.map { " (\($0.name))" } ?? "") : ""
-        title = "\(d.title) — \(ep.title)\(groupName)"
-        resumeAt = Prefs.position(ep.url)
+        // TubeMini: tên video; lịch sử + chỗ xem nằm trên máy chủ TubeMini (không ghi vào lịch sử phim)
+        title = isTube ? ep.title : "\(d.title) — \(ep.title)\(groupName)"
+        resumeAt = isTube ? 0 : Prefs.position(ep.url)
         introDone = false
-        if !Prefs.privateMode {
+        if !Prefs.privateMode && !isTube {
             Prefs.addHistory(HistoryItem(filmUrl: d.url, title: d.title, poster: d.poster, epTitle: ep.title, epUrl: ep.url, time: nowMs()))
             // Trang chủ tổng hợp: người hay xem bản thuyết minh / lồng tiếng thì có hàng riêng
             if let l = group.flatMap({ PlayStats.lang($0.name) }) { Prefs.recordWatchLang(l) }
         }
-        HomeFeed.markSeen(d)
+        if !isTube { HomeFeed.markSeen(d) }
         showLoading("Đang mở \(ep.title)…")
         let g = group
         Task {
@@ -232,12 +235,15 @@ final class PlayerModel: NSObject, ObservableObject, WKNavigationDelegate, WKUID
                 guard t == token else { return }
                 source = src
                 servers = src.pageOnly ? [] : src.servers
+                if isTube { resumeAt = TubeMini.resume(ep.url) } // chỗ xem dở trên máy chủ (đọc trong TubeMini.source)
                 if src.pageOnly {
                     playPage(src)
                 } else {
                     let host = Site.hostOf(src.epUrl)
-                    let usual = src.servers.first { $0.type == Prefs.serverType(host) } ?? src.servers.first
-                    var pick = PlayStats.choose(AppProxy.statsHost(host), src.servers, usual)
+                    // TubeMini: chất lượng nhớ như server; «Chỉ nghe» chọn từ menu ô video đứng đầu danh sách → dùng luôn
+                    let oneShot = isTube && src.servers.first?.type == "tmaudio"
+                    let usual = oneShot ? src.servers.first : (src.servers.first { $0.type == Prefs.serverType(host) } ?? src.servers.first)
+                    var pick = isTube ? usual : PlayStats.choose(AppProxy.statsHost(host), src.servers, usual)
                     if let u = usual, let p = pick, p != u {
                         let why = PlayStats.score(AppProxy.statsHost(host), u.type).label ?? "hay giật"
                         showNotice("\(u.label) \(why) gần đây — mở \(p.label) (Menu để đổi server).", 6)
@@ -291,7 +297,7 @@ final class PlayerModel: NSObject, ObservableObject, WKNavigationDelegate, WKUID
                 startHint = startFor()
                 Log.d("Player", "phát \(v.url) (server \(s?.type ?? "-"), báo trước \(startHint) s)")
                 let m3u8 = URL(string: v.url)?.path.hasSuffix(".m3u8") == true
-                if v.file || v.hls || m3u8 {
+                if v.avPlayer || v.file || v.hls || m3u8 {
                     hlsUrl = v.url
                     lastVideo = v
                     if Self.nativeOK(v, m3u8: m3u8) {
@@ -327,13 +333,15 @@ final class PlayerModel: NSObject, ObservableObject, WKNavigationDelegate, WKUID
 
     /// Đang chiếu lên màn xe và luồng là HLS thường / tệp video, không phụ đề rời, không âm thanh tách rời (dexter.pw) → AVPlayer.
     private static func nativeOK(_ v: Video, m3u8: Bool) -> Bool {
-        CarScreen.shared.uiOnCar && (m3u8 || v.file) && !v.hls && v.subs.isEmpty && v.subsLater == nil
+        v.avPlayer || (CarScreen.shared.uiOnCar && (m3u8 || v.file) && !v.hls && v.subs.isEmpty && v.subsLater == nil)
     }
 
     private func playNative(_ v: Video, _ src: EpisodeSource) {
         guard let u = URL(string: v.url) else { return }
-        Log.d("Player", "màn xe: phát bằng AVPlayer (tắt màn iPhone vẫn có hình)")
-        let n = NativeFilm(url: u, referer: src.epUrl, start: Double(startHint))
+        Log.d("Player", isTube ? "TubeMini: phát bằng AVPlayer" : "màn xe: phát bằng AVPlayer (tắt màn iPhone vẫn có hình)")
+        // Luồng HLS (đuôi .m3u8, hoặc HLS của máy chủ TubeMini) đi qua app; tệp MP4 thì AVPlayer tải thẳng
+        let hls = !v.file && (v.avPlayer || u.path.lowercased().hasSuffix(".m3u8"))
+        let n = NativeFilm(url: u, hls: hls, referer: isTube ? nil : src.epUrl, start: Double(startHint))
         n.onRemote = { [weak self] r in
             if r == "next" { self?.next() } else if r == "prev" { self?.prev() }
         }
@@ -351,6 +359,15 @@ final class PlayerModel: NSObject, ObservableObject, WKNavigationDelegate, WKUID
     /// AVPlayer không mở được luồng trước khi phim chạy (vd đoạn video ngụy trang ảnh của VSMOV): phát lại bằng trình phát web.
     private func nativeFallback(_ why: String) {
         guard let v = lastVideo, let src = source, native != nil else { return }
+        if isTube {
+            // TubeMini chỉ phát bằng AVPlayer: báo lỗi, lần «Tải lại» xin link mới (bỏ bộ nhớ đệm của máy chủ)
+            Log.d("Player", "TubeMini: AVPlayer không phát được (\(why))")
+            stopNative()
+            TubeMini.markFresh(episodeUrl)
+            showError("Không phát được video (\(why)).\nMenu → Tải lại, hoặc chọn chất lượng khác.")
+            showPanel()
+            return
+        }
         Log.d("Player", "AVPlayer không phát được (\(why)) — chuyển sang trình phát web")
         stopNative()
         playHls(v, src, m3u8: URL(string: v.url)?.path.hasSuffix(".m3u8") == true, token)
@@ -492,6 +509,7 @@ final class PlayerModel: NSObject, ObservableObject, WKNavigationDelegate, WKUID
 
     func reload() {
         hidePanel()
+        if isTube { TubeMini.markFresh(episodeUrl) } // xin link mới (link cũ hết hạn / 403)
         if let t = currentTime() { resumeAt = t }
         guard let src = source else {
             openEpisode(index)
@@ -503,7 +521,8 @@ final class PlayerModel: NSObject, ObservableObject, WKNavigationDelegate, WKUID
     func openWebPage() {
         hidePanel()
         cmd("pause")
-        onOpenWeb(episodeUrl)
+        // TubeMini: trang của video trên YouTube
+        onOpenWeb(TubeMini.videoId(episodeUrl).map { "https://m.youtube.com/watch?v=\($0)" } ?? episodeUrl)
     }
 
     // MARK: - Server đang giật → gợi ý server khác (người xem chọn mới chuyển)
@@ -549,7 +568,9 @@ final class PlayerModel: NSObject, ObservableObject, WKNavigationDelegate, WKUID
             }
             onState([NSNumber(value: pageLoad), n.state(), NSNull()])
             if started, let s = state, let d = detail {
-                n.nowPlaying(title: d.title, subtitle: episodes[safe: index]?.title ?? "", duration: s.d, elapsed: s.t, playing: !s.paused)
+                let ep = episodes[safe: index]?.title ?? ""
+                let author = TubeMini.videoId(episodeUrl).flatMap { TubeMini.info($0)?.author } ?? ""
+                n.nowPlaying(title: isTube ? ep : d.title, subtitle: isTube ? author : ep, duration: s.d, elapsed: s.t, playing: !s.paused)
             }
             return
         }
@@ -666,7 +687,7 @@ final class PlayerModel: NSObject, ObservableObject, WKNavigationDelegate, WKUID
         if let w = wasPaused, w != s.paused { showBar() }
         if started && now - lastSave > 5000 {
             lastSave = now
-            savePosition()
+            savePosition(periodic: true)
         }
         if s.ended && !endedHandled {
             endedHandled = true
@@ -979,8 +1000,15 @@ final class PlayerModel: NSObject, ObservableObject, WKNavigationDelegate, WKUID
         return Int(s.t)
     }
 
-    func savePosition() {
+    /// `periodic`: lần lưu định kỳ khi đang xem (TubeMini gửi lên máy chủ tối đa 15 giây một lần; đóng / đổi video thì gửi ngay).
+    func savePosition(periodic: Bool = false) {
         guard let s = state, started, !episodeUrl.isEmpty, !resumePending, !saveDisabled else { return }
+        if isTube {
+            // Như app TubeMini: xem gần hết (còn < 20 giây) thì lần sau phát từ đầu
+            let done = s.ended || (s.d > 0 && s.t > s.d - 20)
+            TubeMini.report(episodeUrl, position: done ? 0 : Int(s.t), duration: Int(s.d), force: !periodic)
+            return
+        }
         // Xem gần hết thì coi như xong (lần sau mở lại từ đầu)
         let done = s.ended || (s.d > 0 && s.t > s.d - 90)
         Prefs.savePosition(episodeUrl, seconds: done ? 0 : Int(s.t), filmUrl: detail?.url ?? filmUrl)
@@ -1208,7 +1236,7 @@ final class PlayerModel: NSObject, ObservableObject, WKNavigationDelegate, WKUID
 
     /// Menu → «Danh sách tập»: đóng trình phát rồi mở trang phim (mở từ hàng Xem tiếp thì trước đây chỉ về trang chủ).
     func closeToEpisodes() {
-        AppModel.shared.episodesAfterPlayer = filmUrl
+        if !isTube { AppModel.shared.episodesAfterPlayer = filmUrl } // TubeMini: về lại danh sách video
         close()
     }
 

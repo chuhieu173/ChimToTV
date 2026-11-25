@@ -18,6 +18,18 @@ struct PlayerView: View {
             if let p = m.nativePlayer {
                 NativeVideoSurface(player: p, fill: m.nativeFill).ignoresSafeArea()
             }
+            // TubeMini «Chỉ nghe»: không có hình — hiện ảnh của video
+            if m.server?.type == "tmaudio", let id = TubeMini.videoId(m.episodeUrl) {
+                VStack(spacing: 14) {
+                    PosterImage(url: "https://i.ytimg.com/vi/\(id)/hqdefault.jpg", maxPixel: 720)
+                        .aspectRatio(16 / 9, contentMode: .fit)
+                        .frame(maxWidth: 520)
+                        .clipShape(RoundedRectangle(cornerRadius: 14))
+                    Label("Chỉ nghe", systemImage: "headphones").appFont(17, .semibold).foregroundColor(Theme.dim)
+                }
+                .padding(30)
+                .allowsHitTesting(false)
+            }
             TouchLayer(m: m)
                 .ignoresSafeArea()
             if let text = m.loading {

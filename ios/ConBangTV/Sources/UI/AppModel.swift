@@ -44,7 +44,7 @@ struct GridSection: Identifiable, Hashable {
 final class AppModel: ObservableObject {
     static let shared = AppModel()
 
-    enum Kind: String { case home, search, history, follows, imdb, tv, category, filter, site, web, clear, settings }
+    enum Kind: String { case home, search, history, follows, imdb, tv, tube, category, filter, site, web, clear, settings }
 
     struct Entry: Identifiable, Hashable {
         let title: String
@@ -60,6 +60,7 @@ final class AppModel: ObservableObject {
             case .follows: return "bell"
             case .imdb: return "star"
             case .tv: return "tv"
+            case .tube: return "play.rectangle"
             case .category: return "film"
             case .filter: return "line.3.horizontal.decrease.circle"
             case .site: return "arrow.left.arrow.right"
@@ -345,6 +346,8 @@ final class AppModel: ObservableObject {
         items.append(Entry(title: "Điểm IMDb cao", kind: .imdb))
         // Truyền hình / radio: danh sách kênh M3U người xem tự thêm (UI/TvViews.swift, Core/Iptv.swift)
         items.append(Entry(title: "Truyền hình · Radio", kind: .tv))
+        // TubeMini: YouTube qua máy chủ tubemini-server (UI/TubeViews.swift) — hồ sơ trẻ em không có (máy chủ không lọc nội dung)
+        if !Prefs.kids { items.append(Entry(title: "TubeMini", kind: .tube)) }
         items += categories.map { Entry(title: $0.title, kind: .category, url: $0.url) }
         // Trang kiểu PhimMoi / trang API (mephim): đủ thể loại / quốc gia của bộ lọc (menu trang chỉ có vài mục)
         if NextSite.isKnown(Prefs.baseUrl) || ApiSite.isKnown(Prefs.baseUrl) {
@@ -362,6 +365,10 @@ final class AppModel: ObservableObject {
         menu = items
         // Giữ mục đang chọn (tên mục "Phim theo dõi" có thể đổi theo số tập mới)
         active = items.first { $0.kind == a?.kind && $0.url == a?.url } ?? a
+        // Đổi sang hồ sơ trẻ em lúc đang ở TubeMini: về Trang chủ
+        if a?.kind == .tube && !items.contains(where: { $0.kind == .tube }), let first = items.first {
+            DispatchQueue.main.async { [weak self] in self?.select(first) }
+        }
     }
 
     func select(_ e: Entry) {
@@ -409,6 +416,13 @@ final class AppModel: ObservableObject {
             nextUrl = nil
             status = .none
             if Iptv.activeList() != nil && TvModel.shared.hasList { TvModel.shared.rebuild() }
+        case .tube:
+            // Khung chính vẽ TubeContent (UI/TubeViews.swift)
+            token += 1
+            sections = []
+            nextUrl = nil
+            status = .none
+            TubeModel.shared.appear()
         case .category: if let u = e.url { showList(u) }
         default: break
         }
