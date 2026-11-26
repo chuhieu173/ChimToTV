@@ -211,17 +211,31 @@ final class TubeModel: ObservableObject {
 
     /// Cho cổng gỡ lỗi (/state): mã thiết bị trong địa chỉ được che.
     var debugInfo: [String: Any] {
-        ["server": Log.redact(TubeMini.server), "note": serverNote, "status": status ?? "", "videos": videos.count, "tab": tabTitle]
+        ["server": Log.redact(TubeMini.server), "note": serverNote, "status": status ?? "", "videos": videos.count, "tab": tabTitle,
+         "quality": TubeMini.quality]
     }
 
     /// Hộp sửa địa chỉ máy chủ (nút ⚙︎).
     func editServer() {
         TvAlert.show("Máy chủ TubeMini", "Dán địa chỉ bot Telegram @tube_mini_bot gửi (tên-miền/u/mã), hoặc địa chỉ máy chủ trong nhà.",
-                     ["Lưu", "Chat với bot Telegram", "Cách lấy mã", "Huỷ"],
+                     ["Lưu", "Chất lượng video: \(TubeMini.qualityLabel(TubeMini.quality))", "Chat với bot Telegram", "Cách lấy mã", "Huỷ"],
                      fields: [(TubeMini.server, "địa chỉ máy chủ")]) { [weak self] i, texts in
             if i == 0 { self?.setServer(texts[safe: 0] ?? "", toast: true) }
-            if i == 1 { self?.openBot() }
-            if i == 2 { self?.showGuide() }
+            if i == 1 { self?.chooseQuality() }
+            if i == 2 { self?.openBot() }
+            if i == 3 { self?.showGuide() }
+        }
+    }
+
+    /// Chất lượng mặc định cho các video sau (1080p nếu chưa chọn) — cùng chỗ nhớ với nút chất lượng trong trình phát.
+    func chooseQuality() {
+        let list = TubeMini.qualities
+        let cur = TubeMini.quality
+        TvAlert.show("Chất lượng video", "Dùng cho các video mở sau; trong lúc xem đổi bằng nút chất lượng cạnh nút Menu.",
+                     list.map { $0.type == cur ? "\($0.label)  ✓" : $0.label } + ["Huỷ"]) { i in
+            guard let s = list[safe: i] else { return }
+            TubeMini.quality = s.type
+            AppModel.shared.showToast("TubeMini — chất lượng video: \(s.label)")
         }
     }
 
@@ -624,7 +638,8 @@ private struct TubeCard: View {
     var body: some View {
         Button { m.play(v) } label: {
             VStack(alignment: .leading, spacing: 6) {
-                PosterImage(url: v.thumb, maxPixel: 480)
+                // Ảnh nét (hq720 → sddefault → hqdefault); giải mã tối đa 960 điểm ảnh — đủ cho ô rộng nhất (iPhone dọc @3x)
+                PosterImage(url: v.thumbs[0], maxPixel: 960, fallbacks: Array(v.thumbs.dropFirst()))
                     .aspectRatio(16 / 9, contentMode: .fit)
                     .overlay(alignment: .bottomTrailing) {
                         if v.duration > 0 {

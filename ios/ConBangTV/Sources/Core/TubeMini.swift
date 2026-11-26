@@ -26,7 +26,12 @@ struct TubeVideo: Identifiable, Hashable {
     /// Chỗ đang xem (giây) — có ở danh sách Lịch sử
     var position: Int?
 
-    var thumb: String { "https://i.ytimg.com/vi/\(id)/mqdefault.jpg" }
+    /// Ảnh đại diện một tấm (tranh của «phim giả», màn khoá, màn xe): hqdefault 480×360 — video nào cũng có.
+    var thumb: String { "https://i.ytimg.com/vi/\(id)/hqdefault.jpg" }
+    /// Ảnh nét cho ô video / màn «Chỉ nghe» (anh yêu cầu 26/11/2026 — mqdefault 320×180 mờ trên màn Retina), thử lần lượt: hq720
+    /// 1280×720 (video HD có), sddefault 640×480, hqdefault 480×360 (luôn có). Ảnh 4:3 có viền đen trên dưới — khung 16:9 cắt mất.
+    var thumbs: [String] { TubeVideo.thumbs(id) }
+    static func thumbs(_ id: String) -> [String] { ["hq720", "sddefault", "hqdefault"].map { "https://i.ytimg.com/vi/\(id)/\($0).jpg" } }
 }
 
 struct TubeChannel: Identifiable, Hashable {
@@ -228,10 +233,24 @@ enum TubeMini {
 
     // MARK: Trình phát: chất lượng = server
 
+    /// 1080p đứng đầu = mặc định (anh chọn 26/11/2026; trước là 720p).
     static let qualities = [
-        Server(label: "720p", type: "tm720"), Server(label: "1080p", type: "tm1080"),
+        Server(label: "1080p", type: "tm1080"), Server(label: "720p", type: "tm720"),
         Server(label: "360p", type: "tm360"), Server(label: "Chỉ nghe (tiếng)", type: "tmaudio"),
     ]
+
+    /// Trình phát nhớ server theo tên máy của địa chỉ tập — với tubemini://video/<id> là «video».
+    static let qualityHost = "video"
+
+    /// Chất lượng mặc định cho các video sau (cùng khoá với lựa chọn trong trình phát, theo hồ sơ người xem); chưa chọn = 1080p.
+    static var quality: String {
+        get { Prefs.serverType(qualityHost).flatMap { t in qualities.contains { $0.type == t } ? t : nil } ?? "tm1080" }
+        set { Prefs.setServer(qualityHost, type: newValue, label: qualities.first { $0.type == newValue }?.label) }
+    }
+
+    static func qualityLabel(_ type: String?) -> String {
+        type == "tmaudio" ? "Chỉ nghe" : qualities.first { $0.type == type }?.label ?? "1080p"
+    }
 
     /// KkPhim.source(tubemini://video/…): các mức chất lượng + chỗ xem dở trên máy chủ.
     static func source(_ ep: Episode) async throws -> EpisodeSource {
@@ -276,7 +295,7 @@ enum TubeMini {
             Log.d("TubeMini", "\(id): chờ quảng cáo đầu \(st.availableIn) s")
             try await Task.sleep(nanoseconds: UInt64(min(30, st.availableIn)) * 1_000_000_000)
         }
-        let type = server?.type ?? "tm720"
+        let type = server?.type ?? quality
         if type == "tmaudio" {
             guard let a = st.audio else { throw AppError("Video này không có luồng chỉ tiếng — chọn chất lượng khác trong Menu.") }
             var v = Video(url: a)

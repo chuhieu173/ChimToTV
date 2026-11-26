@@ -374,6 +374,8 @@ enum DebugRoutes {
             if q["edit"] == "1" { m.editServer() }
             if q["guide"] == "1" { m.showGuide() }
             if q["bot"] == "1" { m.openBot() } // như bấm «Chat với bot»
+            if let t = q["quality"] { TubeMini.quality = t } // tm1080 | tm720 | tm360 | tmaudio
+            if q["pickq"] == "1" { PlayerModel.current?.chooseTubeQuality() } // hộp chất lượng của trình phát
             if let s = q["server"] {
                 m.setServer(s, toast: true)
                 for _ in 0..<40 where m.serverNote == "Đang kiểm tra…" { try? await Task.sleep(nanoseconds: 250_000_000) }

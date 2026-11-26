@@ -21,7 +21,7 @@ struct PlayerView: View {
             // TubeMini «Chỉ nghe»: không có hình — hiện ảnh của video
             if m.server?.type == "tmaudio", let id = TubeMini.videoId(m.episodeUrl) {
                 VStack(spacing: 14) {
-                    PosterImage(url: "https://i.ytimg.com/vi/\(id)/hqdefault.jpg", maxPixel: 720)
+                    PosterImage(url: TubeVideo.thumbs(id)[0], maxPixel: 1280, fallbacks: Array(TubeVideo.thumbs(id).dropFirst()))
                         .aspectRatio(16 / 9, contentMode: .fit)
                         .frame(maxWidth: 520)
                         .clipShape(RoundedRectangle(cornerRadius: 14))
@@ -554,6 +554,19 @@ private struct ControlBar: View {
                         RoundButton(icon: "pip.enter", label: "Thu nhỏ", compact: compact) { m.startPip() }
                             .disabled(!m.started)
                     }
+                    // TubeMini: nút chất lượng ngay trên thanh (anh yêu cầu 26/11/2026 — trước chỉ có trong Menu, tên «Server»)
+                    if m.isTube && !m.servers.isEmpty {
+                        Button { m.chooseTubeQuality() } label: {
+                            Text(TubeMini.qualityLabel(m.server?.type))
+                                .appFont(compact ? 15 : 17, .semibold)
+                                .foregroundColor(Theme.text)
+                                .padding(.horizontal, compact ? 12 : 16)
+                                .frame(height: compact ? 44 : 54)
+                                .background(Capsule().fill(Color.white.opacity(0.14)))
+                        }
+                        .buttonStyle(PressScale())
+                        .accessibilityLabel("Chất lượng video")
+                    }
                     RoundButton(icon: "list.bullet", label: "Menu", compact: compact) { m.showPanel() }
                 }
             }
@@ -638,7 +651,8 @@ private struct MenuPanel: View {
                             }
                         }
                         if !m.servers.isEmpty {
-                            PanelLabel(m.sessionText.map { "Server — lần xem này: \($0)" } ?? "Server (điểm theo những lần xem trước trên máy này)")
+                            PanelLabel(m.isTube ? "Chất lượng video (nhớ cho các video sau)"
+                                       : m.sessionText.map { "Server — lần xem này: \($0)" } ?? "Server (điểm theo những lần xem trước trên máy này)")
                             LazyVGrid(columns: cols, alignment: .leading, spacing: 10) {
                                 ForEach(m.servers) { s in
                                     ChipButton(text: m.serverText(s), active: s == m.server) { m.switchServer(s) }

@@ -448,11 +448,24 @@ final class PlayerModel: NSObject, ObservableObject, WKNavigationDelegate, WKUID
     // MARK: - Server / bản / tập
 
     func serverText(_ s: Server) -> String {
+        if isTube { return s.label } // chất lượng TubeMini: không chấm điểm server
         let host = source.flatMap { Site.hostOf($0.epUrl) }
         return PlayStats.score(AppProxy.statsHost(host), s.type).summary.map { "\(s.label)  ·  \($0)" } ?? s.label
     }
 
     var sessionText: String? { session?.describe() }
+
+    /// TubeMini: nút chất lượng trên thanh điều khiển → chọn 1080p / 720p / 360p / Chỉ nghe; xem tiếp đúng chỗ, nhớ cho các
+    /// video sau (switchServer lưu như server của trang, khoá «video»).
+    func chooseTubeQuality() {
+        guard isTube, !servers.isEmpty else { return }
+        let list = servers
+        let cur = server
+        TvAlert.show("Chất lượng video", "Nhớ cho các video sau.", list.map { $0 == cur ? "\($0.label)  ✓" : $0.label } + ["Huỷ"]) { [weak self] i in
+            guard let self, let s = list[safe: i], s != self.server else { return }
+            self.switchServer(s)
+        }
+    }
 
     /// Người xem chọn server khác: nhớ lựa chọn, xem tiếp từ chỗ đang xem.
     func switchServer(_ s: Server) {

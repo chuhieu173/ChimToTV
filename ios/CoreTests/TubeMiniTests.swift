@@ -113,6 +113,20 @@ final class TubeMiniTests: XCTestCase {
         XCTAssertEqual(TubeMini.normalize("http://192.168.1.10:8080https://tm.example.com/u/k7pq-4xmz-9tbn"), want)
         XCTAssertEqual(TubeMini.normalize("tm.example.com/u/k7pq-4xmz-9tbn."), want)
         XCTAssertEqual(TubeMini.normalize("192.168.1.10 :8080"), "http://192.168.1.10:8080")
+        // Ảnh nét trước, ảnh luôn có ở cuối; chất lượng mặc định 1080p, nhớ lựa chọn
+        XCTAssertEqual(TubeVideo(id: "abc", title: "x").thumbs, ["hq720", "sddefault", "hqdefault"].map { "https://i.ytimg.com/vi/abc/\($0).jpg" })
+        XCTAssertEqual(TubeVideo(id: "abc", title: "x").thumb, "https://i.ytimg.com/vi/abc/hqdefault.jpg")
+        XCTAssertEqual(TubeMini.qualities.first?.type, "tm1080")
+        Prefs.setServer(TubeMini.qualityHost, type: nil, label: nil)
+        XCTAssertEqual(TubeMini.quality, "tm1080")
+        TubeMini.quality = "tm360"
+        XCTAssertEqual(TubeMini.quality, "tm360")
+        XCTAssertEqual(Prefs.serverType("video"), "tm360") // trình phát đọc đúng khoá này cho tubemini://video/<id>
+        Prefs.setServer(TubeMini.qualityHost, type: "lạ", label: nil)
+        XCTAssertEqual(TubeMini.quality, "tm1080")
+        Prefs.setServer(TubeMini.qualityHost, type: nil, label: nil)
+        XCTAssertEqual(TubeMini.qualityLabel("tmaudio"), "Chỉ nghe")
+        XCTAssertEqual(TubeMini.qualityLabel("tm720"), "720p")
         // Hướng dẫn lấy mã: 3 bước đánh số rồi các lưu ý
         XCTAssertTrue(TubeMini.botGuide.hasPrefix("1. Bấm «Chat với bot» để mở thẳng khung chat @tube_mini_bot"))
         XCTAssertEqual(TubeMini.botApp.absoluteString, "tg://resolve?domain=tube_mini_bot")
