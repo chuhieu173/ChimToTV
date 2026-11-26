@@ -1445,6 +1445,7 @@ final class AppModel: ObservableObject {
             "status": "\(status)", "detail": detailFilm?.url ?? NSNull(),
             "sections": sections.map { ["title": $0.title ?? "", "count": $0.items.count, "first": $0.items.prefix(3).map { $0.film.title }] },
             "menu": menu.map { $0.title }, "toast": toast ?? NSNull(), "next": nextUrl ?? NSNull(),
+            "tube": TubeModel.shared.debugInfo,
         ]
     }
 }

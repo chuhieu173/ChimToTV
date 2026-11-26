@@ -9,5 +9,9 @@ final class LogTests: XCTestCase {
                        "VTV1 (nguồn 1/2) http://tv.example/live/***/***/123.ts")
         XCTAssertEqual(Log.redact("https://an:b1@tv.example/x.m3u?token=abc#t"), "https://***@tv.example/x.m3u?token=***#t")
         XCTAssertEqual(Log.redact("danh sách «Thử» — 467 kênh"), "danh sách «Thử» — 467 kênh")
+        // Mã thiết bị TubeMini trong đường dẫn
+        XCTAssertEqual(Log.redact("lỗi https://tm.example.com/u/k7pq-4xmz-9tbn/720/getvideo/abc"),
+                       "lỗi https://tm.example.com/u/***/720/getvideo/abc")
+        XCTAssertEqual(Log.redact("thử https://tm.example.com/u/K7pq4xmz9tbn → được"), "thử https://tm.example.com/u/*** → được")
     }
 }

@@ -367,6 +367,16 @@ enum DebugRoutes {
                           "found": s.found.map { ["id": $0.id, "name": $0.name, "platform": $0.platform, "endpoint": "\($0.endpoint)"] }])
         case "/go":
             return go(q)
+        case "/tube":
+            // TubeMini: /tube (trạng thái), /tube?server=<địa chỉ> (như Lưu ở hộp ⚙︎: tự chọn http / https, ping; chờ kết quả),
+            // /tube?edit=1 (mở hộp ⚙︎). Mã thiết bị trong địa chỉ được che.
+            let m = TubeModel.shared
+            if q["edit"] == "1" { m.editServer() }
+            if let s = q["server"] {
+                m.setServer(s, toast: true)
+                for _ in 0..<40 where m.serverNote == "Đang kiểm tra…" { try? await Task.sleep(nanoseconds: 250_000_000) }
+            }
+            return .json(m.debugInfo)
         case "/row":
             // Sửa nhanh hàng trang chủ (như giữ ô phim): /row?id=<id hàng>&do=info|hide|up|down|rows|sources
             let app = AppModel.shared

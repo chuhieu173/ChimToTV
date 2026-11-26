@@ -185,32 +185,41 @@ final class TubeModel: ObservableObject {
         }
     }
 
-    /// Lưu địa chỉ máy chủ, thử kết nối; được thì tải lại.
-    func setServer(_ address: String, token tk: String) {
-        TubeMini.server = address
-        TubeMini.token = tk
+    /// Lưu địa chỉ máy chủ, thử kết nối (tự chọn http / https như app TubeMini 0.7.0); được thì tải lại. `toast`: báo kết quả
+    /// bằng dòng nổi (hộp ⚙︎ — dòng ghi chú chỉ hiện ở màn cài đặt lần đầu).
+    func setServer(_ address: String, toast: Bool = false) {
+        let typed = TubeMini.normalize(address)
+        TubeMini.server = typed
         configured = TubeMini.configured
         serverNote = configured ? "Đang kiểm tra…" : ""
         guard configured else { return }
         Task {
             do {
-                serverNote = "Đã kết nối: " + (try await TubeMini.ping())
+                let r = try await TubeMini.probe(typed)
+                // Đổi scheme (gõ https cho IP trong nhà, http bị chuyển sang https…) — trừ khi người dùng vừa lưu địa chỉ khác
+                if r.url != typed && TubeMini.server == typed { TubeMini.server = r.url }
+                serverNote = "Đã kết nối: " + r.info
                 started = true
                 loadSubscribed()
                 reload()
             } catch {
                 serverNote = "Không kết nối được: \(error.localizedDescription)"
             }
+            if toast { AppModel.shared.showToast("TubeMini — " + serverNote) }
         }
     }
 
-    /// Hộp sửa địa chỉ máy chủ / mã (nút ⚙︎).
+    /// Cho cổng gỡ lỗi (/state): mã thiết bị trong địa chỉ được che.
+    var debugInfo: [String: Any] {
+        ["server": Log.redact(TubeMini.server), "note": serverNote, "status": status ?? "", "videos": videos.count, "tab": tabTitle]
+    }
+
+    /// Hộp sửa địa chỉ máy chủ (nút ⚙︎).
     func editServer() {
-        TvAlert.show("Máy chủ TubeMini", "Địa chỉ tubemini-server trong nhà (vd 192.168.1.10:8080). Mã (token) chỉ cần khi máy chủ có bật "
-                     + "auth_token.", ["Lưu", "Huỷ"],
-                     fields: [(TubeMini.server, "địa chỉ:cổng"), (TubeMini.token, "mã (token) — để trống nếu không có")]) { [weak self] i, texts in
+        TvAlert.show("Máy chủ TubeMini", TubeMini.addressHelp, ["Lưu", "Huỷ"],
+                     fields: [(TubeMini.server, "địa chỉ máy chủ")]) { [weak self] i, texts in
             guard i == 0 else { return }
-            self?.setServer(texts[safe: 0] ?? "", token: texts[safe: 1] ?? "")
+            self?.setServer(texts[safe: 0] ?? "", toast: true)
         }
     }
 }
@@ -234,7 +243,6 @@ struct TubeContent: View {
     let openMenu: () -> Void
     @FocusState private var searchFocused: Bool
     @State private var address = TubeMini.server
-    @State private var token = TubeMini.token
     /// Thanh trên (tiêu đề + ô tìm + chip) đang khuất: cuộn xuống thì ẩn, cuộn lên / về đầu thì hiện — như menu nổi của Roza
     /// (RZTabs: quá 80 điểm, mỗi lần cuộn hơn 12 điểm). Thanh nằm đè lên danh sách nên ẩn / hiện không làm danh sách nhảy.
     @State private var barsHidden = false
@@ -474,15 +482,19 @@ struct TubeContent: View {
             VStack(alignment: .leading, spacing: 14) {
                 Text("Xem YouTube qua máy chủ TubeMini")
                     .appFont(20, .bold).foregroundColor(Theme.text)
-                Text("TubeMini cần máy chủ tubemini-server chạy trong nhà (dự án TubeMini — yt-dlp lấy link, video tải thẳng từ YouTube). "
-                     + "Nhập địa chỉ máy chủ, ví dụ 192.168.1.10:8080. Kênh theo dõi và lịch sử lưu trên máy chủ, dùng chung với app TubeMini.")
+                Text("TubeMini cần máy chủ TubeMini (yt-dlp lấy link, video tải thẳng từ YouTube). " + TubeMini.addressHelp
+                     + " Kênh theo dõi và lịch sử lưu trên máy chủ, theo mã của bạn.")
                     .appFont(15).foregroundColor(Theme.dim).fixedSize(horizontal: false, vertical: true)
-                field("Địa chỉ máy chủ (máy:cổng)", text: $address)
-                field("Mã (token) — để trống nếu máy chủ không bật", text: $token)
-                Button("Lưu và kiểm tra") { m.setServer(address, token: token) }
-                    .buttonStyle(.borderedProminent)
-                    .tint(Theme.brand)
-                    .controlSize(.large)
+                field("Địa chỉ máy chủ", text: $address)
+                HStack(spacing: 12) {
+                    Button("Lưu và kiểm tra") { m.setServer(address) }
+                        .buttonStyle(.borderedProminent)
+                        .tint(Theme.brand)
+                    Button("Mở bot Telegram") { UIApplication.shared.open(TubeMini.botUrl) }
+                        .buttonStyle(.bordered)
+                        .tint(Theme.text)
+                }
+                .controlSize(.large)
                 if !m.serverNote.isEmpty {
                     Text(m.serverNote).appFont(14).foregroundColor(Theme.dim)
                 }

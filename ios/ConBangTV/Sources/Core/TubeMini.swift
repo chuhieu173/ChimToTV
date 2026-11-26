@@ -9,6 +9,11 @@ import Foundation
 // video = tubemini://video/<id>, các mức chất lượng = «server» (1080p / 720p / 360p / Chỉ nghe) → có sẵn thanh nút, tua, video kế,
 // giới hạn giờ xem, màn xe CarPlay. Luôn phát bằng AVPlayer (NativeFilm). Theo dõi kênh và lịch sử nằm trên máy chủ (dùng chung với
 // app TubeMini, không chia theo người xem — anh chọn 25/11/2026), không ghi vào lịch sử phim của Côn Bằng.
+//
+// Máy chủ 0.7.0 (D39–D44 của TubeMini_Server, 25/11/2026): ra Internet qua Cloudflare, mỗi thiết bị một mã nằm trong địa chỉ
+// (`https://<tên miền>/u/<mã>`, bot Telegram @tube_mini_bot cấp; trong nhà không mã = chủ máy chủ), kênh theo dõi / lịch sử theo
+// người dùng của mã; bỏ X-Auth-Token và chế độ phát qua máy chủ. App chỉ ghép đường dẫn vào sau địa chỉ (giữ nguyên mã), link máy chủ
+// trả về đã có sẵn mã.
 
 struct TubeVideo: Identifiable, Hashable {
     let id: String
@@ -58,27 +63,60 @@ struct TubeStreams {
 enum TubeMini {
     // MARK: Cài đặt (dùng chung cả máy — máy chủ không chia theo người xem)
 
-    /// Địa chỉ máy chủ, dạng http://máy:8080 (rỗng = chưa cài).
+    /// Địa chỉ máy chủ: «http://máy:8080» trong nhà, «https://tên-miền/u/<mã>» ngoài nhà (rỗng = chưa cài).
     static var server: String {
-        get { Prefs.store.string(forKey: "tube_server") ?? "" }
+        get {
+            _ = dropOldToken
+            return Prefs.store.string(forKey: "tube_server") ?? ""
+        }
         set { Prefs.store.set(normalize(newValue), forKey: "tube_server") }
     }
 
-    /// Mã X-Auth-Token (auth_token trong config.toml của máy chủ; rỗng = máy chủ không bật).
-    static var token: String {
-        get { Prefs.store.string(forKey: "tube_token") ?? "" }
-        set { Prefs.store.set(newValue.trimmingCharacters(in: .whitespaces), forKey: "tube_token") }
-    }
+    /// Máy chủ / app TubeMini 0.7.0 bỏ mã X-Auth-Token (mã thiết bị nằm trong địa chỉ) → xoá mã bản 1.25 đã lưu, như app TubeMini.
+    private static let dropOldToken: Void = Prefs.store.removeObject(forKey: "tube_token")
 
     static var configured: Bool { !server.isEmpty }
 
-    /// «máy:8080», «http://máy:8080/» → «http://máy:8080».
+    /// Bot Telegram cấp địa chỉ có mã thiết bị (trang giới thiệu và app TubeMini cũng chỉ tới đây).
+    static let botUrl = URL(string: "https://t.me/tube_mini_bot")!
+
+    static let addressHelp = "Trong nhà: nhập địa chỉ máy chủ, ví dụ 192.168.1.10:8080. Ngoài nhà (4G, trên xe): dán địa chỉ có mã thiết bị "
+        + "do bot Telegram @tube_mini_bot gửi (tên-miền/u/mã) — không cần gõ https://, mỗi máy một mã."
+
+    /// Như `normalizeURL` của app TubeMini 0.7.0: bỏ khoảng trắng và «/» cuối; chưa có scheme thì địa chỉ trong nhà
+    /// («192.168.1.10:8080», «nas», «may.local») thêm http://, tên miền («tm.example.com/u/k7pq-4xmz-9tbn») thêm https://.
+    /// Scheme và tên máy viết thường; đường dẫn (mã thiết bị) giữ nguyên — mã cũ 24 ký tự phân biệt hoa thường.
     static func normalize(_ s: String) -> String {
         var t = s.trimmingCharacters(in: .whitespacesAndNewlines)
         while t.hasSuffix("/") { t.removeLast() }
         if t.isEmpty { return "" }
-        if !t.lowercased().hasPrefix("http://") && !t.lowercased().hasPrefix("https://") { t = "http://" + t }
-        return t
+        if !t.contains("://") {
+            while t.hasPrefix("/") { t.removeFirst() }
+            t = (isLocalAddress(t) ? "http://" : "https://") + t
+        }
+        guard let r = t.range(of: "://") else { return t }
+        let rest = t[r.upperBound...]
+        let end = rest.firstIndex(of: "/") ?? t.endIndex
+        return t[..<end].lowercased() + t[end...]
+    }
+
+    /// Địa chỉ trong nhà: IPv4, tên không có dấu chấm, đuôi .local / .lan / .home / .internal, hoặc cổng khác 443 → http;
+    /// tên miền trên Internet (Cloudflare) → https.
+    static func isLocalAddress(_ hostAndPath: String) -> Bool {
+        let hostPort = hostAndPath.split(separator: "/", omittingEmptySubsequences: false).first.map(String.init) ?? ""
+        let parts = hostPort.split(separator: ":", omittingEmptySubsequences: false).map(String.init)
+        let host = parts[0].lowercased()
+        if parts.count > 1 && parts[1] != "443" { return true }
+        if host.isEmpty || !host.contains(".") { return true }
+        if host.allSatisfy({ $0.isNumber || $0 == "." }) { return true }
+        return [".local", ".lan", ".home", ".internal"].contains { host.hasSuffix($0) }
+    }
+
+    /// Cùng địa chỉ, đổi http ↔ https.
+    static func otherScheme(_ url: String) -> String {
+        if url.hasPrefix("https://") { return "http://" + url.dropFirst(8) }
+        if url.hasPrefix("http://") { return "https://" + url.dropFirst(7) }
+        return url
     }
 
     // MARK: Địa chỉ trong app
@@ -212,11 +250,6 @@ enum TubeMini {
 
     // MARK: API của máy chủ
 
-    private static func headers() -> [String: String] {
-        let t = token
-        return t.isEmpty ? [:] : ["X-Auth-Token": t]
-    }
-
     private static func url(_ path: String) throws -> String {
         guard configured else { throw AppError("Chưa nhập địa chỉ máy chủ TubeMini.") }
         return path.hasPrefix("http") ? path : server + path
@@ -224,16 +257,18 @@ enum TubeMini {
 
     private static func get(_ path: String) async throws -> Data {
         do {
-            return try await Http.get(try url(path), headers: headers()).data
+            return try await Http.get(try url(path)).data
         } catch let e as Http.HttpError {
             throw AppError(message(e.code))
         }
     }
 
-    private static func message(_ code: Int) -> String {
+    static func message(_ code: Int) -> String {
         switch code {
-        case 401: return "Máy chủ TubeMini cần mã (token) — nhập ở Cài đặt máy chủ."
-        case 404: return "Máy chủ TubeMini không có mục này (máy chủ cũ quá?)."
+        case 401: return "Máy chủ TubeMini cần mã thiết bị — dán địa chỉ có mã (…/u/<mã>) nhận từ bot Telegram @tube_mini_bot."
+        case 403: return "Máy chủ TubeMini từ chối (403): máy chủ chỉ nhận mạng Việt Nam — tắt VPN / proxy đặt ở nước ngoài rồi thử lại."
+        case 404: return "Máy chủ TubeMini không nhận địa chỉ này (404): mã thiết bị sai hoặc đã bị thu hồi (lấy mã mới ở bot "
+            + "@tube_mini_bot), ngoài mạng nhà mà thiếu mã, hoặc máy chủ quá cũ."
         case 502: return "YouTube không trả lời hoặc không lấy được link (máy chủ TubeMini báo lỗi 502)."
         default: return "Máy chủ TubeMini trả về lỗi HTTP \(code)."
         }
@@ -241,13 +276,43 @@ enum TubeMini {
 
     private static func q(_ s: String) -> String { s.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed.subtracting(CharacterSet(charactersIn: "&=+?"))) ?? s }
 
-    /// Kiểm tra kết nối: «máy chủ 0.6.0 · yt-dlp 2026.10.26».
+    /// Kiểm tra kết nối: «máy chủ 0.7.0 · yt-dlp 2026.10.26».
     static func ping() async throws -> String {
-        let a = TubeXML.attrs(try await get("/tm/v1/ping"), "tm:ping")
-        var parts = ["máy chủ \(a["server"] ?? "?")"]
+        try await probe(server).info
+    }
+
+    /// Lưu địa chỉ / «Kiểm tra kết nối» (như `probeServer` của app TubeMini 0.7.0): ping `base`; không tới được (lỗi mạng / TLS,
+    /// không phải câu trả lời HTTP) thì thử scheme còn lại; http bị chuyển sang https (Cloudflare «Always Use HTTPS») thì giữ https,
+    /// vì POST (theo dõi kênh, chỗ xem) không đi qua được lệnh chuyển hướng. Trả địa chỉ dùng được + dòng thông tin máy chủ.
+    static func probe(_ base: String) async throws -> (url: String, info: String) {
+        guard !base.isEmpty else { throw AppError("Chưa nhập địa chỉ máy chủ TubeMini.") }
+        do {
+            return try await pingAt(base)
+        } catch let e where !(e is AppError) {
+            let other = otherScheme(base)
+            guard other != base, let r = try? await pingAt(other) else { throw e }
+            return r
+        }
+    }
+
+    private static func pingAt(_ base: String) async throws -> (url: String, info: String) {
+        let r: Http.Response
+        do {
+            r = try await Http.get(base + "/tm/v1/ping")
+        } catch let e as Http.HttpError {
+            throw AppError(message(e.code))
+        } catch is WebFetch.ChallengeError {
+            throw AppError("Máy chủ TubeMini đang bật lớp chống bot của Cloudflare — tắt Bot Fight Mode / Under Attack cho tên miền này.")
+        }
+        let a = TubeXML.attrs(r.data, "tm:ping")
+        guard let server = a["server"] else {
+            throw AppError(a["message"] ?? "Địa chỉ này không phải máy chủ TubeMini (hoặc máy chủ quá cũ).")
+        }
+        var parts = ["máy chủ \(server)"]
         if let y = a["yt_dlp"], !y.isEmpty { parts.append("yt-dlp \(y)") } else { parts.append("THIẾU yt-dlp") }
         if (a["deno"] ?? "").isEmpty { parts.append("THIẾU Deno") }
-        return parts.joined(separator: " · ")
+        let upgraded = base.hasPrefix("http://") && r.url.lowercased().hasPrefix("https://")
+        return (upgraded ? otherScheme(base) : base, parts.joined(separator: " · "))
     }
 
     /// Phổ biến: "" = trộn, "Music" / "News" / "Sports" / "Games" / "Film" = từng chủ đề.
@@ -279,7 +344,7 @@ enum TubeMini {
 
     static func subscribe(_ channel: String) async throws {
         do {
-            _ = try await Http.post(try url("/tm/v1/subscriptions"), form: ["channel_id": channel], headers: headers())
+            _ = try await Http.post(try url("/tm/v1/subscriptions"), form: ["channel_id": channel])
         } catch let e as Http.HttpError {
             throw AppError(message(e.code))
         }
@@ -289,7 +354,7 @@ enum TubeMini {
     static func deleteHistory(_ id: String) async throws { try await delete("/tm/v1/history/\(id)") }
 
     private static func delete(_ path: String) async throws {
-        var r = try Http.request(try url(path), headers: headers())
+        var r = try Http.request(try url(path))
         r.httpMethod = "DELETE"
         let (_, resp) = try await Http.session.data(for: r)
         if let c = (resp as? HTTPURLResponse)?.statusCode, c >= 400 { throw AppError(message(c)) }
@@ -325,10 +390,9 @@ enum TubeMini {
             if !v.authorId.isEmpty { form["author_id"] = v.authorId }
         }
         let target = server + "/tm/v1/history"
-        let h = headers()
         let body = form
         Task.detached {
-            do { _ = try await Http.post(target, form: body, headers: h) } catch {
+            do { _ = try await Http.post(target, form: body) } catch {
                 Log.d("TubeMini", "không lưu được chỗ xem \(id): \(error.localizedDescription)")
             }
         }
