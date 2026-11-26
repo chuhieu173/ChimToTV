@@ -369,9 +369,10 @@ enum DebugRoutes {
             return go(q)
         case "/tube":
             // TubeMini: /tube (trạng thái), /tube?server=<địa chỉ> (như Lưu ở hộp ⚙︎: tự chọn http / https, ping; chờ kết quả),
-            // /tube?edit=1 (mở hộp ⚙︎). Mã thiết bị trong địa chỉ được che.
+            // /tube?edit=1 (mở hộp ⚙︎), /tube?guide=1 (hộp «Cách lấy mã»). Mã thiết bị trong địa chỉ được che.
             let m = TubeModel.shared
             if q["edit"] == "1" { m.editServer() }
+            if q["guide"] == "1" { m.showGuide() }
             if let s = q["server"] {
                 m.setServer(s, toast: true)
                 for _ in 0..<40 where m.serverNote == "Đang kiểm tra…" { try? await Task.sleep(nanoseconds: 250_000_000) }

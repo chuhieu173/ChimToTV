@@ -216,10 +216,18 @@ final class TubeModel: ObservableObject {
 
     /// Hộp sửa địa chỉ máy chủ (nút ⚙︎).
     func editServer() {
-        TvAlert.show("Máy chủ TubeMini", TubeMini.addressHelp, ["Lưu", "Huỷ"],
-                     fields: [(TubeMini.server, "địa chỉ máy chủ")]) { [weak self] i, texts in
-            guard i == 0 else { return }
-            self?.setServer(texts[safe: 0] ?? "", toast: true)
+        TvAlert.show("Máy chủ TubeMini", "Dán địa chỉ bot Telegram @tube_mini_bot gửi (tên-miền/u/mã), hoặc địa chỉ máy chủ trong nhà.",
+                     ["Lưu", "Cách lấy mã", "Huỷ"], fields: [(TubeMini.server, "địa chỉ máy chủ")]) { [weak self] i, texts in
+            if i == 0 { self?.setServer(texts[safe: 0] ?? "", toast: true) }
+            if i == 1 { self?.showGuide() }
+        }
+    }
+
+    /// Cách lấy mã thiết bị qua bot Telegram.
+    func showGuide() {
+        TvAlert.show("Cách lấy mã TubeMini", TubeMini.botGuide, ["Mở bot Telegram", "Nhập địa chỉ", "Đóng"]) { [weak self] i in
+            if i == 0 { UIApplication.shared.open(TubeMini.botUrl) }
+            if i == 1 { self?.editServer() }
         }
     }
 }
@@ -482,10 +490,11 @@ struct TubeContent: View {
             VStack(alignment: .leading, spacing: 14) {
                 Text("Xem YouTube qua máy chủ TubeMini")
                     .appFont(20, .bold).foregroundColor(Theme.text)
-                Text("TubeMini cần máy chủ TubeMini (yt-dlp lấy link, video tải thẳng từ YouTube). " + TubeMini.addressHelp
-                     + " Kênh theo dõi và lịch sử lưu trên máy chủ, theo mã của bạn.")
+                Text("Danh sách video và link phát lấy từ máy chủ TubeMini; hình và tiếng tải thẳng từ YouTube. Cần một địa chỉ máy chủ "
+                     + "có mã riêng cho máy này — kênh theo dõi, lịch sử và chỗ đang xem lưu trên máy chủ, theo mã của bạn.")
                     .appFont(15).foregroundColor(Theme.dim).fixedSize(horizontal: false, vertical: true)
-                field("Địa chỉ máy chủ", text: $address)
+                guide
+                field("Địa chỉ máy chủ (tên-miền/u/mã)", text: $address)
                 HStack(spacing: 12) {
                     Button("Lưu và kiểm tra") { m.setServer(address) }
                         .buttonStyle(.borderedProminent)
@@ -496,12 +505,40 @@ struct TubeContent: View {
                 }
                 .controlSize(.large)
                 if !m.serverNote.isEmpty {
-                    Text(m.serverNote).appFont(14).foregroundColor(Theme.dim)
+                    Text(m.serverNote).appFont(14).foregroundColor(Theme.dim).fixedSize(horizontal: false, vertical: true)
                 }
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(TubeMini.botNotes, id: \.self) { n in
+                        HStack(alignment: .firstTextBaseline, spacing: 8) {
+                            Text("•").appFont(14).foregroundColor(Theme.dim)
+                            Text(n).appFont(14).foregroundColor(Theme.dim).fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                }
+                .padding(.top, 4)
             }
             .padding(20)
             .frame(maxWidth: 620, alignment: .leading)
         }
+    }
+
+    /// Khung «Cách lấy mã»: 3 bước qua bot Telegram (như trang giới thiệu TubeMini).
+    private var guide: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Cách lấy mã qua bot Telegram").appFont(17, .semibold).foregroundColor(Theme.text)
+            ForEach(Array(TubeMini.botSteps.enumerated()), id: \.offset) { i, s in
+                HStack(alignment: .top, spacing: 12) {
+                    Text("\(i + 1)").appFont(15, .bold).foregroundColor(.white)
+                        .frame(width: 28, height: 28)
+                        .background(Circle().fill(Theme.brand))
+                    Text(s).appFont(15).foregroundColor(Theme.text).fixedSize(horizontal: false, vertical: true)
+                        .padding(.top, 3)
+                }
+            }
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 14).fill(Theme.surface2.opacity(0.6)))
     }
 
     private func field(_ hint: String, text: Binding<String>) -> some View {

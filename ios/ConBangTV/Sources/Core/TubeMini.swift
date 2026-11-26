@@ -80,8 +80,28 @@ enum TubeMini {
     /// Bot Telegram cấp địa chỉ có mã thiết bị (trang giới thiệu và app TubeMini cũng chỉ tới đây).
     static let botUrl = URL(string: "https://t.me/tube_mini_bot")!
 
-    static let addressHelp = "Trong nhà: nhập địa chỉ máy chủ, ví dụ 192.168.1.10:8080. Ngoài nhà (4G, trên xe): dán địa chỉ có mã thiết bị "
-        + "do bot Telegram @tube_mini_bot gửi (tên-miền/u/mã) — không cần gõ https://, mỗi máy một mã."
+    // Cách lấy mã — theo trang giới thiệu TubeMini (mục «Đăng ký nhận địa chỉ máy chủ») và tin «❓ Hướng dẫn» của bot (tên nút giữ
+    // đúng như bot hiện: 📝 Đăng ký, 📋 Chép địa chỉ, 👤 Tài khoản của tôi → Cấp lại mã, ➕ Thiết bị mới).
+    static let botSteps = [
+        "Mở Telegram, nhắn bot @tube_mini_bot (nút «Mở bot Telegram») rồi bấm «📝 Đăng ký».",
+        "Bot gửi địa chỉ máy chủ riêng cho máy này, dạng tên-miền/u/k7pq-4xmz-9tbn. Chạm vào địa chỉ hoặc nút «📋 Chép địa chỉ» "
+            + "để chép — tin tự xoá sau một lúc, nên chép ngay.",
+        "Quay lại Côn Bằng, dán vào ô địa chỉ máy chủ rồi bấm «Lưu». Không cần gõ https://, chữ hoa hay thường đều được.",
+    ]
+
+    static let botNotes = [
+        "Mất địa chỉ: vào bot bấm «👤 Tài khoản của tôi» → «Cấp lại mã» (mã cũ hết dùng được).",
+        "Mỗi người tối đa 2 máy; máy thứ hai (vd iPad sau iPhone) bấm «➕ Thiết bị mới» trong bot rồi chờ duyệt. Mỗi máy một địa chỉ "
+            + "riêng — đừng dùng chung hay chia sẻ.",
+        "Máy chủ chỉ nhận mạng Việt Nam: đang bật VPN / proxy đặt ở nước ngoài thì tắt đi.",
+        "Có máy chủ TubeMini riêng trong nhà: gõ địa chỉ của nó (vd 192.168.1.10:8080), không cần mã.",
+    ]
+
+    /// Bản chữ thường cho hộp thoại (nút ⚙︎ → «Cách lấy mã»).
+    static var botGuide: String {
+        botSteps.enumerated().map { "\($0.offset + 1). \($0.element)" }.joined(separator: "\n")
+            + "\n\n" + botNotes.map { "• " + $0 }.joined(separator: "\n")
+    }
 
     /// Như `normalizeURL` của app TubeMini 0.7.0: bỏ khoảng trắng và «/» cuối; chưa có scheme thì địa chỉ trong nhà
     /// («192.168.1.10:8080», «nas», «may.local») thêm http://, tên miền («tm.example.com/u/k7pq-4xmz-9tbn») thêm https://.
