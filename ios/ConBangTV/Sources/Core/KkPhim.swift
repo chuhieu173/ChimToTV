@@ -32,6 +32,8 @@ enum KkPhim {
     /// Trang tập + server dự phòng KKPhim và NguonC, tải song song. Nguồn dự phòng chậm / lỗi thì thôi; trang tập lỗi mà
     /// nguồn dự phòng có tập này → chỉ phát bằng nguồn dự phòng.
     static func source(_ d: FilmDetail, _ group: EpisodeGroup?, _ ep: Episode) async throws -> EpisodeSource {
+        // TubeMini: các mức chất lượng là «server» (Core/TubeMini.swift)
+        if TubeMini.isTubeUrl(ep.url) { return try await TubeMini.source(ep) }
         var backups: [() async throws -> [(Server, Video)]] = []
         if appliesTo(d.url) { backups.append { try await servers(d, group, ep) } }
         if NguonC.appliesTo(d.url) { backups.append { try await NguonC.servers(d, group, ep) } }

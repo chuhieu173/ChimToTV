@@ -9,6 +9,214 @@ Bản Windows (Windows 10 / 11, một tệp `.exe`) ghi riêng với tiêu đề
 Bản Mac (macOS 12+, từ 13/11/2026, cùng mã nguồn và số bản với bản iPad) ghi riêng với tiêu đề "Mac …", tag `mac-v…`.
 Bản Linux (Ubuntu 22.04+ / Linux Mint 21+ / Debian 12+, từ 13/11/2026, tệp `.deb`) ghi riêng với tiêu đề "Linux …", tag `linux-v…`.
 
+## iPad / iPhone 1.27 và Mac 1.27 — 26/11/2026 (TubeMini: ảnh thu nhỏ nét hơn, chọn chất lượng video — mặc định 1080p)
+
+Anh: «tăng độ phân giải của Thumbnail video», «chọn được độ phân giải của video, mặc định 1080p», rồi «ok phát hành nha e».
+
+- **Ảnh thu nhỏ nét hơn:** ô video dùng hq720 (1280×720) → sddefault (640×480) → hqdefault (480×360, luôn có) thay cho mqdefault 320×180
+  (mờ trên màn Retina); ảnh máy chủ trả 404 được nhớ 7 ngày (dấu `.404` cạnh tệp trong bộ nhớ ảnh). Màn «Chỉ nghe» cũng dùng ảnh nét.
+- **Chọn chất lượng video:** mặc định 1080p (trước 720p); nút chất lượng ngay cạnh nút Menu khi đang xem (1080p / 720p / 360p / Chỉ
+  nghe) — đổi xong xem tiếp đúng chỗ và nhớ cho các video sau; mục «Server» trong Menu đổi tên thành «Chất lượng video»; hộp ⚙︎ của trang
+  TubeMini có «Chất lượng video: …» để đặt mặc định.
+- iPad / iPhone: bản 1.27 (build 35) · tag `ios-v1.27` · `ConBangTV-iPad-1.27.ipa` 6 323 485 byte · SHA-256
+  `bd43ad7a2d546bce829ccf0e92406cbe2576f9befd99b60f8b39aeaab27dbc07`; Mac: bản 1.27 (build 35) · tag `mac-v1.27` · `ConBangTV-Mac-1.27.zip`
+  9 780 384 byte (x86_64 + arm64, ký ad-hoc, `codesign --verify` đạt, không cổng gỡ lỗi) · SHA-256
+  `37d9480fba31465037449ed96a57c46a2ef89b5b67c18f8c00fc1df07ced3662` · commit `6c6618b` (tính năng: `7869b86`) · dựng trên Mac mini
+- Thử: test lõi Swift 184 đạt (thêm: thứ tự ảnh, mặc định / nhớ chất lượng). Bản Mac thử: ô video nét; video mở 1080p; nút chất lượng →
+  720p phát tiếp đúng giây và nhớ; video cũ không có hq720 / sddefault (404) lùi về hqdefault trên màn «Chỉ nghe». IPA chính `vn.chimto.tv`
+  1.27 / 35 (cảnh CarPlay + `SBStarkCapable`, không `no-container`, không cổng gỡ lỗi) **cài lên iPad thử bằng TrollStore** và mở được.
+- Đăng lúc 10:38:45 (iPad) và 10:39:17 (Mac) bằng `release.ps1 ipad|mac -File dist\mac\…` (`--latest=false`, Latest vẫn `v2.23`);
+  `-Verify` đạt cả hai. **Tự cập nhật thật Mac 1.26.1 → 1.27** trên Mac mini: hộp «Có bản mới 1.27» đủ «Có gì mới» → «Cài đặt ngay» → app
+  mở lại 1.27 / 35 lúc 10:41, `codesign` đạt, trang TubeMini hiện ảnh nét. Trang hướng dẫn: dòng số bản → iPad / iPhone 1.27 · Mac 1.27
+  (site `212516d`).
+
+## iPad / iPhone 1.26.1 và Mac 1.26.1 — 26/11/2026 (TubeMini: sửa lỗi «404» khi dán địa chỉ chép từ Telegram)
+
+Anh: dán địa chỉ có mã từ bot vào Côn Bằng trên iPhone 14 → «404» (nhập trên màn điện thoại), rồi «Phát hành nha e». Máy chủ chạy đúng
+(ping / feed / link phát 200 từ máy tính; bản Mac 1.26 với cùng địa chỉ kết nối và phát được); máy chủ trả 404 khi mã dính ký tự lạ.
+Dựng lại được: địa chỉ kèm ký tự vô hình (dấu định hướng chữ U+2069 / U+200E mà Telegram hay chèn khi chép, dấu cách không ngắt) →
+`trimming` không bỏ được khi nằm sau ký tự khác, từ iOS 17 `URL(string:)` mã hoá luôn thay vì báo sai → mã sai → 404.
+
+- **TubeMini tự làm sạch địa chỉ dán vào** (`TubeMini.cleanAddress`): bỏ mọi ký tự vô hình (định dạng Cf) và khoảng trắng, gạch nối lạ
+  (‐ ‑ – — −) thành «-»; dán cả tin của bot thì tự lấy đúng địa chỉ có `/u/`; dán dính vào địa chỉ cũ thì lấy địa chỉ `http(s)://` cuối;
+  bỏ dấu câu cuối.
+- iPad / iPhone: bản 1.26.1 (build 34) · tag `ios-v1.26.1` · `ConBangTV-iPad-1.26.1.ipa` 6 311 779 byte · SHA-256
+  `8f098ffa10ab8561e8c81a457c17a67505f13cec1d38b4c61c441d26317e1bdf`; Mac: bản 1.26.1 (build 34) · tag `mac-v1.26.1` ·
+  `ConBangTV-Mac-1.26.1.zip` 9 758 425 byte (x86_64 + arm64, ký ad-hoc, `codesign --verify` đạt, không cổng gỡ lỗi) · SHA-256
+  `677683567ee1dfd211a5e315c1768f0dace4c74eab2cb65d90735d72ea795f4b` · commit `cf0fad2` (sửa: `6e9331b`) · dựng trên Mac mini
+- Thử: test lõi Swift 184 đạt (thêm 7 ca làm sạch địa chỉ). Bản Mac thử với địa chỉ công khai thật có mã: 4 kiểu địa chỉ dính ký tự vô
+  hình trước báo 404 / «không hợp lệ», giờ đều kết nối. IPA chính `vn.chimto.tv` 1.26.1 / 34 (cảnh CarPlay + `SBStarkCapable`, không
+  `no-container`, không cổng gỡ lỗi) **cài lên iPad thử bằng TrollStore** (thay bản 1.23) và mở được. Chưa cài lên iPhone 14 (SSH bằng
+  tài khoản của 6s Plus bị từ chối) — anh cập nhật qua hộp «Có bản mới» rồi dán lại địa chỉ.
+- Đăng lúc 09:27:27 (iPad) và 09:27:46 (Mac) bằng `release.ps1 ipad|mac -File dist\mac\…` (`--latest=false`, Latest vẫn `v2.23`);
+  `-Verify` đạt cả hai. **Tự cập nhật thật Mac 1.26 → 1.26.1** trên Mac mini: hộp «Có bản mới 1.26.1» đủ «Có gì mới» → «Cài đặt ngay» →
+  app mở lại 1.26.1 / 34 lúc 09:30, `codesign` đạt. Trang hướng dẫn: dòng số bản → iPad / iPhone 1.26.1 · Mac 1.26.1 (site `f262e9f`).
+
+## iPad / iPhone 1.26 và Mac 1.26 — 26/11/2026 (TubeMini theo máy chủ 0.7.0: mã thiết bị qua bot Telegram, dùng được ngoài nhà)
+
+Anh giao: «E qua repo tubemini app xem cập nhật lõi mới của tubemini», rồi «bổ sung vào luôn để user biết cách lấy mã», «làm nút bấm để
+bấm trực tiếp trên app chuyển qua chat trên tele bot cho tiện», và «Commit và phát hành nha e». Máy chủ TubeMini 0.7.0 (25/11, repo riêng):
+ra Internet qua Cloudflare (chỉ nhận mạng Việt Nam), nhiều người dùng, **mỗi thiết bị một mã trong địa chỉ** `https://<tên miền>/u/<mã>` do
+bot @tube_mini_bot cấp, bỏ `X-Auth-Token` và phát qua máy chủ. Bản 1.25 tự thêm `http://` vào mọi địa chỉ → với tên miền đi http rồi bị
+chuyển sang https (theo dõi kênh / lưu chỗ xem hỏng, mã đi không mã hoá).
+
+- **TubeMini dùng được cả ngoài nhà (4G, trên xe):** dán địa chỉ có mã thiết bị bot gửi — không cần gõ `https://`: như app TubeMini 0.7.0,
+  địa chỉ trong nhà thêm `http://`, tên miền thêm `https://`, tên máy viết thường, mã giữ nguyên; «Lưu và kiểm tra» tự thử scheme còn lại
+  khi không tới được, giữ https khi http bị chuyển hướng.
+- **Cách lấy mã ngay trong app:** khung 3 bước ở trang TubeMini (Đăng ký → chép địa chỉ → dán, Lưu) + lưu ý (cấp lại mã, tối đa 2 máy,
+  mỗi máy một địa chỉ, chỉ mạng Việt Nam, máy chủ riêng trong nhà không cần mã), tên nút đúng như bot; nút ⚙︎ → «Cách lấy mã».
+- **Nút «Chat với bot @tube_mini_bot»** (xanh Telegram) mở thẳng khung chat trong app Telegram; máy chưa cài Telegram thì mở trang t.me.
+  Cũng có trong hộp ⚙︎ và hộp «Cách lấy mã».
+- Bỏ ô mã (token) cũ (xoá mã đã lưu); báo rõ khi mã sai / bị thu hồi (404) hoặc đang dùng mạng nước ngoài (403); đổi máy chủ qua ⚙︎ báo
+  kết quả bằng dòng nổi; nhật ký che mã `/u/<mã>`.
+- iPad / iPhone: bản 1.26 (build 33) · tag `ios-v1.26` · `ConBangTV-iPad-1.26.ipa` 6 309 221 byte · SHA-256
+  `84b15e42124ea8973625c3fec18ce85c75068ae727d9ecfe3745602d3f22ef0c`; Mac: bản 1.26 (build 33) · tag `mac-v1.26` · `ConBangTV-Mac-1.26.zip`
+  9 751 634 byte (x86_64 + arm64, ký ad-hoc, `codesign --verify` đạt, không cổng gỡ lỗi) · SHA-256
+  `4e93c7ca4035afa42b6b2d66b77cb1cb2f5e673375e8a1a8067655fad6acfc61` · commit `41b0035` (tính năng: `ae410ce`, `0b259ef`, `ea4c18c`) · dựng
+  trên Mac mini
+- Thử: test lõi Swift 184 đạt (thêm ca địa chỉ / scheme, che mã trong nhật ký, chữ hướng dẫn). Bản Mac thử với máy chủ thử 0.7.0 trong nhà:
+  địa chỉ cũ vẫn chạy; gõ `https://` cho IP trong nhà → tự lùi về `http://`; mã sai → câu báo 404; tên miền viết hoa → `https://`, chữ
+  thường, mã giữ nguyên; phát 1080p; màn hướng dẫn, hộp «Cách lấy mã»; nút «Chat với bot» bật Telegram Desktop lên ngay. IPA chính:
+  `vn.chimto.tv` 1.26 / 33, có cảnh CarPlay + `SBStarkCapable`, không `no-container`, không cổng gỡ lỗi. **Chưa thử:** địa chỉ công khai thật
+  có mã; cài IPA chính lên iPhone / iPad (lúc đăng cả hai máy thử không tới được — iPad vừa ngủ, iPhone không mở SSH / bản thử).
+- Đăng lúc 08:31:05 (iPad) và 08:31:36 (Mac) bằng `release.ps1 ipad|mac -File dist\mac\…` (`--latest=false`, Latest vẫn `v2.23`); `-Verify`
+  đạt cả hai: tải từ link công khai và link cố định khớp SHA-256. **Tự cập nhật thật Mac 1.25 → 1.26** trên Mac mini (`/Applications`): hộp
+  «Có bản mới 1.26» đủ «Có gì mới» → «Cài đặt ngay» → app mở lại 1.26 / 33 lúc 08:33, `codesign` đạt; trên bản chính gõ địa chỉ máy chủ
+  thử không có `http://` → kết nối, ra danh sách «Đã theo dõi». Trang hướng dẫn: dòng số bản → iPad / iPhone 1.26 · Mac 1.26 (site `9f2940e`).
+
+## iPad / iPhone 1.25 và Mac 1.25 — 25/11/2026 (mục TubeMini — xem YouTube qua máy chủ TubeMini)
+
+Anh giao: «lên phương án tích hợp tubemini vào Côn Bằng TV, vị trí menu bên dưới nút Truyền hình - radio», chốt tên «TubeMini», làm iPad /
+iPhone / Mac trước, chưa làm phần ra mạng ngoài nhà, ẩn với hồ sơ trẻ em + tính giờ xem; rồi «ok rồi đó e, đẩy và phát hành giúp a». Mac
+nhảy 1.23 → 1.25 cho cùng số với bản iPad.
+
+- **Mục TubeMini** (dưới «Truyền hình · Radio»): app khách của máy chủ **tubemini-server** (dự án TubeMini, theo `docs/API.md` của dự án đó)
+  — Đã theo dõi, Phổ biến, Âm nhạc, Tin tức, Thể thao, Trò chơi, Phim, Lịch sử, Kênh; ô tìm video / kênh có kính lúp ngay cạnh tiêu đề;
+  thẻ video 16:9; trang kênh, theo dõi / bỏ theo dõi, xoá khỏi lịch sử; nhập địa chỉ máy chủ + mã (token) ngay trên trang.
+- **Phát** bằng trình phát phim của app, luôn qua AVPlayer: danh sách đang xem thành «tập» (video kế, tự sang video sau), chất lượng 720p /
+  1080p / 360p / Chỉ nghe là «server»; chờ quảng cáo đầu; xem tiếp + lưu chỗ xem trên máy chủ (dùng chung với app TubeMini). Màn xe CarPlay:
+  có hình cả khi tắt màn iPhone.
+- Cuộn xuống thì thanh trên (tiêu đề, ô tìm, chip) thu gọn, cuộn lên thì hiện lại (như menu nổi của Roza — anh yêu cầu).
+- Hồ sơ trẻ em không có mục TubeMini; giới hạn giờ xem tính cả TubeMini.
+- iPad / iPhone: bản 1.25 (build 32) · tag `ios-v1.25` · `ConBangTV-iPad-1.25.ipa` 6 287 089 byte · SHA-256
+  `6e1b7844c47ff725417d4db771656a433587b0339052fad6b10042c3290d239a`; Mac: bản 1.25 (build 32) · tag `mac-v1.25` · `ConBangTV-Mac-1.25.zip`
+  9 711 554 byte (x86_64 + arm64, ký ad-hoc, `codesign --verify` đạt, không cổng gỡ lỗi) · SHA-256
+  `e5e9b253c49d840a27a9ec0d45c6789667c79a3d5ca3b5036b4152e10ccdac18` · commit `5b7b397` (tính năng: `f2ec7a2`, `ee42488`) · dựng trên Mac mini
+- Thử: test lõi Swift 184 đạt (mới: `TubeMiniTests` — feed video / kênh, link phát, lịch sử, chữ hiện). Bản Mac thử (Mac mini cùng mạng máy
+  chủ thử): feed, phát 720p (chờ quảng cáo 3 giây), xem tiếp đúng chỗ đã xem trong app TubeMini, chỗ xem ghi ngược lên máy chủ, đổi 1080p /
+  Chỉ nghe giữ chỗ xem, thanh trên ẩn / hiện khi cuộn. iPhone trên màn xe CarPlay: anh tự mở và xem video TubeMini (720p, AVPlayer). IPA chính:
+  `vn.chimto.tv` 1.25 / 32, có `SBStarkCapable`, không cổng gỡ lỗi; chưa cài lên iPhone lúc đăng (bản thử trên iPhone không mở để đẩy tệp).
+- Đăng lúc 16:43:03 (iPad) và 16:43:34 (Mac) bằng `release.ps1 ipad|mac -File dist\mac\…` (`--latest=false`, Latest vẫn `v2.23`); link cố
+  định chép đè, tải từ link công khai và link cố định khớp SHA-256. **Tự cập nhật thật Mac 1.23 → 1.25** trên Mac mini (`/Applications`):
+  hộp «Có bản mới 1.25» đủ «Có gì mới» → «Cài đặt ngay» → app mở lại 1.25 / 32 lúc 16:46, `codesign` đạt, menu có TubeMini. Trang hướng
+  dẫn: dòng số bản → iPad / iPhone 1.25 · Mac 1.25 (site `1e0d750`).
+
+## iPad / iPhone 1.24 — 25/11/2026 (Côn Bằng TV trên màn xe CarPlay)
+
+Anh hỏi «code cho nó hiện ở carplay» rồi muốn «giao diện app trên carplay full như trên màn hình iphone»; thử trên màn CarPlay độc lập
+của anh (nối dây USB) với iPhone 6s Plus iOS 15.8.3. Chỉ bản iPad / iPhone (Mac giữ 1.23 — không có gì mới).
+
+- **Màn xe CarPlay (chỉ iPhone, màn xe cảm ứng):** biểu tượng Côn Bằng TV trên CarPlay; màn xe hiện nguyên giao diện app, chạm trên màn
+  xe; điện thoại thành bảng điều khiển (đang phát + nút, tìm phim, tắt sáng màn, «Dùng trên điện thoại»). Đổi qua lại giữa màn xe và điện
+  thoại lúc đang xem thì phim mở lại đúng chỗ.
+- **Phim KKPhim / link .m3u8 trên màn xe phát bằng AVPlayer:** có hình cả khi tắt màn iPhone (trình phát web thì không — WebKit bỏ khung
+  hình khi màn điện thoại tắt), tự bỏ quảng cáo KKPhim chèn giữa phim, đi qua mạng của app (DNS mã hoá / vượt chặn). Server mã hoá của
+  trang thì app tự đổi sang server KKPhim dự phòng nếu có.
+- **Xe đang chạy** (tốc độ GPS): màn xe chỉ phát tiếng. **Bàn phím riêng** cho ô gõ chữ trên màn xe.
+- iPad / iPhone: bản 1.24 (build 31) · tag `ios-v1.24` · `ConBangTV-iPad-1.24.ipa` 6 124 474 byte · SHA-256
+  `d1847c09c6c3baf129adc707cad832b24c2dfd05deb37d14c239b0c4238d3568` · commit `a166e5a` (tính năng: `76b3911`, `ffce26f`; bỏ dòng nhắc
+  «Bật màn iPhone…»: `a166e5a`) · dựng trên Mac mini (`mac-build.ps1 -Release`, test lõi đạt)
+- Thử trên màn CarPlay thật: biểu tượng hiện, giao diện chính lên màn xe (535×300 điểm @3x), phim chạy 0 khung rớt; đổi màn xe ↔ điện
+  thoại hai chiều (mở lại đúng giây); giả xe chạy → màn che + nút lớn, tiếng vẫn chạy; bàn phím riêng gõ «tien nghich» → Tìm ra 11 nhóm;
+  AVPlayer (server KKPhim): xem tiếp đúng chỗ, dừng / phát / tua / tập sau, bỏ 1 khối quảng cáo, **anh xác nhận tắt màn iPhone mà màn xe
+  vẫn có hình, mượt**; Truyền hình VTV1 cũng có hình khi tắt màn iPhone. IPA chính (`vn.chimto.tv` 1.24 / 31, có `SBStarkCapable`, không
+  cổng gỡ lỗi) cài bằng TrollStore, anh mở trên màn xe — chạy bình thường. Chưa thử: khoá hình theo GPS khi xe chạy thật (anh thử sau).
+- Đăng lúc 15:16:08 bằng `release.ps1 ipad -File dist\mac\ConBangTV-iPad-1.24.ipa` (`--latest=false`; Latest vẫn `v2.23`); link cố định
+  `conbangtv_ios/ConBangTV-iPad.ipa` chép đè — tải từ link công khai và link cố định, khớp SHA-256.
+
+## 2.23 — 18/11/2026 (sửa lỗi sau audit cả 5 bản)
+
+Anh yêu cầu audit lại cả 5 bản («báo cáo lỗi và fix lỗi nếu có»), rồi duyệt thêm 5 mục đề xuất. Cùng đợt với iPad / iPhone / Mac 1.23,
+Windows 1.21, Linux 1.7.
+
+- **Giới hạn giờ xem ở Truyền hình:** hết giờ rồi bấm Home mở lại app thì kênh phát tiếp sau màn «Hết giờ xem» — nay không mở luồng khi
+  màn chặn đang hiện; ra nền thì huỷ mọi việc chờ (mở lại sau 1 giây, thử lại trận sau 20 giây, đọc kênh) và nhịp đếm giây — không còn
+  tự phát khi app ở nền.
+- **«Ai đang xem?» không còn bị vượt qua:** quay lại app sau ≥ 30 phút mà màn hiện lên đầu không phải màn chính (Truyền hình, trang phim,
+  trình phát, Cài đặt…) thì về màn chính hỏi người xem; thông báo nhắc giờ phát mở qua màn chính (qua màn miễn trừ / «Ai đang xem?» rồi
+  mới mở kênh). «Sửa người xem…» ở màn chặn cửa của người có mã PIN chỉ mở phần Người xem.
+- **Đồng bộ:** nhập sai mã ghép 20 lần (kể cả qua các lần đổi mã) thì ngừng cho ghép tới khi mở lại hộp Đồng bộ — mã 4 số trước đây máy lạ
+  trong mạng dò hết được trong vài giây.
+- **Kết nối:** DNS mã hoá giữ mọi địa chỉ của tên miền, cổng nội bộ thử lần lượt tối đa 4 địa chỉ rồi tới DNS của thiết bị.
+- **Truyền hình:** lịch phát sóng dựng vào tệp tạm rồi đổi tên (không mất lịch lúc đang tải, lịch cũ không bị xoá khi tải lỗi); đổi danh sách
+  lúc danh sách khác đang tải thì tải tiếp danh sách mới; mở kênh khi phim đang thu nhỏ thì tắt phim đó; kênh bị lọc (hồ sơ trẻ em) thì báo
+  thay vì phát kênh số 1; nhật ký che username / mật khẩu trong link Xtream.
+- **Khác:** «Kiểm tra cập nhật» không còn kẹt khi đóng Cài đặt giữa lúc tải; tên miền sai không làm mọi máy chủ DNS bị coi là hỏng; dán nhiều
+  trang bỏ qua «v.v.», «e.g.»; xoá người xem thì xoá cả chất lượng video / ngôn ngữ phụ đề của người đó.
+- bản 2.23 · versionCode 47 · tag `v2.23` (Latest) · commit `dbbb331` (sửa: `cb0a27d`, `037d9e3`) · `ConBangTV-2.23.apk` = `ConBangTV.apk` =
+  `ChimToTV.apk` 151 569 152 byte · SHA-256 `ec7fcca761fc461e243bde1cbd530f6b79b3103cd8cb36c9b8efdca71d561c05` · chứng chỉ `949ef2b5…177b`
+- Thử: test đơn vị 193 đạt (mới: `TvLogTest`, ca «v.v.» trong `SitePasteTest`). Bản thử trên TX3: hết giờ → Home → mở lại, kênh không phát
+  lại; Home khi đang xem thì dừng hẳn, mở lại phát tiếp; chỉnh đồng hồ giả lập 31 phút → về màn chính hỏi «Ai đang xem?»; ý định thông báo
+  nhắc giờ → hỏi người xem rồi mới mở VTV1; «Sửa người xem…» ở màn chặn của hồ sơ có khoá chỉ còn phần Người xem; lịch phát sóng giữ nguyên
+  lúc đang tải lại.
+- Đăng lúc 11:45:53 bằng `release.ps1 tv` (Latest = `v2.23`, ba tệp cùng SHA-256, hai link cố định đúng 2.23). **Tự cập nhật thật 2.22 → 2.23
+  trên TX3**: «Có bản mới 2.23 (đang dùng 2.22)» (đủ «Có gì mới») → «Cài đặt ngay» → màn cài của hệ thống (▼ rồi ▶ tới «CÀI ĐẶT») → **2.23
+  lúc 12:03:27**, mở lại chạy bình thường.
+
+## iPad / iPhone 1.23 và Mac 1.23 — 18/11/2026 (sửa lỗi sau audit)
+
+- **Hết giờ xem:** phim ở cửa sổ hình trong hình / bấm ▶ trên màn hình khoá, AirPods thì dừng lại ngay (trước chỉ dừng một lần); không vào
+  hình trong hình khi đang hết giờ; truyền hình huỷ việc chờ khi hết giờ (không tự phát sau màn «Hết giờ xem»).
+- **«Ai đang xem?»:** xoá người đang xem từ màn này (mở từ menu) mà người còn lại đều có mã PIN thì màn này thành màn chặn cửa; ở màn chặn của
+  người có mã PIN, nút thành «Quản lý người xem…» và chỉ mở phần Người xem (không xoá lịch sử / đổi trang phim… khi chưa nhập mã).
+- **Truyền hình:** không còn nhảy về kênh cũ khi danh sách vừa tải lại; danh sách tải ra tệp tạm, đọc được kênh mới thay tệp cũ (trang HTML
+  của Wi‑Fi khách sạn không còn xoá danh sách); bộ lọc «Yêu thích» nhớ theo người xem; lưới kênh không tràn màn iPhone khi chữ cỡ lớn; chạm
+  widget «Xem tiếp» lúc đang nghe radio thì tắt kênh trước.
+- **Đồng bộ:** sai mã ghép 20 lần thì ngừng cho ghép. **Kết nối:** DNS mã hoá dùng mọi địa chỉ, hết thì DNS của máy (mạng IPv6 / NAT64); tải
+  danh sách kênh thử lại bằng mạng của máy với mọi lỗi kết nối. **Khác:** không văng với JSON lồng quá sâu / số tập quá lớn; bộ cập nhật đọc
+  100 release; nhật ký che tài khoản trong link; dán nhiều trang bỏ qua «v.v.».
+- iPad / iPhone: bản 1.23 (build 30) · tag `ios-v1.23` · `ConBangTV-iPad-1.23.ipa` 5 966 967 byte · SHA-256
+  `117d3a7b0c1a1c2a33204b4f7284d9c3654045fe3a6805bd45952882a92f7139`; Mac: bản 1.23 (build 30) · tag `mac-v1.23` · `ConBangTV-Mac-1.23.zip`
+  9 069 372 byte (Intel + Apple Silicon, ký ad-hoc, `codesign --verify` đạt, không cổng gỡ lỗi) · SHA-256
+  `e68a787aaea731a2c13848b4a862fdfd92c6eedcde4412640d5b65a0f1a1ab60` · commit `dbbb331` (sửa: `cb8052b`, `13b140e`) · dựng trên Mac mini
+- Thử: test lõi Swift 179 đạt (mới: `LogTests`, ca độ lồng JSON / số lớn, «v.v.»). Bản Mac thử: phát / chuyển / đóng kênh; DNS trả đủ các địa
+  chỉ; màn chặn của hồ sơ có khoá → «Quản lý người xem…» chỉ mở trang «Người xem». IPA chính (`vn.chimto.tv` 1.23 / 30, không `/tvstatus`) cài
+  lên iPhone 6s Plus bằng TrollStore, mở được, không có báo cáo sập.
+- Đăng lúc 11:48:31 (iPad) và 12:04:16 (Mac) bằng `release.ps1 ipad|mac -File dist\mac\…`; link cố định chép đè, khớp SHA-256. **Tự cập nhật
+  thật Mac 1.22.1 → 1.23** (Mac mini): «Có bản mới 1.23 — Đang dùng 1.22.1» → «Cài đặt ngay» → mở lại 1.23 trong ~5 giây (12:06).
+
+## Windows 1.21 — 18/11/2026 (sửa lỗi sau audit)
+
+- **Truyền hình:** không còn nhảy về kênh cũ khi danh sách vừa tải lại; «Kênh trước / sau nữa» chỉ lật trang bảng kênh (trước đổi luôn kênh
+  đang xem); trang Truyền hình không còn hai hàng nhóm kênh khi vẽ lại chồng nhau.
+- **Hộp thoại khuất sau trình phát:** «Có bản mới» không hiện lúc đang xem phim / truyền hình (lỡ bấm OK là cập nhật giữa lúc xem) — hỏi khi
+  đóng trình phát, và hỏi sau màn «Ai đang xem?»; nhắc giờ phát báo ngay trong trình phát phim.
+- Mở trình duyệt chỉ nhận link http(s). Từ lõi Rust: sai mã ghép 20 lần thì ngừng cho ghép (bỏ SO_REUSEADDR — hai cửa sổ app không nghe chồng
+  cổng); danh sách kênh tải lỗi không xoá danh sách đang dùng; DNS mã hoá dùng mọi địa chỉ; bộ cập nhật đọc 100 release; log.txt che tài khoản
+  trong link; JSON lồng quá sâu không làm app văng; ghi prefs.json lần lượt.
+- bản 1.21.0 · tag `win-v1.21` · `ConBangTV-Windows-1.21.exe` 120 364 438 byte · SHA-256
+  `97a66f7a6cd53ac00a13118fe07b9e30b23bba09dc48721f5656342c3b965aaa` · commit `dbbb331` (sửa: `799da2e`, `8c7454c`)
+- Thử: `windows\build.ps1` — test lõi Rust 195 + tích hợp đạt, .NET 38 đạt. Bản thử: lật trang bảng kênh giữ kênh 1, chọn kênh 141 ở trang mới
+  mở được, ▼ sang 142; trang chủ và kênh phát qua đường kết nối mới. Tệp đóng gói chạy với thư mục dữ liệu riêng.
+- Đăng lúc 11:51:04 bằng `release.ps1 windows`; link cố định `conbangtv_windows` = 1.21. **Tự cập nhật thật 1.20 → 1.21** (bản sao chạy riêng):
+  «Có bản mới» → «Cập nhật ngay» (UI Automation) 12:07:59 → tệp chạy 1.21.0 lúc 12:08:18, mở lại bình thường.
+
+## Linux 1.7 — 18/11/2026 (sửa lỗi sau audit)
+
+- **Đỡ tốn bộ nhớ:** trang rời khỏi ngăn trang (mở mục menu khác, thay trang, Back) được huỷ từng ô — trước đây hàm bấm giữ tham chiếu tới
+  chính trang nên không trang nào được giải phóng (ảnh bìa, hẹn giờ mỗi giây của màn Truyền hình). Thử 120 lần chuyển trang: 120/120 trang
+  được giải phóng, bộ nhớ đứng ~150 MB (trước tăng 159 → 183 MB).
+- **Truyền hình:** không còn nhảy về kênh cũ khi danh sách vừa tải lại (số lượt không về 0 khi mở lại); «Kênh trước / sau nữa» chỉ lật trang;
+  link kênh có ký tự NUL không làm app tắt; đóng app ghi nốt giờ đã xem truyền hình; không đưa con trỏ về menu ẩn sau trình phát.
+- **Hộp thoại:** Tab / Shift+Tab / Enter không lọt xuống trang phía sau (màn «Ai đang xem?» chặn cửa) — Tab đi vòng trong hộp thoại.
+- Từ lõi Rust: như bản Windows 1.21 (mã ghép, danh sách kênh, DNS mọi địa chỉ, cập nhật 100 release, log che tài khoản, JSON sâu).
+- bản 1.7.0 · tag `linux-v1.7` · `ConBangTV-Linux-1.7.deb` 6 224 572 byte · SHA-256 `3854fe04ac7baec0f941deeb3c5b3aac6c023fdbb1ebcd58d02ab5053d60ea2f` ·
+  commit `dbbb331` (sửa: `799da2e`, `8c7454c`) · dựng trong container Ubuntu 22.04 (glibc ≤ 2.34), tệp chạy không có cổng gỡ lỗi
+- Thử: test lõi đạt trên máy ảo (195 + tích hợp). Bản thử: Tab trong hộp miễn trừ đi vòng «Đồng ý» ↔ «Thoát»; lật trang bảng kênh giữ kênh đang
+  xem, chọn kênh 141 mở được; 120 lần chuyển trang không văng, không lỗi GTK.
+- Đăng lúc 11:53:31 bằng `release.ps1 linux`; link cố định `conbangtv_linux` = 1.7. **Tự cập nhật thật 1.6 → 1.7** trên máy ảo: «Có bản mới:
+  Côn Bằng TV 1.7» → «Cập nhật ngay» → gói 1.7.0 lúc ~12:05:20, mở lại `--updated`.
+
 ## iPad / iPhone 1.22.1 và Mac 1.22.1 — 17/11/2026 (sửa: bàn phím che ô dán nhiều trang)
 
 - **Sửa lỗi của 1.22 trên iPhone / iPad:** ô dán nhiều trang (SwiftUI `TextEditor`) ở **Chọn trang phim** → «Thêm trang» và **Cài đặt** → **Địa chỉ trang phim** không tự cuộn lên trên bàn phím như ô một dòng cũ — chạm ô ở nửa dưới màn hình là bàn phím che ô, gõ không thấy chữ (đo trên iPhone 6s Plus iOS 15: bàn phím từ y 435; ô ở y 415 / 513 → bị che). Giờ chọn ô (và khi ô thêm / bớt dòng) thì danh sách cuộn ô lên sát thanh tiêu đề, nút Thêm / Lưu ngay dưới (`@FocusState` + `ScrollViewReader`, neo mép trên — neo nút vào mép bàn phím thì Form Cài đặt cuộn quá ~200 pt). Mac không đổi cách dùng (không cuộn), chỉ giữ cùng số bản.

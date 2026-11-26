@@ -67,8 +67,7 @@ enum TvAlert {
     /// `fields`: ô nhập (giá trị đầu, chữ mờ); `done(nút, chữ trong các ô)`. Nút cuối là nút huỷ khi có từ hai nút.
     static func show(_ title: String, _ message: String?, _ buttons: [String], fields: [(String, String)] = [],
                      done: @escaping (Int, [String]) -> Void) {
-        let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
-        guard let scene = scenes.first(where: { $0.activationState == .foregroundActive }) ?? scenes.first else { return }
+        guard let scene = CarScreen.mainScene else { return } // đang chiếu lên màn xe: hỏi trên màn xe
         window?.isHidden = true
         let main = scene.windows.first { $0.isKeyWindow } ?? scene.windows.first
         let w = UIWindow(windowScene: scene)

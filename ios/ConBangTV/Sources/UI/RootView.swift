@@ -5,9 +5,8 @@ import UIKit
 @MainActor
 enum Router {
     static var topController: UIViewController? {
-        let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
-        let windows = scenes.flatMap { $0.windows }
-        var vc = (windows.first { $0.isKeyWindow } ?? windows.first)?.rootViewController
+        // Cửa sổ đang hiện giao diện chính: màn xe (CarPlay) khi đang chiếu lên xe, không thì cửa sổ điện thoại / iPad / Mac
+        var vc = CarScreen.mainWindow?.rootViewController
         while let p = vc?.presentedViewController, !p.isBeingDismissed { vc = p }
         return vc
     }
@@ -258,6 +257,9 @@ struct HomeContent: View {
         if app.active?.kind == .tv {
             // Truyền hình · Radio: trang riêng (UI/TvViews.swift), cùng khung chính
             TvContent(showMenuButton: showMenuButton, openMenu: openMenu)
+        } else if app.active?.kind == .tube {
+            // TubeMini (UI/TubeViews.swift)
+            TubeContent(showMenuButton: showMenuButton, openMenu: openMenu)
         } else {
             films
         }
@@ -304,13 +306,17 @@ struct HomeContent: View {
                             .focused($searchFocused)
                             .submitLabel(.search)
                             .onSubmit { app.doSearch() }
+                            .carSubmit(searchFocused) { app.doSearch() } // bàn phím riêng của màn xe (CarPlay)
                             .disableAutocorrection(true)
                             .foregroundColor(Theme.text)
                     }
                     .padding(.horizontal, 14)
                     .padding(.vertical, 12)
                     .background(RoundedRectangle(cornerRadius: 12).fill(Theme.surface2))
-                    Button("Tìm") { app.doSearch() }
+                    Button("Tìm") {
+                        app.doSearch()
+                        CarKeyboard.shared.hide() // màn xe: bàn phím riêng che gần hết kết quả
+                    }
                         .buttonStyle(.borderedProminent)
                         .tint(Theme.brand)
                         .controlSize(.large)

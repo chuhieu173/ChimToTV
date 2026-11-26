@@ -13,4 +13,9 @@ WKWebsiteDataStore *_Nullable CBTProxiedDataStore(NSDictionary *proxy);
 /// Các SPI cần dùng có mặt không (cho cổng gỡ lỗi).
 NSDictionary<NSString *, NSNumber *> *CBTWebKitSPIInfo(void);
 
+// Ô nhập chữ trên màn xe (UI/CarInput.m): không mở bàn phím hệ thống, app vẽ bàn phím riêng.
+void CBTInstallCarInput(void);
+void CBTSetCarKeyboard(BOOL on);
+BOOL CBTCarKeyboardEnabled(void);
+
 NS_ASSUME_NONNULL_END

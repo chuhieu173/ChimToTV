@@ -111,6 +111,8 @@ struct Video {
     var hls: Bool = false
     var subs: [SubTrack] = []
     var subsLater: String? = nil
+    /// Luôn phát bằng AVPlayer (NativeFilm) — TubeMini: HLS của máy chủ (đường dẫn không có đuôi .m3u8), «Chỉ nghe»…
+    var avPlayer: Bool = false
 }
 
 /// Cách phát một tập (xem Site.kt): player.php → iframe; pageMode → mở thẳng trang tập; next → trang Next.js.

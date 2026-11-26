@@ -28,6 +28,10 @@ import WebKit
 ///   POST /upload  (thân = .ipa)    đẩy bản mới lên iPad  ·  GET /ipa  tải lại tệp đó
 ///   POST /update[?url=…]           cài .ipa qua TrollStore (apple-magnifier://install); không url = tệp vừa đẩy lên
 ///   POST /macupdate?version=…[&url=…]  bản Mac: tự cập nhật bằng tệp .zip (không url = tệp vừa đẩy lên bằng /upload)
+///   GET  /car[?phone=1|0&moving=1|0|auto&syskb=1|0&type=…&kb=hide]   màn xe (CarPlay): trạng thái; phone = giao diện về điện
+///            thoại / lên màn xe; moving = giả xe chạy / đứng (auto = theo GPS); syskb=1 dùng bàn phím hệ thống trên màn xe;
+///            type = gõ bằng bàn phím riêng của màn xe ("\n" = phím Tìm / Xong)
+///   Thêm w=phone|car vào /shot /ui /press /scroll /focus: chọn cửa sổ (mặc định cửa sổ đang hiện giao diện chính)
 final class DebugServer {
     static let shared = DebugServer()
     let port: UInt16 = 8790
@@ -227,7 +231,19 @@ enum DebugRoutes {
 
     static func handle(_ r: Request) async -> Response {
         let q = r.query
+        windowPick = q["w"]
         switch r.path {
+        case "/car":
+            let car = CarScreen.shared
+            if let p = q["phone"] { car.onPhone = p == "1" }
+            if let m = q["moving"] { car.fakeMoving = m == "auto" ? nil : m == "1" }
+            if let s = q["syskb"] { CBTSetCarKeyboard(s != "1") }
+            if q["kb"] == "hide" { CarKeyboard.shared.hide() }
+            if let d = q["dim"] { if d == "1" { car.dimPhone() } else { car.undimPhone() } }
+            let typed = q["type"].map { CarKeyboard.shared.typeText($0) }
+            var o = car.debugInfo
+            if let t = typed { o["typed"] = t }
+            return .json(o)
         case "/", "/help":
             return .text("Cổng gỡ lỗi Côn Bằng TV (bản thử). Xem chú thích trong ios/ConBangTV/Sources/Debug/DebugServer.swift")
         case "/ping":
@@ -237,7 +253,7 @@ enum DebugRoutes {
                 "bundle": Bundle.main.bundleIdentifier ?? "", "ios": UIDevice.current.systemVersion, "model": UIDevice.current.model,
                 "machine": machine(), "screen": [Int(s.width), Int(s.height), Int(UIScreen.main.scale)],
                 "site": Prefs.baseUrl, "ua": Http.userAgent, "ip": DebugServer.wifiAddress() ?? "",
-                "appState": appState(),
+                "appState": appState(), "car": CarScreen.shared.connected, "uiOnCar": CarScreen.shared.uiOnCar,
             ])
         case "/frames":
             return .json(PlayerModel.current?.frames.map { $0.url } ?? [])
@@ -351,6 +367,20 @@ enum DebugRoutes {
                           "found": s.found.map { ["id": $0.id, "name": $0.name, "platform": $0.platform, "endpoint": "\($0.endpoint)"] }])
         case "/go":
             return go(q)
+        case "/tube":
+            // TubeMini: /tube (trạng thái), /tube?server=<địa chỉ> (như Lưu ở hộp ⚙︎: tự chọn http / https, ping; chờ kết quả),
+            // /tube?edit=1 (mở hộp ⚙︎), /tube?guide=1 (hộp «Cách lấy mã»). Mã thiết bị trong địa chỉ được che.
+            let m = TubeModel.shared
+            if q["edit"] == "1" { m.editServer() }
+            if q["guide"] == "1" { m.showGuide() }
+            if q["bot"] == "1" { m.openBot() } // như bấm «Chat với bot»
+            if let t = q["quality"] { TubeMini.quality = t } // tm1080 | tm720 | tm360 | tmaudio
+            if q["pickq"] == "1" { PlayerModel.current?.chooseTubeQuality() } // hộp chất lượng của trình phát
+            if let s = q["server"] {
+                m.setServer(s, toast: true)
+                for _ in 0..<40 where m.serverNote == "Đang kiểm tra…" { try? await Task.sleep(nanoseconds: 250_000_000) }
+            }
+            return .json(m.debugInfo)
         case "/row":
             // Sửa nhanh hàng trang chủ (như giữ ô phim): /row?id=<id hàng>&do=info|hide|up|down|rows|sources
             let app = AppModel.shared
@@ -375,6 +405,7 @@ enum DebugRoutes {
                 Task { try? await Iptv.refresh(force: true) }
                 return .json(["ok": true, "id": l.id])
             }
+            if let id = q["remove"] { Iptv.removeList(id) } // /tv?remove=<mã danh sách>: bỏ danh sách thử
             if let n = q["use"].flatMap(Int.init), n >= 0, n < Iptv.lists().count {
                 TvModel.shared.useList(Iptv.lists()[n].id)
             }
@@ -773,13 +804,21 @@ enum DebugRoutes {
         return nil
     }
 
+    /// Tham số w=phone|car của lệnh đang chạy.
+    private static var windowPick: String?
+
+    /// Cửa sổ các lệnh màn hình làm việc: mặc định cửa sổ đang hiện giao diện chính (màn xe khi đang chiếu lên xe).
     private static var keyWindow: UIWindow? {
-        let windows = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.flatMap { $0.windows }
-        return windows.first { $0.isKeyWindow } ?? windows.first
+        switch windowPick {
+        case "phone": return CarScreen.phoneWindow
+        case "car": return CarScreen.shared.window
+        default: return CarScreen.mainWindow
+        }
     }
 
     private static func screenshot(scale: CGFloat) -> Data? {
         guard let w = keyWindow else { return nil }
+        let overlay = CarScreen.shared.overlayWindow.flatMap { !$0.isHidden && $0.windowScene === w.windowScene ? $0 : nil }
         let fmt = UIGraphicsImageRendererFormat()
         fmt.scale = max(0.2, min(3, scale))
         guard UIApplication.shared.applicationState == .active else { return nil }
@@ -789,10 +828,12 @@ enum DebugRoutes {
         var ok = false
         var img = UIGraphicsImageRenderer(bounds: w.bounds, format: fmt).image { _ in
             ok = w.drawHierarchy(in: w.bounds, afterScreenUpdates: false)
+            if let o = overlay { o.drawHierarchy(in: o.frame, afterScreenUpdates: false) } // bàn phím / màn «xe đang chạy»
         }
         if !ok {
             img = UIGraphicsImageRenderer(bounds: w.bounds, format: fmt).image { _ in
                 ok = w.drawHierarchy(in: w.bounds, afterScreenUpdates: true)
+                if let o = overlay { o.drawHierarchy(in: o.frame, afterScreenUpdates: true) }
             }
         }
         return ok ? img.jpegData(compressionQuality: 0.75) : nil

@@ -181,6 +181,47 @@ Mục **Truyền hình · Radio** trong menu: xem kênh truyền hình và nghe 
 - **Phím:** tivi ▲ ▼ hoặc CH+ / CH− đổi kênh, phím số nhảy tới kênh, OK hiện nút (☰ Kênh, Tạm dừng, ☆…); Windows / Linux PgUp /
   PgDn đổi kênh, gõ số; iPad / Mac có bàn phím ↑ ↓, gõ số, Space dừng / phát.
 
+## TubeMini (từ iPad · iPhone · Mac 1.25)
+
+Mục **TubeMini** trong menu (ngay dưới «Truyền hình · Radio»): xem YouTube qua máy chủ TubeMini của dự án
+[TubeMini](https://github.com/TubeMini/TubeMini) (Rust + yt-dlp; từ máy chủ 0.7.0 là repo riêng, ra Internet qua Cloudflare, nhiều người
+dùng). App là một «app khách» theo hợp đồng `docs/API.md` của máy chủ: danh sách video là feed Atom kiểu GData, link phát / kênh theo dõi
+/ lịch sử ở `/tm/v1`. Video không đi qua máy chủ — máy chủ trả playlist HLS đã lọc (tiếng gốc), đoạn video tải thẳng từ YouTube (link lấy
+ở mạng nhà máy chủ phát được cả từ 4G). Mã: `ios/ConBangTV/Sources/Core/TubeMini.swift`, `UI/TubeViews.swift`; test
+`ios/CoreTests/TubeMiniTests.swift`.
+
+- **Lấy mã (từ 1.26):** mỗi máy một địa chỉ có mã thiết bị `tên-miền/u/<mã>` do bot Telegram **@tube_mini_bot** cấp. Màn cài đặt lần
+  đầu có khung «Cách lấy mã qua bot Telegram»: (1) nút xanh **«Chat với bot @tube_mini_bot»** mở thẳng khung chat trong app Telegram
+  (`tg://resolve?domain=tube_mini_bot`; chưa cài Telegram thì mở `t.me`) → bấm «📝 Đăng ký»; (2) chép địa chỉ bot gửi («📋 Chép địa chỉ»
+  — tin tự xoá sau một lúc); (3) dán vào ô → «Lưu và kiểm tra». Lưu ý ngay dưới: mất địa chỉ → «👤 Tài khoản của tôi» → «Cấp lại mã»;
+  tối đa 2 máy mỗi người (máy thứ hai «➕ Thiết bị mới», chờ duyệt); máy chủ chỉ nhận mạng Việt Nam; máy chủ riêng trong nhà không cần
+  mã. Tên nút chép đúng như bot hiện (`TubeMini_Server/server/src/bot/mod.rs`) — bot đổi thì sửa `TubeMini.botSteps` / `botNotes`.
+- **Địa chỉ:** chữ dán vào được làm sạch trước (từ 1.26.1, `TubeMini.cleanAddress`: bỏ ký tự vô hình mà Telegram hay chèn khi chép
+  — chúng làm mã sai → máy chủ báo 404 —, khoảng trắng, gạch nối lạ; dán cả tin của bot thì lấy từ có `/u/`; dính địa chỉ cũ thì lấy
+  `http(s)://` cuối). Không cần gõ `https://` — như app TubeMini 0.7.0, địa chỉ trong nhà (IPv4, tên không dấu chấm, `.local` / `.lan` / `.home`
+  / `.internal`, cổng khác 443) thêm `http://`, tên miền thêm `https://`; tên máy viết thường, mã giữ nguyên chữ hoa / thường. «Lưu và kiểm
+  tra» ping `/tm/v1/ping` (báo bản máy chủ, yt-dlp, Deno); không tới được thì thử scheme còn lại, http bị chuyển sang https thì giữ https
+  (POST không qua được lệnh chuyển hướng). Báo rõ 404 (mã sai / thu hồi / thiếu mã ngoài nhà), 403 (mạng nước ngoài). Không còn ô mã
+  (token) / `X-Auth-Token` (máy chủ bỏ từ 0.7.0). Sửa sau bằng nút ⚙︎ (Lưu / Chat với bot Telegram / Cách lấy mã). Nhật ký che `/u/<mã>`.
+- **Trang:** ô tìm (kính lúp) ngay cạnh chữ TubeMini — tìm video và kênh; chip Đã theo dõi / Phổ biến / Âm nhạc / Tin tức / Thể thao /
+  Trò chơi / Phim / Lịch sử / Kênh; thẻ video 16:9 (thời lượng, vạch đã xem, kênh · lượt xem · thời gian); trang kênh có nút Theo dõi.
+  Ảnh thẻ (từ 1.27): hq720 1280×720 → sddefault → hqdefault (luôn có), `ImageCache.image(first:)` + `PosterImage(fallbacks:)`, ảnh 404
+  nhớ 7 ngày (dấu `.404`); giải mã tối đa 960 điểm ảnh (màn «Chỉ nghe» 1280).
+  Giữ ngón tay trên thẻ: Chỉ nghe, mở kênh, theo dõi / bỏ theo dõi, xoá khỏi lịch sử. Cuộn xuống thì thanh trên (tiêu đề, ô tìm, chip)
+  trượt khuất, cuộn lên / về đầu thì hiện lại (như menu nổi của Roza).
+- **Phát:** bằng trình phát phim của app, luôn qua AVPlayer: danh sách đang xem thành «tập» (video kế / trước, tự sang video sau khi
+  hết); chất lượng là «server» (từ 1.27: **mặc định 1080p**, nút chất lượng cạnh nút Menu → hộp chọn 1080p / 720p / 360p / Chỉ nghe, Menu
+  ghi «Chất lượng video», hộp ⚙︎ của trang có «Chất lượng video: …»; nhớ theo hồ sơ ở khoá `server_type@video` = `TubeMini.quality`);
+  video có quảng cáo đầu thì chờ YouTube mở link
+  (`available_in`, vài giây); xem tiếp đúng chỗ và lưu chỗ xem lên máy chủ (15 giây / lần, khi đóng thì lưu ngay) — **theo tài khoản của
+  mã (trong nhà không mã = chủ máy chủ), dùng chung với app TubeMini cùng tài khoản, không chia theo người xem, không vào «Lịch sử xem» phim**. «Tải lại» xin link mới. Trên màn xe CarPlay có hình cả khi tắt
+  màn iPhone; ô tìm trên bảng điều khiển của điện thoại tìm TubeMini khi đang ở mục này.
+- **Người xem:** hồ sơ trẻ em không có mục TubeMini (máy chủ không lọc nội dung trẻ em); giới hạn giờ xem tính cả TubeMini.
+- **Thử khi dựng:** bản Mac thử trên Mac mini cùng mạng với máy chủ; trên bản Mac cổng gỡ lỗi `/ui` / `/press` không thấy phần tử — mở
+  video bằng `/go?to=play&film=tubemini://video/<id>&ep=tubemini://video/<id>`, đặt địa chỉ bằng `/tube?server=<địa chỉ>` (chờ ping, trả
+  ghi chú + địa chỉ đã che mã), `/tube?guide=1` (hộp «Cách lấy mã»), `/tube?bot=1` (như bấm «Chat với bot»). Hộp thoại nằm ở cửa sổ riêng,
+  `/shot` không chụp được — chụp cả màn hình Mac (`Mac-Shot`).
+
 ## Trang phim hỗ trợ
 
 Có sẵn trong danh sách (menu **Đổi trang phim**). Mở menu này là app đo ngay từng trang: tải trang chủ mất bao lâu,
@@ -371,6 +412,29 @@ Cùng app cho iPad và iPhone (iOS / iPadOS 15 trở lên, cài bằng TrollStor
   hướng dẫn, «Chép» chép tin nhắn đó — xem [Cài trên Android TV bằng Downloader](#cài-trên-android-tv-bằng-downloader).
 - **Khác bản TV:** không có con trỏ ảo (chạm thẳng vào trang web). Lúc bật proxy / vượt chặn / DNS mã hoá, trên iPadOS 15–16
   app không giữ cookie của trang web sau khi tắt app.
+
+### Màn xe CarPlay (iPhone, từ 1.24)
+
+Apple chỉ cho app lên CarPlay bằng giao diện mẫu và không cho phát video; app cài bằng TrollStore nên tự khai quyền `SBStarkCapable`
+(`ios/scripts/package.sh`) và cảnh `UIWindowSceneSessionRoleCarPlay` (khoá `UIApplicationSceneManifest~iphone` trong `ios/project.yml` —
+iPad / Mac giữ một cửa sổ) — cách của [CarTube](https://github.com/Avangelista/CarTube). Mã: `ios/ConBangTV/Sources/UI/CarScreen.swift`,
+`UI/CarInput.m`, `Player/NativeFilm.swift`.
+
+- **Dùng:** cắm iPhone vào xe / màn CarPlay (màn cảm ứng) → chạm biểu tượng Côn Bằng TV trên CarPlay. Màn xe hiện **nguyên giao diện app**
+  (chạm trên màn xe); điện thoại thành **bảng điều khiển**: phim / kênh đang phát và nút điều khiển, ô tìm phim (kết quả hiện trên màn
+  xe), «Tắt sáng màn điện thoại», «Dùng trên điện thoại» (giao diện về điện thoại; đang xem thì phim đóng ở màn xe và mở lại đúng chỗ ở
+  điện thoại — và ngược lại). Rút dây thì phim đóng (lưu chỗ xem), không tự phát tiếp trên điện thoại.
+- **Phim trên màn xe:** luồng `.m3u8` / tệp video (KKPhim…) phát bằng **AVPlayer** — có hình cả khi tắt màn iPhone, tự bỏ khối quảng
+  cáo KKPhim chèn giữa phim; danh sách phát và đoạn video đi qua mạng của app (DNS mã hoá / vượt chặn / proxy — cổng chuyển tiếp
+  127.0.0.1). Server riêng của trang (nhúng, mã hoá) chỉ phát được bằng trình phát web: WebKit bỏ khung hình khi màn iPhone tắt nên
+  cần màn iPhone bật (bấm «Tắt sáng màn điện thoại» cho tối hẳn); vì vậy trên màn xe app tự mở server KKPhim dự phòng (cùng kiểu
+  Vietsub / Thuyết minh) nếu phim có. AVPlayer không mở được luồng thì tự quay về trình phát web. Truyền hình (AVPlayer) có hình cả khi
+  tắt màn iPhone.
+- **Xe đang chạy** (tốc độ GPS ≥ 10 km/h trong 2 giây; dừng: < 4 km/h trong 6 giây): màn xe bị che, chỉ phát tiếng, nút điều khiển cỡ
+  lớn. Lần đầu nối xe iPhone hỏi quyền vị trí — chọn «Cho phép khi dùng ứng dụng».
+- **Gõ chữ trên màn xe:** bàn phím riêng của app (bàn phím của iPhone hiện trên màn xe bị lỗi).
+- **Thử khi không có người ngồi cạnh** (iPhone thử có jailbreak Dopamine): cổng gỡ lỗi `/car` (trạng thái; `phone=1|0`, `moving=1|0|auto`,
+  `type=…`), thêm `w=phone|car` cho `/shot` `/ui` `/press`…; công cụ mở khoá / chạm biểu tượng CarPlay nằm ngoài repo (bộ công cụ máy thử).
 
 ## Bản Mac
 
@@ -563,11 +627,14 @@ TV / iPad dùng chung cả nhà: mỗi người một hồ sơ, chọn ở màn 
 - Lịch sử có từ trước là của người xem đầu tiên **Cả nhà** (đổi tên được). Thêm người ở **Cài đặt → Người xem** (tối đa
   8, mỗi người một màu); người mới bắt đầu với trang phim + cài đặt xem của người đang dùng, lịch sử trống.
 - Nhà có từ 2 người: mở app — và quay lại app sau 30 phút không dùng — thì hỏi **Ai đang xem?** (tắt được: "Hỏi «Ai đang
-  xem?» khi mở app"). Đổi người lúc nào cũng được: mục **Người xem: …** đầu menu (iPad: tên người xem ở đầu menu).
+  xem?» khi mở app"). Đổi người lúc nào cũng được: mục **Người xem: …** đầu menu (iPad: tên người xem ở đầu menu). Từ TV 2.23,
+  quay lại sau 30 phút ở bất kỳ màn nào (Truyền hình, trang phim, trình phát…) cũng về màn chính hỏi người xem; thông báo nhắc
+  giờ phát cũng hỏi người xem trước khi mở kênh.
 - **Mã PIN** 4 số, bật / tắt riêng từng người (Cài đặt → chọn người → Đặt / Đổi / Tắt mã PIN): người có mã phải nhập đúng
   mới mở hồ sơ, sửa hay xoá. App chỉ lưu mã băm. Người đang dùng có mã thì mở app luôn phải nhập mã (kể cả khi tắt hỏi
   "Ai đang xem?"). Quên mã: chỉ xoá dữ liệu app (mất lịch sử, cài đặt) mới mở lại được — PIN để trẻ khỏi vào nhầm hồ sơ
-  người lớn, không phải mật khẩu bảo mật.
+  người lớn, không phải mật khẩu bảo mật. Màn «Ai đang xem?» đang chặn (người đang dùng có mã): «Sửa người xem…» / «Quản lý
+  người xem…» chỉ mở phần Người xem (TV 2.23 / iPad · iPhone · Mac 1.23; Windows / Linux không mở).
 - Đổi người lúc phim đang thu nhỏ: app lưu chỗ xem cho người cũ rồi đóng phim đó.
 
 ## Đồng bộ trong nhà (từ 2.2)
@@ -576,7 +643,8 @@ TV và iPad / iPhone (bản 1.3+) cùng mạng Wi‑Fi đồng bộ với nhau: 
 
 - **Ghép máy:** TV: Cài đặt → **Đồng bộ với iPad / iPhone…** (hiện mã ghép 4 số); iPad / iPhone: Cài đặt → **Đồng bộ trong
   nhà** (cũng hiện mã) → chọn máy kia trong danh sách «Ghép với máy khác» rồi nhập mã đang hiện trên máy đó. Mã chỉ dùng được
-  lúc màn đồng bộ đang mở, dùng một lần; đoán sai 5 lần thì đổi mã. Mạng chia nhiều lớp (máy không tự thấy nhau) thì gõ địa
+  lúc màn đồng bộ đang mở, dùng một lần; đoán sai 5 lần thì đổi mã, sai tổng cộng 20 lần thì ngừng cho ghép tới khi mở lại
+  màn đồng bộ (từ TV 2.23 / iPad · Mac 1.23 / Windows 1.21 / Linux 1.7). Mạng chia nhiều lớp (máy không tự thấy nhau) thì gõ địa
   chỉ IP của máy kia. Lần đầu iPad / iPhone hỏi cho phép tìm thiết bị trong mạng cục bộ: chọn Cho phép.
 - **Đồng bộ gì:** lịch sử xem, hàng Xem tiếp, chỗ đang xem dở, tập đã xem, phim theo dõi (số tập đã thấy), danh sách trang
   phim. Người xem đầu tiên của hai máy ghép với nhau, người khác ghép theo tên (vd «Bố» ↔ «Bố»); người chỉ có ở một máy
@@ -653,6 +721,10 @@ thay vì ~200 ms trở lên. Tên miền không có (NXDOMAIN) là trả lời t
 máy chủ video `v.lumenbox.top` của dexter.pw) thì app hỏi máy chủ sau (Cloudflare → Google) thay vì dừng ở câu trả lời đó (trước đây
 coi là trả lời thật nên phim đứng hình). Nhà mạng không đọc / sửa được truy vấn DNS, nhưng vẫn thấy tên trang lúc kết nối (phần
 đó do [Vượt chặn nhà mạng](#vượt-chặn-nhà-mạng-từ-21) lo) và IP đích. Đang bật proxy với «DNS của proxy» thì proxy tự hỏi DNS.
+**Từ 2.23 / iPad · Mac 1.23 / Windows 1.21 / Linux 1.7:** app giữ **mọi** địa chỉ máy chủ DNS trả (trước chỉ giữ địa chỉ đầu); kết
+nối thẳng thử lần lượt tối đa 4 địa chỉ (4 giây mỗi địa chỉ, địa chỉ cuối 10–15 giây), hết thì thử địa chỉ DNS của máy (khác các địa
+chỉ đã thử, không phải địa chỉ chặn) — CDN / dịch vụ rút gọn link có một địa chỉ chết không còn làm hỏng tới hết thời hạn nhớ, mạng chỉ
+có IPv6 / NAT64 vẫn vào được. Tên miền sai (nhãn rỗng, dài quá 63 byte) không làm máy chủ DNS nào bị coi là hỏng.
 
 Tắt DNS mã hoá mà vẫn bật Vượt chặn: DNS của máy trả 0.0.0.0 / :: (bị chặn) hoặc không trả lời thì app vẫn hỏi lại qua chuỗi
 trên — vd ảnh bìa CLB Phim Xưa (`clbphimxua.com`) bị bộ lọc DNS trong nhà chặn.
@@ -914,21 +986,24 @@ web mà app đọc.
 
 ## Logo
 
-Logo và banner TV vẽ bằng SVG trong `design/logo.html`. Từ 17/11/2026 dùng **phương án D «Đĩa kính 3D»** (như icon bản Legacy):
-đĩa kính tròn nền trong suốt, vòng bút mực vàng và ấn triện chữ 鵬 nổi khối cùng một hướng sáng (trước đó: phương án C, ấn triện
-phẳng trên ô vuông nền tối). Font Spectral SC cho tên có dấu tiếng Việt, Yuji Boku cho chữ bút lông 鵬.
-Sửa xong thì xuất lại toàn bộ icon bằng Chrome headless:
+Logo và banner TV vẽ bằng SVG trong `design/logo.html`. Từ 26/11/2026 dùng **phương án E «Ô kính vuông bo tròn»** — đồng bộ với icon
+bản Legacy (`ConBangTV_Legacy/design/icon.html` phương án D, từ 18/11/2026): ô kính vuông bo 4 góc (23% cạnh) trong suốt, ánh sáng
+mép trong, viền sáng, vòng bút mực vàng và ấn triện chữ 鵬 nổi khối cùng một hướng sáng. Trước đó: phương án D «Đĩa kính 3D» (đĩa tròn,
+17/11), phương án C (ấn triện phẳng trên ô vuông nền tối). Legacy đổi icon thì chép số đo sang `glassRounded()` rồi xuất lại.
+Font Spectral SC cho tên có dấu tiếng Việt, Yuji Boku cho chữ bút lông 鵬. Sửa xong thì xuất lại toàn bộ icon bằng Chrome headless:
 
 ```powershell
 node design/render.mjs preview xem-truoc.png   # xem các phương án
-node design/render.mjs export d                 # Android: icon, icon thích ứng (nền trong suốt), banner, logo + design/*.png
-node design/render.mjs ios d                    # iPad / iPhone: AppIcon 1024 + logo trong app
-node design/render.mjs mac d                    # Mac: các cỡ icon macOS
-node design/render.mjs desktop d                # Windows: app.ico (tự ghép 9 cỡ) + logo.png; Linux: linux/packaging/icons
+node design/render.mjs export e                 # Android: icon, icon thích ứng (nền trong suốt), banner, logo + design/*.png
+node design/render.mjs ios e                    # iPad / iPhone: AppIcon 1024 + logo trong app
+node design/render.mjs mac e                    # Mac: các cỡ icon macOS
+node design/render.mjs desktop e                # Windows: app.ico (tự ghép 9 cỡ) + logo.png; Linux: linux/packaging/icons
+node design/render.mjs site e                   # trang giới thiệu: site/assets/logo.png + apple-touch-icon.png (repo con site/)
 ```
 
-iPadOS / iOS tô đen phần trong suốt của icon trên màn hình chính (với mọi app), nên riêng icon iPad / iPhone đặt đĩa kính trên nền
-nâu tối của banner; Mac, Android, Windows, Linux giữ nền trong suốt.
+iPadOS / iOS tô đen phần trong suốt của icon trên màn hình chính (với mọi app), nên riêng icon iPad / iPhone (và biểu tượng trang giới
+thiệu trên iPhone) đặt ô kính phủ cả khung trên nền nâu tối của banner; Mac (ô kính theo lưới icon macOS, bóng đổ ngoài ô), Android
+(ô kính trong vùng an toàn 66dp của icon thích ứng), Windows, Linux giữ nền trong suốt.
 
 Đổi tên app chỉ là đổi **tên hiển thị** (`app_name`), logo và banner. Mã gói `vn.chimto.tv`, khoá ký và tên repo
 `ChimToTV` phải giữ nguyên — đổi một trong ba thì các TV đã cài không nhận bản cập nhật nữa. Repo đã chuyển sang

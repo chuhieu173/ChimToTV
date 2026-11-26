@@ -14,6 +14,22 @@ struct PlayerView: View {
         ZStack {
             Color.black.ignoresSafeArea()
             WebHost(web: m.web).ignoresSafeArea()
+            // Màn xe: phim phát bằng AVPlayer (NativeFilm.swift) — lớp hình nằm trên WebView (đang để trống)
+            if let p = m.nativePlayer {
+                NativeVideoSurface(player: p, fill: m.nativeFill).ignoresSafeArea()
+            }
+            // TubeMini «Chỉ nghe»: không có hình — hiện ảnh của video
+            if m.server?.type == "tmaudio", let id = TubeMini.videoId(m.episodeUrl) {
+                VStack(spacing: 14) {
+                    PosterImage(url: TubeVideo.thumbs(id)[0], maxPixel: 1280, fallbacks: Array(TubeVideo.thumbs(id).dropFirst()))
+                        .aspectRatio(16 / 9, contentMode: .fit)
+                        .frame(maxWidth: 520)
+                        .clipShape(RoundedRectangle(cornerRadius: 14))
+                    Label("Chỉ nghe", systemImage: "headphones").appFont(17, .semibold).foregroundColor(Theme.dim)
+                }
+                .padding(30)
+                .allowsHitTesting(false)
+            }
             TouchLayer(m: m)
                 .ignoresSafeArea()
             if let text = m.loading {
@@ -538,6 +554,19 @@ private struct ControlBar: View {
                         RoundButton(icon: "pip.enter", label: "Thu nhỏ", compact: compact) { m.startPip() }
                             .disabled(!m.started)
                     }
+                    // TubeMini: nút chất lượng ngay trên thanh (anh yêu cầu 26/11/2026 — trước chỉ có trong Menu, tên «Server»)
+                    if m.isTube && !m.servers.isEmpty {
+                        Button { m.chooseTubeQuality() } label: {
+                            Text(TubeMini.qualityLabel(m.server?.type))
+                                .appFont(compact ? 15 : 17, .semibold)
+                                .foregroundColor(Theme.text)
+                                .padding(.horizontal, compact ? 12 : 16)
+                                .frame(height: compact ? 44 : 54)
+                                .background(Capsule().fill(Color.white.opacity(0.14)))
+                        }
+                        .buttonStyle(PressScale())
+                        .accessibilityLabel("Chất lượng video")
+                    }
                     RoundButton(icon: "list.bullet", label: "Menu", compact: compact) { m.showPanel() }
                 }
             }
@@ -622,7 +651,8 @@ private struct MenuPanel: View {
                             }
                         }
                         if !m.servers.isEmpty {
-                            PanelLabel(m.sessionText.map { "Server — lần xem này: \($0)" } ?? "Server (điểm theo những lần xem trước trên máy này)")
+                            PanelLabel(m.isTube ? "Chất lượng video (nhớ cho các video sau)"
+                                       : m.sessionText.map { "Server — lần xem này: \($0)" } ?? "Server (điểm theo những lần xem trước trên máy này)")
                             LazyVGrid(columns: cols, alignment: .leading, spacing: 10) {
                                 ForEach(m.servers) { s in
                                     ChipButton(text: m.serverText(s), active: s == m.server) { m.switchServer(s) }
@@ -752,13 +782,14 @@ final class PlayerController: UIHostingController<PlayerView> {
     @available(*, unavailable)
     required dynamic init?(coder: NSCoder) { fatalError("không dùng") }
 
-    /// iPhone: phim luôn xem ngang (mở trình phát là tự xoay); iPad xoay tự do.
+    /// iPhone: phim luôn xem ngang (mở trình phát là tự xoay); iPad xoay tự do. Màn xe (CarPlay) không xoay.
     override var supportedInterfaceOrientations: UIInterfaceOrientationMask {
-        UIDevice.current.userInterfaceIdiom == .phone ? .landscape : .all
+        UIDevice.current.userInterfaceIdiom == .phone && !CarScreen.shared.uiOnCar ? .landscape : .all
     }
 
     override var preferredInterfaceOrientationForPresentation: UIInterfaceOrientation {
-        UIDevice.current.userInterfaceIdiom == .phone ? .landscapeRight : super.preferredInterfaceOrientationForPresentation
+        UIDevice.current.userInterfaceIdiom == .phone && !CarScreen.shared.uiOnCar
+            ? .landscapeRight : super.preferredInterfaceOrientationForPresentation
     }
 
     override var prefersStatusBarHidden: Bool { true }
@@ -817,7 +848,7 @@ final class PlayerController: UIHostingController<PlayerView> {
     override func viewDidDisappear(_ animated: Bool) {
         super.viewDidDisappear(animated)
         if isBeingDismissed {
-            UIApplication.shared.isIdleTimerDisabled = false
+            UIApplication.shared.isIdleTimerDisabled = CarScreen.keepPhoneAwake // đang nối xe: màn điện thoại đừng tự khoá
             // Đóng vì phim vào hình trong hình: trình phát chạy tiếp tới khi phóng to / đóng cửa sổ nhỏ
             if !model.detached { model.teardown() }
             SystemLevels.shared.restoreBrightness()

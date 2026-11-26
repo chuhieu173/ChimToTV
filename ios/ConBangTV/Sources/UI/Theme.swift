@@ -114,10 +114,21 @@ final class ImageCache {
         }
         let task = Task<UIImage?, Never>.detached(priority: .utility) { [dir] in
             let file = dir.appendingPathComponent(ImageCache.hash(url))
+            // Ảnh máy chủ trả 404 (vd hq720 của video không có bản HD): dấu «.404» cạnh tệp, 7 ngày khỏi hỏi lại
+            let missing = file.appendingPathExtension("404")
+            if let d = (try? missing.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate,
+               Date().timeIntervalSince(d) < 7 * 86_400 {
+                return nil
+            }
             var data = try? Data(contentsOf: file)
-            if data == nil, let r = try? await Http.get(url, headers: ["Referer": Prefs.baseUrl + "/", "Accept": "image/*"]) {
-                data = r.data
-                try? r.data.write(to: file, options: .atomic)
+            if data == nil {
+                do {
+                    let r = try await Http.get(url, headers: ["Referer": Prefs.baseUrl + "/", "Accept": "image/*"])
+                    data = r.data
+                    try? r.data.write(to: file, options: .atomic)
+                } catch let e as Http.HttpError where e.code == 404 {
+                    try? Data().write(to: missing, options: .atomic)
+                } catch {}
             }
             guard let d = data else { return nil }
             return ImageCache.decode(d, maxPixel: maxPixel)
@@ -130,6 +141,15 @@ final class ImageCache {
         lock.unlock()
         if let img = img { memory.setObject(img, forKey: key) }
         return img
+    }
+
+    /// Ảnh đầu tiên tải được trong danh sách (ảnh nét trước, ảnh luôn có ở cuối — ảnh thu nhỏ TubeMini).
+    func image(first urls: [String], maxPixel: CGFloat = 600) async -> UIImage? {
+        for u in urls {
+            if Task.isCancelled { return nil }
+            if let img = await image(u, maxPixel: maxPixel) { return img }
+        }
+        return nil
     }
 
     static func decode(_ data: Data, maxPixel: CGFloat) -> UIImage? {
@@ -170,6 +190,8 @@ final class ImageCache {
 struct PosterImage: View {
     let url: String?
     var maxPixel: CGFloat = 600
+    /// Ảnh thử tiếp khi `url` không tải được (404…), theo thứ tự.
+    var fallbacks: [String] = []
     @State private var image: UIImage?
 
     var body: some View {
@@ -191,7 +213,7 @@ struct PosterImage: View {
             .allowsHitTesting(false)
         .task(id: url) {
             image = nil
-            if let u = url { image = await ImageCache.shared.image(u, maxPixel: maxPixel) }
+            if let u = url { image = await ImageCache.shared.image(first: [u] + fallbacks, maxPixel: maxPixel) }
         }
     }
 }

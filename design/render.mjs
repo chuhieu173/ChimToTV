@@ -3,8 +3,10 @@
 //   node design/render.mjs export <a|b|c>       → ghi PNG vào app/src/main/res (+ design/logo-512.png, banner-1280.png)
 //   node design/render.mjs ios <a|b|c>          → icon 1024 + logo cho bản iPad (ios/ConBangTV/Assets.xcassets)
 //   node design/render.mjs mac <a|b|c>          → các cỡ icon macOS (16…1024) cho bản Mac, cùng bộ AppIcon
-//   node design/render.mjs desktop <a|b|c|d>    → windows/ConBangTV/app.ico + logo.png, linux/packaging/icons/*.png
-// Đang dùng phương án D (đĩa kính 3D, nền trong suốt — 17/11/2026): chạy export, ios, mac, desktop với «d».
+//   node design/render.mjs desktop <a|b|c|d|e>  → windows/ConBangTV/app.ico + logo.png, linux/packaging/icons/*.png
+//   node design/render.mjs site <…>             → site/assets/logo.png + apple-touch-icon.png (trang giới thiệu, repo con site/)
+// Đang dùng phương án E (ô kính vuông bo tròn như icon bản Legacy — 26/11/2026; trước đó D đĩa kính tròn từ 17/11): chạy export, ios,
+// mac, desktop, site với «e».
 import { spawn } from 'node:child_process';
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -38,7 +40,7 @@ const evaluate = async expr => (await send('Runtime.evaluate', { expression: exp
 
 await send('Page.enable');
 await send('Emulation.setDefaultBackgroundColorOverride', { color: { r: 0, g: 0, b: 0, a: 0 } });
-const assetModes = ['export', 'ios', 'mac', 'desktop'];
+const assetModes = ['export', 'ios', 'mac', 'desktop', 'site'];
 const query = assetModes.includes(mode) ? `?mode=${mode}&concept=${arg || 'a'}` : '?mode=preview';
 await send('Emulation.setDeviceMetricsOverride', { width: 1400, height: 1000, deviceScaleFactor: 1, mobile: false });
 await send('Page.navigate', { url: pathToFileURL(join(here, 'logo.html')).href + query });
