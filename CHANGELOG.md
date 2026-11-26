@@ -9,6 +9,28 @@ Bản Windows (Windows 10 / 11, một tệp `.exe`) ghi riêng với tiêu đề
 Bản Mac (macOS 12+, từ 13/11/2026, cùng mã nguồn và số bản với bản iPad) ghi riêng với tiêu đề "Mac …", tag `mac-v…`.
 Bản Linux (Ubuntu 22.04+ / Linux Mint 21+ / Debian 12+, từ 13/11/2026, tệp `.deb`) ghi riêng với tiêu đề "Linux …", tag `linux-v…`.
 
+## iPad / iPhone 1.26.1 và Mac 1.26.1 — 26/11/2026 (TubeMini: sửa lỗi «404» khi dán địa chỉ chép từ Telegram)
+
+Anh: dán địa chỉ có mã từ bot vào Côn Bằng trên iPhone 14 → «404» (nhập trên màn điện thoại), rồi «Phát hành nha e». Máy chủ chạy đúng
+(ping / feed / link phát 200 từ máy tính; bản Mac 1.26 với cùng địa chỉ kết nối và phát được); máy chủ trả 404 khi mã dính ký tự lạ.
+Dựng lại được: địa chỉ kèm ký tự vô hình (dấu định hướng chữ U+2069 / U+200E mà Telegram hay chèn khi chép, dấu cách không ngắt) →
+`trimming` không bỏ được khi nằm sau ký tự khác, từ iOS 17 `URL(string:)` mã hoá luôn thay vì báo sai → mã sai → 404.
+
+- **TubeMini tự làm sạch địa chỉ dán vào** (`TubeMini.cleanAddress`): bỏ mọi ký tự vô hình (định dạng Cf) và khoảng trắng, gạch nối lạ
+  (‐ ‑ – — −) thành «-»; dán cả tin của bot thì tự lấy đúng địa chỉ có `/u/`; dán dính vào địa chỉ cũ thì lấy địa chỉ `http(s)://` cuối;
+  bỏ dấu câu cuối.
+- iPad / iPhone: bản 1.26.1 (build 34) · tag `ios-v1.26.1` · `ConBangTV-iPad-1.26.1.ipa` 6 311 779 byte · SHA-256
+  `8f098ffa10ab8561e8c81a457c17a67505f13cec1d38b4c61c441d26317e1bdf`; Mac: bản 1.26.1 (build 34) · tag `mac-v1.26.1` ·
+  `ConBangTV-Mac-1.26.1.zip` 9 758 425 byte (x86_64 + arm64, ký ad-hoc, `codesign --verify` đạt, không cổng gỡ lỗi) · SHA-256
+  `677683567ee1dfd211a5e315c1768f0dace4c74eab2cb65d90735d72ea795f4b` · commit `cf0fad2` (sửa: `6e9331b`) · dựng trên Mac mini
+- Thử: test lõi Swift 184 đạt (thêm 7 ca làm sạch địa chỉ). Bản Mac thử với địa chỉ công khai thật có mã: 4 kiểu địa chỉ dính ký tự vô
+  hình trước báo 404 / «không hợp lệ», giờ đều kết nối. IPA chính `vn.chimto.tv` 1.26.1 / 34 (cảnh CarPlay + `SBStarkCapable`, không
+  `no-container`, không cổng gỡ lỗi) **cài lên iPad thử bằng TrollStore** (thay bản 1.23) và mở được. Chưa cài lên iPhone 14 (SSH bằng
+  tài khoản của 6s Plus bị từ chối) — anh cập nhật qua hộp «Có bản mới» rồi dán lại địa chỉ.
+- Đăng lúc 09:27:27 (iPad) và 09:27:46 (Mac) bằng `release.ps1 ipad|mac -File dist\mac\…` (`--latest=false`, Latest vẫn `v2.23`);
+  `-Verify` đạt cả hai. **Tự cập nhật thật Mac 1.26 → 1.26.1** trên Mac mini: hộp «Có bản mới 1.26.1» đủ «Có gì mới» → «Cài đặt ngay» →
+  app mở lại 1.26.1 / 34 lúc 09:30, `codesign` đạt. Trang hướng dẫn: dòng số bản → iPad / iPhone 1.26.1 · Mac 1.26.1 (site `f262e9f`).
+
 ## iPad / iPhone 1.26 và Mac 1.26 — 26/11/2026 (TubeMini theo máy chủ 0.7.0: mã thiết bị qua bot Telegram, dùng được ngoài nhà)
 
 Anh giao: «E qua repo tubemini app xem cập nhật lõi mới của tubemini», rồi «bổ sung vào luôn để user biết cách lấy mã», «làm nút bấm để

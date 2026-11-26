@@ -196,7 +196,9 @@ dùng). App là một «app khách» theo hợp đồng `docs/API.md` của máy
   — tin tự xoá sau một lúc); (3) dán vào ô → «Lưu và kiểm tra». Lưu ý ngay dưới: mất địa chỉ → «👤 Tài khoản của tôi» → «Cấp lại mã»;
   tối đa 2 máy mỗi người (máy thứ hai «➕ Thiết bị mới», chờ duyệt); máy chủ chỉ nhận mạng Việt Nam; máy chủ riêng trong nhà không cần
   mã. Tên nút chép đúng như bot hiện (`TubeMini_Server/server/src/bot/mod.rs`) — bot đổi thì sửa `TubeMini.botSteps` / `botNotes`.
-- **Địa chỉ:** không cần gõ `https://` — như app TubeMini 0.7.0, địa chỉ trong nhà (IPv4, tên không dấu chấm, `.local` / `.lan` / `.home`
+- **Địa chỉ:** chữ dán vào được làm sạch trước (từ 1.26.1, `TubeMini.cleanAddress`: bỏ ký tự vô hình mà Telegram hay chèn khi chép
+  — chúng làm mã sai → máy chủ báo 404 —, khoảng trắng, gạch nối lạ; dán cả tin của bot thì lấy từ có `/u/`; dính địa chỉ cũ thì lấy
+  `http(s)://` cuối). Không cần gõ `https://` — như app TubeMini 0.7.0, địa chỉ trong nhà (IPv4, tên không dấu chấm, `.local` / `.lan` / `.home`
   / `.internal`, cổng khác 443) thêm `http://`, tên miền thêm `https://`; tên máy viết thường, mã giữ nguyên chữ hoa / thường. «Lưu và kiểm
   tra» ping `/tm/v1/ping` (báo bản máy chủ, yt-dlp, Deno); không tới được thì thử scheme còn lại, http bị chuyển sang https thì giữ https
   (POST không qua được lệnh chuyển hướng). Báo rõ 404 (mã sai / thu hồi / thiếu mã ngoài nhà), 403 (mạng nước ngoài). Không còn ô mã
