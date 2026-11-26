@@ -9,6 +9,27 @@ Bản Windows (Windows 10 / 11, một tệp `.exe`) ghi riêng với tiêu đề
 Bản Mac (macOS 12+, từ 13/11/2026, cùng mã nguồn và số bản với bản iPad) ghi riêng với tiêu đề "Mac …", tag `mac-v…`.
 Bản Linux (Ubuntu 22.04+ / Linux Mint 21+ / Debian 12+, từ 13/11/2026, tệp `.deb`) ghi riêng với tiêu đề "Linux …", tag `linux-v…`.
 
+## iPad / iPhone 1.27 và Mac 1.27 — 26/11/2026 (TubeMini: ảnh thu nhỏ nét hơn, chọn chất lượng video — mặc định 1080p)
+
+Anh: «tăng độ phân giải của Thumbnail video», «chọn được độ phân giải của video, mặc định 1080p», rồi «ok phát hành nha e».
+
+- **Ảnh thu nhỏ nét hơn:** ô video dùng hq720 (1280×720) → sddefault (640×480) → hqdefault (480×360, luôn có) thay cho mqdefault 320×180
+  (mờ trên màn Retina); ảnh máy chủ trả 404 được nhớ 7 ngày (dấu `.404` cạnh tệp trong bộ nhớ ảnh). Màn «Chỉ nghe» cũng dùng ảnh nét.
+- **Chọn chất lượng video:** mặc định 1080p (trước 720p); nút chất lượng ngay cạnh nút Menu khi đang xem (1080p / 720p / 360p / Chỉ
+  nghe) — đổi xong xem tiếp đúng chỗ và nhớ cho các video sau; mục «Server» trong Menu đổi tên thành «Chất lượng video»; hộp ⚙︎ của trang
+  TubeMini có «Chất lượng video: …» để đặt mặc định.
+- iPad / iPhone: bản 1.27 (build 35) · tag `ios-v1.27` · `ConBangTV-iPad-1.27.ipa` 6 323 485 byte · SHA-256
+  `bd43ad7a2d546bce829ccf0e92406cbe2576f9befd99b60f8b39aeaab27dbc07`; Mac: bản 1.27 (build 35) · tag `mac-v1.27` · `ConBangTV-Mac-1.27.zip`
+  9 780 384 byte (x86_64 + arm64, ký ad-hoc, `codesign --verify` đạt, không cổng gỡ lỗi) · SHA-256
+  `37d9480fba31465037449ed96a57c46a2ef89b5b67c18f8c00fc1df07ced3662` · commit `6c6618b` (tính năng: `7869b86`) · dựng trên Mac mini
+- Thử: test lõi Swift 184 đạt (thêm: thứ tự ảnh, mặc định / nhớ chất lượng). Bản Mac thử: ô video nét; video mở 1080p; nút chất lượng →
+  720p phát tiếp đúng giây và nhớ; video cũ không có hq720 / sddefault (404) lùi về hqdefault trên màn «Chỉ nghe». IPA chính `vn.chimto.tv`
+  1.27 / 35 (cảnh CarPlay + `SBStarkCapable`, không `no-container`, không cổng gỡ lỗi) **cài lên iPad thử bằng TrollStore** và mở được.
+- Đăng lúc 10:38:45 (iPad) và 10:39:17 (Mac) bằng `release.ps1 ipad|mac -File dist\mac\…` (`--latest=false`, Latest vẫn `v2.23`);
+  `-Verify` đạt cả hai. **Tự cập nhật thật Mac 1.26.1 → 1.27** trên Mac mini: hộp «Có bản mới 1.27» đủ «Có gì mới» → «Cài đặt ngay» → app
+  mở lại 1.27 / 35 lúc 10:41, `codesign` đạt, trang TubeMini hiện ảnh nét. Trang hướng dẫn: dòng số bản → iPad / iPhone 1.27 · Mac 1.27
+  (site `212516d`).
+
 ## iPad / iPhone 1.26.1 và Mac 1.26.1 — 26/11/2026 (TubeMini: sửa lỗi «404» khi dán địa chỉ chép từ Telegram)
 
 Anh: dán địa chỉ có mã từ bot vào Côn Bằng trên iPhone 14 → «404» (nhập trên màn điện thoại), rồi «Phát hành nha e». Máy chủ chạy đúng

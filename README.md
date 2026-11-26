@@ -205,10 +205,14 @@ dùng). App là một «app khách» theo hợp đồng `docs/API.md` của máy
   (token) / `X-Auth-Token` (máy chủ bỏ từ 0.7.0). Sửa sau bằng nút ⚙︎ (Lưu / Chat với bot Telegram / Cách lấy mã). Nhật ký che `/u/<mã>`.
 - **Trang:** ô tìm (kính lúp) ngay cạnh chữ TubeMini — tìm video và kênh; chip Đã theo dõi / Phổ biến / Âm nhạc / Tin tức / Thể thao /
   Trò chơi / Phim / Lịch sử / Kênh; thẻ video 16:9 (thời lượng, vạch đã xem, kênh · lượt xem · thời gian); trang kênh có nút Theo dõi.
+  Ảnh thẻ (từ 1.27): hq720 1280×720 → sddefault → hqdefault (luôn có), `ImageCache.image(first:)` + `PosterImage(fallbacks:)`, ảnh 404
+  nhớ 7 ngày (dấu `.404`); giải mã tối đa 960 điểm ảnh (màn «Chỉ nghe» 1280).
   Giữ ngón tay trên thẻ: Chỉ nghe, mở kênh, theo dõi / bỏ theo dõi, xoá khỏi lịch sử. Cuộn xuống thì thanh trên (tiêu đề, ô tìm, chip)
   trượt khuất, cuộn lên / về đầu thì hiện lại (như menu nổi của Roza).
 - **Phát:** bằng trình phát phim của app, luôn qua AVPlayer: danh sách đang xem thành «tập» (video kế / trước, tự sang video sau khi
-  hết), chất lượng là «server» trong Menu (720p / 1080p / 360p / Chỉ nghe — nhớ lựa chọn); video có quảng cáo đầu thì chờ YouTube mở link
+  hết); chất lượng là «server» (từ 1.27: **mặc định 1080p**, nút chất lượng cạnh nút Menu → hộp chọn 1080p / 720p / 360p / Chỉ nghe, Menu
+  ghi «Chất lượng video», hộp ⚙︎ của trang có «Chất lượng video: …»; nhớ theo hồ sơ ở khoá `server_type@video` = `TubeMini.quality`);
+  video có quảng cáo đầu thì chờ YouTube mở link
   (`available_in`, vài giây); xem tiếp đúng chỗ và lưu chỗ xem lên máy chủ (15 giây / lần, khi đóng thì lưu ngay) — **theo tài khoản của
   mã (trong nhà không mã = chủ máy chủ), dùng chung với app TubeMini cùng tài khoản, không chia theo người xem, không vào «Lịch sử xem» phim**. «Tải lại» xin link mới. Trên màn xe CarPlay có hình cả khi tắt
   màn iPhone; ô tìm trên bảng điều khiển của điện thoại tìm TubeMini khi đang ở mục này.
