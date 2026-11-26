@@ -986,21 +986,24 @@ web mà app đọc.
 
 ## Logo
 
-Logo và banner TV vẽ bằng SVG trong `design/logo.html`. Từ 17/11/2026 dùng **phương án D «Đĩa kính 3D»** (như icon bản Legacy):
-đĩa kính tròn nền trong suốt, vòng bút mực vàng và ấn triện chữ 鵬 nổi khối cùng một hướng sáng (trước đó: phương án C, ấn triện
-phẳng trên ô vuông nền tối). Font Spectral SC cho tên có dấu tiếng Việt, Yuji Boku cho chữ bút lông 鵬.
-Sửa xong thì xuất lại toàn bộ icon bằng Chrome headless:
+Logo và banner TV vẽ bằng SVG trong `design/logo.html`. Từ 26/11/2026 dùng **phương án E «Ô kính vuông bo tròn»** — đồng bộ với icon
+bản Legacy (`ConBangTV_Legacy/design/icon.html` phương án D, từ 18/11/2026): ô kính vuông bo 4 góc (23% cạnh) trong suốt, ánh sáng
+mép trong, viền sáng, vòng bút mực vàng và ấn triện chữ 鵬 nổi khối cùng một hướng sáng. Trước đó: phương án D «Đĩa kính 3D» (đĩa tròn,
+17/11), phương án C (ấn triện phẳng trên ô vuông nền tối). Legacy đổi icon thì chép số đo sang `glassRounded()` rồi xuất lại.
+Font Spectral SC cho tên có dấu tiếng Việt, Yuji Boku cho chữ bút lông 鵬. Sửa xong thì xuất lại toàn bộ icon bằng Chrome headless:
 
 ```powershell
 node design/render.mjs preview xem-truoc.png   # xem các phương án
-node design/render.mjs export d                 # Android: icon, icon thích ứng (nền trong suốt), banner, logo + design/*.png
-node design/render.mjs ios d                    # iPad / iPhone: AppIcon 1024 + logo trong app
-node design/render.mjs mac d                    # Mac: các cỡ icon macOS
-node design/render.mjs desktop d                # Windows: app.ico (tự ghép 9 cỡ) + logo.png; Linux: linux/packaging/icons
+node design/render.mjs export e                 # Android: icon, icon thích ứng (nền trong suốt), banner, logo + design/*.png
+node design/render.mjs ios e                    # iPad / iPhone: AppIcon 1024 + logo trong app
+node design/render.mjs mac e                    # Mac: các cỡ icon macOS
+node design/render.mjs desktop e                # Windows: app.ico (tự ghép 9 cỡ) + logo.png; Linux: linux/packaging/icons
+node design/render.mjs site e                   # trang giới thiệu: site/assets/logo.png + apple-touch-icon.png (repo con site/)
 ```
 
-iPadOS / iOS tô đen phần trong suốt của icon trên màn hình chính (với mọi app), nên riêng icon iPad / iPhone đặt đĩa kính trên nền
-nâu tối của banner; Mac, Android, Windows, Linux giữ nền trong suốt.
+iPadOS / iOS tô đen phần trong suốt của icon trên màn hình chính (với mọi app), nên riêng icon iPad / iPhone (và biểu tượng trang giới
+thiệu trên iPhone) đặt ô kính phủ cả khung trên nền nâu tối của banner; Mac (ô kính theo lưới icon macOS, bóng đổ ngoài ô), Android
+(ô kính trong vùng an toàn 66dp của icon thích ứng), Windows, Linux giữ nền trong suốt.
 
 Đổi tên app chỉ là đổi **tên hiển thị** (`app_name`), logo và banner. Mã gói `vn.chimto.tv`, khoá ký và tên repo
 `ChimToTV` phải giữ nguyên — đổi một trong ba thì các TV đã cài không nhận bản cập nhật nữa. Repo đã chuyển sang
