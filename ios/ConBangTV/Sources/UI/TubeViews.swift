@@ -217,17 +217,28 @@ final class TubeModel: ObservableObject {
     /// Hộp sửa địa chỉ máy chủ (nút ⚙︎).
     func editServer() {
         TvAlert.show("Máy chủ TubeMini", "Dán địa chỉ bot Telegram @tube_mini_bot gửi (tên-miền/u/mã), hoặc địa chỉ máy chủ trong nhà.",
-                     ["Lưu", "Cách lấy mã", "Huỷ"], fields: [(TubeMini.server, "địa chỉ máy chủ")]) { [weak self] i, texts in
+                     ["Lưu", "Chat với bot Telegram", "Cách lấy mã", "Huỷ"],
+                     fields: [(TubeMini.server, "địa chỉ máy chủ")]) { [weak self] i, texts in
             if i == 0 { self?.setServer(texts[safe: 0] ?? "", toast: true) }
-            if i == 1 { self?.showGuide() }
+            if i == 1 { self?.openBot() }
+            if i == 2 { self?.showGuide() }
         }
     }
 
     /// Cách lấy mã thiết bị qua bot Telegram.
     func showGuide() {
-        TvAlert.show("Cách lấy mã TubeMini", TubeMini.botGuide, ["Mở bot Telegram", "Nhập địa chỉ", "Đóng"]) { [weak self] i in
-            if i == 0 { UIApplication.shared.open(TubeMini.botUrl) }
+        TvAlert.show("Cách lấy mã TubeMini", TubeMini.botGuide, ["Chat với bot Telegram", "Nhập địa chỉ", "Đóng"]) { [weak self] i in
+            if i == 0 { self?.openBot() }
             if i == 1 { self?.editServer() }
+        }
+    }
+
+    /// «Chat với bot»: mở thẳng khung chat @tube_mini_bot trong app Telegram (tg://resolve — không cần khai
+    /// LSApplicationQueriesSchemes vì chỉ gọi open, không hỏi canOpenURL); máy chưa cài Telegram thì mở t.me trên trình duyệt.
+    func openBot() {
+        UIApplication.shared.open(TubeMini.botApp, options: [:]) { ok in
+            Log.d("TubeMini", ok ? "mở chat bot trong Telegram" : "chưa cài Telegram — mở t.me")
+            if !ok { UIApplication.shared.open(TubeMini.botUrl) }
         }
     }
 }
@@ -495,15 +506,10 @@ struct TubeContent: View {
                     .appFont(15).foregroundColor(Theme.dim).fixedSize(horizontal: false, vertical: true)
                 guide
                 field("Địa chỉ máy chủ (tên-miền/u/mã)", text: $address)
-                HStack(spacing: 12) {
-                    Button("Lưu và kiểm tra") { m.setServer(address) }
-                        .buttonStyle(.borderedProminent)
-                        .tint(Theme.brand)
-                    Button("Mở bot Telegram") { UIApplication.shared.open(TubeMini.botUrl) }
-                        .buttonStyle(.bordered)
-                        .tint(Theme.text)
-                }
-                .controlSize(.large)
+                Button("Lưu và kiểm tra") { m.setServer(address) }
+                    .buttonStyle(.borderedProminent)
+                    .tint(Theme.brand)
+                    .controlSize(.large)
                 if !m.serverNote.isEmpty {
                     Text(m.serverNote).appFont(14).foregroundColor(Theme.dim).fixedSize(horizontal: false, vertical: true)
                 }
@@ -531,14 +537,33 @@ struct TubeContent: View {
                     Text("\(i + 1)").appFont(15, .bold).foregroundColor(.white)
                         .frame(width: 28, height: 28)
                         .background(Circle().fill(Theme.brand))
-                    Text(s).appFont(15).foregroundColor(Theme.text).fixedSize(horizontal: false, vertical: true)
-                        .padding(.top, 3)
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text(s).appFont(15).foregroundColor(Theme.text).fixedSize(horizontal: false, vertical: true)
+                            .padding(.top, 3)
+                        if i == 0 { botButton }
+                    }
                 }
             }
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(RoundedRectangle(cornerRadius: 14).fill(Theme.surface2.opacity(0.6)))
+    }
+
+    /// Nút xanh Telegram: mở thẳng khung chat với bot.
+    private var botButton: some View {
+        Button { m.openBot() } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "paperplane.fill").appFont(16, .semibold)
+                Text("Chat với bot @tube_mini_bot").appFont(16, .semibold)
+            }
+            .foregroundColor(.white)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 11)
+            .background(Capsule().fill(Color(red: 0x2A / 255, green: 0xAB / 255, blue: 0xEE / 255)))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Chat với bot Telegram")
     }
 
     private func field(_ hint: String, text: Binding<String>) -> some View {

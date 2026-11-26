@@ -77,13 +77,15 @@ enum TubeMini {
 
     static var configured: Bool { !server.isEmpty }
 
-    /// Bot Telegram cấp địa chỉ có mã thiết bị (trang giới thiệu và app TubeMini cũng chỉ tới đây).
+    /// Bot Telegram cấp địa chỉ có mã thiết bị (trang giới thiệu và app TubeMini cũng chỉ tới đây): `botApp` mở thẳng khung chat
+    /// trong app Telegram, `botUrl` cho máy chưa cài Telegram (trang t.me trên trình duyệt).
+    static let botApp = URL(string: "tg://resolve?domain=tube_mini_bot")!
     static let botUrl = URL(string: "https://t.me/tube_mini_bot")!
 
     // Cách lấy mã — theo trang giới thiệu TubeMini (mục «Đăng ký nhận địa chỉ máy chủ») và tin «❓ Hướng dẫn» của bot (tên nút giữ
     // đúng như bot hiện: 📝 Đăng ký, 📋 Chép địa chỉ, 👤 Tài khoản của tôi → Cấp lại mã, ➕ Thiết bị mới).
     static let botSteps = [
-        "Mở Telegram, nhắn bot @tube_mini_bot (nút «Mở bot Telegram») rồi bấm «📝 Đăng ký».",
+        "Bấm «Chat với bot» để mở thẳng khung chat @tube_mini_bot trong Telegram, rồi bấm «📝 Đăng ký».",
         "Bot gửi địa chỉ máy chủ riêng cho máy này, dạng tên-miền/u/k7pq-4xmz-9tbn. Chạm vào địa chỉ hoặc nút «📋 Chép địa chỉ» "
             + "để chép — tin tự xoá sau một lúc, nên chép ngay.",
         "Quay lại Côn Bằng, dán vào ô địa chỉ máy chủ rồi bấm «Lưu». Không cần gõ https://, chữ hoa hay thường đều được.",

@@ -105,7 +105,8 @@ final class TubeMiniTests: XCTestCase {
         XCTAssertEqual(TubeMini.otherScheme("http://tm.example.com/u/a"), "https://tm.example.com/u/a")
         XCTAssertEqual(TubeMini.otherScheme("https://192.168.1.10:8080"), "http://192.168.1.10:8080")
         // Hướng dẫn lấy mã: 3 bước đánh số rồi các lưu ý
-        XCTAssertTrue(TubeMini.botGuide.hasPrefix("1. Mở Telegram, nhắn bot @tube_mini_bot"))
+        XCTAssertTrue(TubeMini.botGuide.hasPrefix("1. Bấm «Chat với bot» để mở thẳng khung chat @tube_mini_bot"))
+        XCTAssertEqual(TubeMini.botApp.absoluteString, "tg://resolve?domain=tube_mini_bot")
         XCTAssertTrue(TubeMini.botGuide.contains("\n3. "))
         XCTAssertTrue(TubeMini.botGuide.contains("\n\n• Mất địa chỉ"))
         XCTAssertEqual(TubeMini.videoId(TubeMini.videoUrl("abc_DEF-123")), "abc_DEF-123")
