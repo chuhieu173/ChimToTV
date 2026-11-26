@@ -104,6 +104,15 @@ final class TubeMiniTests: XCTestCase {
         XCTAssertEqual(TubeMini.normalize("HTTP://Tm.Example.com/u/AbC"), "http://tm.example.com/u/AbC")
         XCTAssertEqual(TubeMini.otherScheme("http://tm.example.com/u/a"), "https://tm.example.com/u/a")
         XCTAssertEqual(TubeMini.otherScheme("https://192.168.1.10:8080"), "http://192.168.1.10:8080")
+        // Chữ dán từ Telegram / bàn phím: ký tự vô hình, dấu cách không ngắt, gạch nối giả, cả tin của bot, dính địa chỉ cũ
+        let want = "https://tm.example.com/u/k7pq-4xmz-9tbn"
+        XCTAssertEqual(TubeMini.normalize("\u{2068}tm.example.com/u/k7pq-4xmz-9tbn\u{2069}"), want)
+        XCTAssertEqual(TubeMini.normalize("https://tm.example.com/u/k7pq-4xmz-9tbn\u{00A0}\u{200E}"), want)
+        XCTAssertEqual(TubeMini.normalize("\u{200E}https://tm.example.com/u/k7pq\u{2011}4xmz\u{2013}9tbn\u{200B}"), want)
+        XCTAssertEqual(TubeMini.normalize("🔑 Địa chỉ máy chủ TubeMini của An (thiết bị #3):\n\ntm.example.com/u/k7pq-4xmz-9tbn\n\nMã của bạn: k7pq-4xmz-9tbn"), want)
+        XCTAssertEqual(TubeMini.normalize("http://192.168.1.10:8080https://tm.example.com/u/k7pq-4xmz-9tbn"), want)
+        XCTAssertEqual(TubeMini.normalize("tm.example.com/u/k7pq-4xmz-9tbn."), want)
+        XCTAssertEqual(TubeMini.normalize("192.168.1.10 :8080"), "http://192.168.1.10:8080")
         // Hướng dẫn lấy mã: 3 bước đánh số rồi các lưu ý
         XCTAssertTrue(TubeMini.botGuide.hasPrefix("1. Bấm «Chat với bot» để mở thẳng khung chat @tube_mini_bot"))
         XCTAssertEqual(TubeMini.botApp.absoluteString, "tg://resolve?domain=tube_mini_bot")

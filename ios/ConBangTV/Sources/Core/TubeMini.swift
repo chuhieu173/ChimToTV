@@ -109,7 +109,7 @@ enum TubeMini {
     /// («192.168.1.10:8080», «nas», «may.local») thêm http://, tên miền («tm.example.com/u/k7pq-4xmz-9tbn») thêm https://.
     /// Scheme và tên máy viết thường; đường dẫn (mã thiết bị) giữ nguyên — mã cũ 24 ký tự phân biệt hoa thường.
     static func normalize(_ s: String) -> String {
-        var t = s.trimmingCharacters(in: .whitespacesAndNewlines)
+        var t = cleanAddress(s)
         while t.hasSuffix("/") { t.removeLast() }
         if t.isEmpty { return "" }
         if !t.contains("://") {
@@ -120,6 +120,26 @@ enum TubeMini {
         let rest = t[r.upperBound...]
         let end = rest.firstIndex(of: "/") ?? t.endIndex
         return t[..<end].lowercased() + t[end...]
+    }
+
+    /// Làm sạch chữ dán vào ô địa chỉ (26/11/2026: iPhone 14 dán địa chỉ chép từ Telegram → máy chủ báo 404). Chép từ Telegram /
+    /// bàn phím có thể kèm ký tự vô hình (dấu định hướng chữ U+2066–U+2069 / U+200E, dấu cách không ngắt…): `trimming` không bỏ được
+    /// khi nó nằm sau ký tự khác, và từ iOS 17 URL(string:) không báo sai mà mã hoá luôn (`%E2%81%A9`) → mã sai → 404. Nên:
+    /// bỏ mọi ký tự định dạng (Cf) và khoảng trắng, gạch nối «giả» (‐ ‑ – — −) thành «-»; dán cả tin của bot thì lấy «từ» có
+    /// `/u/` (hoặc `://`); dán dính vào địa chỉ cũ thì lấy từ `http(s)://` cuối cùng; bỏ dấu câu cuối.
+    static func cleanAddress(_ s: String) -> String {
+        let dashes: Set<UInt32> = [0x2010, 0x2011, 0x2012, 0x2013, 0x2014, 0x2015, 0x2212, 0xFE58, 0xFE63, 0xFF0D]
+        var out = String.UnicodeScalarView()
+        for u in s.unicodeScalars {
+            if u.properties.generalCategory == .format { continue }
+            out.append(dashes.contains(u.value) ? "-" : u)
+        }
+        let words = String(out).split(whereSeparator: { $0.isWhitespace }).map(String.init)
+        var t = words.last(where: { $0.contains("/u/") }) ?? words.last(where: { $0.contains("://") }) ?? words.joined()
+        let starts = ["http://", "https://"].compactMap { t.range(of: $0, options: [.backwards, .caseInsensitive])?.lowerBound }
+        if let last = starts.max(), last != t.startIndex { t = String(t[last...]) }
+        while let c = t.last, ".,;)]}>»\"'".contains(c) { t.removeLast() }
+        return t
     }
 
     /// Địa chỉ trong nhà: IPv4, tên không có dấu chấm, đuôi .local / .lan / .home / .internal, hoặc cổng khác 443 → http;
