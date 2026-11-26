@@ -9,6 +9,38 @@ Bản Windows (Windows 10 / 11, một tệp `.exe`) ghi riêng với tiêu đề
 Bản Mac (macOS 12+, từ 13/11/2026, cùng mã nguồn và số bản với bản iPad) ghi riêng với tiêu đề "Mac …", tag `mac-v…`.
 Bản Linux (Ubuntu 22.04+ / Linux Mint 21+ / Debian 12+, từ 13/11/2026, tệp `.deb`) ghi riêng với tiêu đề "Linux …", tag `linux-v…`.
 
+## iPad / iPhone 1.26 và Mac 1.26 — 26/11/2026 (TubeMini theo máy chủ 0.7.0: mã thiết bị qua bot Telegram, dùng được ngoài nhà)
+
+Anh giao: «E qua repo tubemini app xem cập nhật lõi mới của tubemini», rồi «bổ sung vào luôn để user biết cách lấy mã», «làm nút bấm để
+bấm trực tiếp trên app chuyển qua chat trên tele bot cho tiện», và «Commit và phát hành nha e». Máy chủ TubeMini 0.7.0 (25/11, repo riêng):
+ra Internet qua Cloudflare (chỉ nhận mạng Việt Nam), nhiều người dùng, **mỗi thiết bị một mã trong địa chỉ** `https://<tên miền>/u/<mã>` do
+bot @tube_mini_bot cấp, bỏ `X-Auth-Token` và phát qua máy chủ. Bản 1.25 tự thêm `http://` vào mọi địa chỉ → với tên miền đi http rồi bị
+chuyển sang https (theo dõi kênh / lưu chỗ xem hỏng, mã đi không mã hoá).
+
+- **TubeMini dùng được cả ngoài nhà (4G, trên xe):** dán địa chỉ có mã thiết bị bot gửi — không cần gõ `https://`: như app TubeMini 0.7.0,
+  địa chỉ trong nhà thêm `http://`, tên miền thêm `https://`, tên máy viết thường, mã giữ nguyên; «Lưu và kiểm tra» tự thử scheme còn lại
+  khi không tới được, giữ https khi http bị chuyển hướng.
+- **Cách lấy mã ngay trong app:** khung 3 bước ở trang TubeMini (Đăng ký → chép địa chỉ → dán, Lưu) + lưu ý (cấp lại mã, tối đa 2 máy,
+  mỗi máy một địa chỉ, chỉ mạng Việt Nam, máy chủ riêng trong nhà không cần mã), tên nút đúng như bot; nút ⚙︎ → «Cách lấy mã».
+- **Nút «Chat với bot @tube_mini_bot»** (xanh Telegram) mở thẳng khung chat trong app Telegram; máy chưa cài Telegram thì mở trang t.me.
+  Cũng có trong hộp ⚙︎ và hộp «Cách lấy mã».
+- Bỏ ô mã (token) cũ (xoá mã đã lưu); báo rõ khi mã sai / bị thu hồi (404) hoặc đang dùng mạng nước ngoài (403); đổi máy chủ qua ⚙︎ báo
+  kết quả bằng dòng nổi; nhật ký che mã `/u/<mã>`.
+- iPad / iPhone: bản 1.26 (build 33) · tag `ios-v1.26` · `ConBangTV-iPad-1.26.ipa` 6 309 221 byte · SHA-256
+  `84b15e42124ea8973625c3fec18ce85c75068ae727d9ecfe3745602d3f22ef0c`; Mac: bản 1.26 (build 33) · tag `mac-v1.26` · `ConBangTV-Mac-1.26.zip`
+  9 751 634 byte (x86_64 + arm64, ký ad-hoc, `codesign --verify` đạt, không cổng gỡ lỗi) · SHA-256
+  `4e93c7ca4035afa42b6b2d66b77cb1cb2f5e673375e8a1a8067655fad6acfc61` · commit `41b0035` (tính năng: `ae410ce`, `0b259ef`, `ea4c18c`) · dựng
+  trên Mac mini
+- Thử: test lõi Swift 184 đạt (thêm ca địa chỉ / scheme, che mã trong nhật ký, chữ hướng dẫn). Bản Mac thử với máy chủ thử 0.7.0 trong nhà:
+  địa chỉ cũ vẫn chạy; gõ `https://` cho IP trong nhà → tự lùi về `http://`; mã sai → câu báo 404; tên miền viết hoa → `https://`, chữ
+  thường, mã giữ nguyên; phát 1080p; màn hướng dẫn, hộp «Cách lấy mã»; nút «Chat với bot» bật Telegram Desktop lên ngay. IPA chính:
+  `vn.chimto.tv` 1.26 / 33, có cảnh CarPlay + `SBStarkCapable`, không `no-container`, không cổng gỡ lỗi. **Chưa thử:** địa chỉ công khai thật
+  có mã; cài IPA chính lên iPhone / iPad (lúc đăng cả hai máy thử không tới được — iPad vừa ngủ, iPhone không mở SSH / bản thử).
+- Đăng lúc 08:31:05 (iPad) và 08:31:36 (Mac) bằng `release.ps1 ipad|mac -File dist\mac\…` (`--latest=false`, Latest vẫn `v2.23`); `-Verify`
+  đạt cả hai: tải từ link công khai và link cố định khớp SHA-256. **Tự cập nhật thật Mac 1.25 → 1.26** trên Mac mini (`/Applications`): hộp
+  «Có bản mới 1.26» đủ «Có gì mới» → «Cài đặt ngay» → app mở lại 1.26 / 33 lúc 08:33, `codesign` đạt; trên bản chính gõ địa chỉ máy chủ
+  thử không có `http://` → kết nối, ra danh sách «Đã theo dõi». Trang hướng dẫn: dòng số bản → iPad / iPhone 1.26 · Mac 1.26 (site `9f2940e`).
+
 ## iPad / iPhone 1.25 và Mac 1.25 — 25/11/2026 (mục TubeMini — xem YouTube qua máy chủ TubeMini)
 
 Anh giao: «lên phương án tích hợp tubemini vào Côn Bằng TV, vị trí menu bên dưới nút Truyền hình - radio», chốt tên «TubeMini», làm iPad /

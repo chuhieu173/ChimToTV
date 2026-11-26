@@ -183,26 +183,38 @@ Mục **Truyền hình · Radio** trong menu: xem kênh truyền hình và nghe 
 
 ## TubeMini (từ iPad · iPhone · Mac 1.25)
 
-Mục **TubeMini** trong menu (ngay dưới «Truyền hình · Radio»): xem YouTube qua máy chủ **tubemini-server** của dự án
-[TubeMini](https://github.com/TubeMini/TubeMini) (Rust + yt-dlp, chạy trong nhà). App là một «app khách» theo đúng hợp đồng `docs/API.md`
-của dự án đó: danh sách video là feed Atom kiểu GData, link phát / kênh theo dõi / lịch sử ở `/tm/v1`. Video không đi qua máy chủ —
-máy chủ trả playlist HLS đã lọc (tiếng gốc), đoạn video tải thẳng từ YouTube. Mã: `ios/ConBangTV/Sources/Core/TubeMini.swift`,
-`UI/TubeViews.swift`; test `ios/CoreTests/TubeMiniTests.swift`.
+Mục **TubeMini** trong menu (ngay dưới «Truyền hình · Radio»): xem YouTube qua máy chủ TubeMini của dự án
+[TubeMini](https://github.com/TubeMini/TubeMini) (Rust + yt-dlp; từ máy chủ 0.7.0 là repo riêng, ra Internet qua Cloudflare, nhiều người
+dùng). App là một «app khách» theo hợp đồng `docs/API.md` của máy chủ: danh sách video là feed Atom kiểu GData, link phát / kênh theo dõi
+/ lịch sử ở `/tm/v1`. Video không đi qua máy chủ — máy chủ trả playlist HLS đã lọc (tiếng gốc), đoạn video tải thẳng từ YouTube (link lấy
+ở mạng nhà máy chủ phát được cả từ 4G). Mã: `ios/ConBangTV/Sources/Core/TubeMini.swift`, `UI/TubeViews.swift`; test
+`ios/CoreTests/TubeMiniTests.swift`.
 
-- **Cài:** lần đầu mở mục TubeMini thì nhập địa chỉ máy chủ (vd `192.168.1.10:8080`) và mã (token, nếu máy chủ bật `auth_token`) →
-  «Lưu và kiểm tra» (báo bản máy chủ, yt-dlp, Deno). Sửa sau bằng nút ⚙︎ trên trang. Hiện dùng trong mạng nhà (ra ngoài bằng 4G: để sau).
+- **Lấy mã (từ 1.26):** mỗi máy một địa chỉ có mã thiết bị `tên-miền/u/<mã>` do bot Telegram **@tube_mini_bot** cấp. Màn cài đặt lần
+  đầu có khung «Cách lấy mã qua bot Telegram»: (1) nút xanh **«Chat với bot @tube_mini_bot»** mở thẳng khung chat trong app Telegram
+  (`tg://resolve?domain=tube_mini_bot`; chưa cài Telegram thì mở `t.me`) → bấm «📝 Đăng ký»; (2) chép địa chỉ bot gửi («📋 Chép địa chỉ»
+  — tin tự xoá sau một lúc); (3) dán vào ô → «Lưu và kiểm tra». Lưu ý ngay dưới: mất địa chỉ → «👤 Tài khoản của tôi» → «Cấp lại mã»;
+  tối đa 2 máy mỗi người (máy thứ hai «➕ Thiết bị mới», chờ duyệt); máy chủ chỉ nhận mạng Việt Nam; máy chủ riêng trong nhà không cần
+  mã. Tên nút chép đúng như bot hiện (`TubeMini_Server/server/src/bot/mod.rs`) — bot đổi thì sửa `TubeMini.botSteps` / `botNotes`.
+- **Địa chỉ:** không cần gõ `https://` — như app TubeMini 0.7.0, địa chỉ trong nhà (IPv4, tên không dấu chấm, `.local` / `.lan` / `.home`
+  / `.internal`, cổng khác 443) thêm `http://`, tên miền thêm `https://`; tên máy viết thường, mã giữ nguyên chữ hoa / thường. «Lưu và kiểm
+  tra» ping `/tm/v1/ping` (báo bản máy chủ, yt-dlp, Deno); không tới được thì thử scheme còn lại, http bị chuyển sang https thì giữ https
+  (POST không qua được lệnh chuyển hướng). Báo rõ 404 (mã sai / thu hồi / thiếu mã ngoài nhà), 403 (mạng nước ngoài). Không còn ô mã
+  (token) / `X-Auth-Token` (máy chủ bỏ từ 0.7.0). Sửa sau bằng nút ⚙︎ (Lưu / Chat với bot Telegram / Cách lấy mã). Nhật ký che `/u/<mã>`.
 - **Trang:** ô tìm (kính lúp) ngay cạnh chữ TubeMini — tìm video và kênh; chip Đã theo dõi / Phổ biến / Âm nhạc / Tin tức / Thể thao /
   Trò chơi / Phim / Lịch sử / Kênh; thẻ video 16:9 (thời lượng, vạch đã xem, kênh · lượt xem · thời gian); trang kênh có nút Theo dõi.
   Giữ ngón tay trên thẻ: Chỉ nghe, mở kênh, theo dõi / bỏ theo dõi, xoá khỏi lịch sử. Cuộn xuống thì thanh trên (tiêu đề, ô tìm, chip)
   trượt khuất, cuộn lên / về đầu thì hiện lại (như menu nổi của Roza).
 - **Phát:** bằng trình phát phim của app, luôn qua AVPlayer: danh sách đang xem thành «tập» (video kế / trước, tự sang video sau khi
   hết), chất lượng là «server» trong Menu (720p / 1080p / 360p / Chỉ nghe — nhớ lựa chọn); video có quảng cáo đầu thì chờ YouTube mở link
-  (`available_in`, vài giây); xem tiếp đúng chỗ và lưu chỗ xem lên máy chủ (15 giây / lần, khi đóng thì lưu ngay) — **dùng chung với app
-  TubeMini, không chia theo người xem, không vào «Lịch sử xem» phim**. «Tải lại» xin link mới. Trên màn xe CarPlay có hình cả khi tắt
+  (`available_in`, vài giây); xem tiếp đúng chỗ và lưu chỗ xem lên máy chủ (15 giây / lần, khi đóng thì lưu ngay) — **theo tài khoản của
+  mã (trong nhà không mã = chủ máy chủ), dùng chung với app TubeMini cùng tài khoản, không chia theo người xem, không vào «Lịch sử xem» phim**. «Tải lại» xin link mới. Trên màn xe CarPlay có hình cả khi tắt
   màn iPhone; ô tìm trên bảng điều khiển của điện thoại tìm TubeMini khi đang ở mục này.
 - **Người xem:** hồ sơ trẻ em không có mục TubeMini (máy chủ không lọc nội dung trẻ em); giới hạn giờ xem tính cả TubeMini.
-- **Thử khi dựng:** bản Mac thử trên Mac mini cùng mạng với máy chủ; trên bản Mac cổng gỡ lỗi `/ui` không liệt kê được phần tử — mở video
-  bằng `/go?to=play&film=tubemini://video/<id>&ep=tubemini://video/<id>`.
+- **Thử khi dựng:** bản Mac thử trên Mac mini cùng mạng với máy chủ; trên bản Mac cổng gỡ lỗi `/ui` / `/press` không thấy phần tử — mở
+  video bằng `/go?to=play&film=tubemini://video/<id>&ep=tubemini://video/<id>`, đặt địa chỉ bằng `/tube?server=<địa chỉ>` (chờ ping, trả
+  ghi chú + địa chỉ đã che mã), `/tube?guide=1` (hộp «Cách lấy mã»), `/tube?bot=1` (như bấm «Chat với bot»). Hộp thoại nằm ở cửa sổ riêng,
+  `/shot` không chụp được — chụp cả màn hình Mac (`Mac-Shot`).
 
 ## Trang phim hỗ trợ
 
